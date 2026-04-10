@@ -6,19 +6,20 @@
   <a href="/admin/joins" class="btn btn-sm btn-outline-secondary">&larr; Back</a>
 </div>
 
-<div class="card shadow-sm" style="max-width:620px">
+<div class="card shadow-sm" style="max-width:640px">
   <div class="card-body p-4">
     <p class="text-muted small mb-4">
-      A join defines how two tables are related. The report engine uses joins to build
-      multi-table queries safely — without Cartesian products.
+      A join defines how two tables are related. Once defined, the query builder can
+      automatically construct multi-table SQL from <code>table.field</code> references.
     </p>
 
     <form method="POST" action="/admin/joins">
 
+      {# ── Left side ── #}
       <div class="row g-3 mb-3">
         <div class="col-md-6">
-          <label class="form-label">Left table <span class="text-danger">*</span></label>
-          <select name="left_table_id" class="form-select" required>
+          <label class="form-label">From table <span class="text-danger">*</span></label>
+          <select name="left_table_id" id="left_table_id" class="form-select" required>
             <option value="">— select —</option>
             {% for t in tables %}
             <option value="{{ t.id }}" {% if join and join.left_table_id == t.id %}selected{% endif %}>
@@ -28,17 +29,21 @@
           </select>
         </div>
         <div class="col-md-6">
-          <label class="form-label">Left field <span class="text-danger">*</span></label>
-          <input type="text" name="left_field_name" class="form-control"
-            value="{{ join.left_field_name if join else '' }}"
-            placeholder="e.g. author_id" required>
+          <label class="form-label">Foreign key field <span class="text-danger">*</span></label>
+          <select name="left_field_name" id="left_field_name" class="form-select" required>
+            <option value="">— select table first —</option>
+          </select>
+          {% if errors and errors.left_field_name %}
+          <div class="text-danger small mt-1">{{ errors.left_field_name[0] }}</div>
+          {% endif %}
         </div>
       </div>
 
+      {# ── Right side ── #}
       <div class="row g-3 mb-3">
         <div class="col-md-6">
-          <label class="form-label">Right table <span class="text-danger">*</span></label>
-          <select name="right_table_id" class="form-select" required>
+          <label class="form-label">Referenced table <span class="text-danger">*</span></label>
+          <select name="right_table_id" id="right_table_id" class="form-select" required>
             <option value="">— select —</option>
             {% for t in tables %}
             <option value="{{ t.id }}" {% if join and join.right_table_id == t.id %}selected{% endif %}>
@@ -48,13 +53,17 @@
           </select>
         </div>
         <div class="col-md-6">
-          <label class="form-label">Right field <span class="text-danger">*</span></label>
-          <input type="text" name="right_field_name" class="form-control"
-            value="{{ join.right_field_name if join else '' }}"
-            placeholder="e.g. id" required>
+          <label class="form-label">Referenced field <span class="text-danger">*</span></label>
+          <select name="right_field_name" id="right_field_name" class="form-select" required>
+            <option value="">— select table first —</option>
+          </select>
+          {% if errors and errors.right_field_name %}
+          <div class="text-danger small mt-1">{{ errors.right_field_name[0] }}</div>
+          {% endif %}
         </div>
       </div>
 
+      {# ── Options ── #}
       <div class="row g-3 mb-4">
         <div class="col-md-6">
           <label class="form-label">Join type</label>
@@ -65,18 +74,98 @@
           </select>
         </div>
         <div class="col-md-6">
-          <label class="form-label">Relationship label</label>
+          <label class="form-label">Label <span class="text-muted small">(optional)</span></label>
           <input type="text" name="relationship_label" class="form-control"
             value="{{ join.relationship_label if join else '' }}"
             placeholder="e.g. has author">
         </div>
       </div>
 
+      {# Preview pill — updates live as selections change #}
+      <div id="join-preview" class="mb-4 p-3 rounded" style="background:var(--accent-soft);font-size:0.82rem;display:none;">
+        <code id="join-preview-text"></code>
+      </div>
+
       <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">Create Join</button>
+        <button type="submit" class="btn btn-primary">Save Join</button>
         <a href="/admin/joins" class="btn btn-outline-secondary">Cancel</a>
       </div>
     </form>
   </div>
 </div>
+
+<script>
+(function () {
+  // Pre-fill values if returning from a validation error
+  const prefillLeft  = {{ (join.left_table_id  if join else 'null') | safe }};
+  const prefillRight = {{ (join.right_table_id if join else 'null') | safe }};
+  const prefillLeftField  = {{ ('"' + join.left_field_name  + '"' if join and join.left_field_name  else 'null') | safe }};
+  const prefillRightField = {{ ('"' + join.right_field_name + '"' if join and join.right_field_name else 'null') | safe }};
+
+  async function loadFields(tableId, selectEl, preselectValue) {
+    selectEl.innerHTML = '<option value="">Loading…</option>';
+    try {
+      const res = await fetch(`/admin/joins/fields/${tableId}`);
+      const fields = await res.json();
+      selectEl.innerHTML = '<option value="">— select field —</option>';
+      for (const f of fields) {
+        const opt = document.createElement('option');
+        opt.value = f.field_name;
+        opt.textContent = `${f.field_name}${f.is_primary_key ? ' 🔑' : ''}`;
+        if (preselectValue && f.field_name === preselectValue) opt.selected = true;
+        selectEl.appendChild(opt);
+      }
+    } catch {
+      selectEl.innerHTML = '<option value="">— error loading fields —</option>';
+    }
+    updatePreview();
+  }
+
+  const leftTableSel  = document.getElementById('left_table_id');
+  const rightTableSel = document.getElementById('right_table_id');
+  const leftFieldSel  = document.getElementById('left_field_name');
+  const rightFieldSel = document.getElementById('right_field_name');
+
+  leftTableSel.addEventListener('change', () => {
+    if (leftTableSel.value) loadFields(leftTableSel.value, leftFieldSel, null);
+    else { leftFieldSel.innerHTML = '<option value="">— select table first —</option>'; updatePreview(); }
+  });
+
+  rightTableSel.addEventListener('change', () => {
+    if (rightTableSel.value) loadFields(rightTableSel.value, rightFieldSel, null);
+    else { rightFieldSel.innerHTML = '<option value="">— select table first —</option>'; updatePreview(); }
+  });
+
+  leftFieldSel.addEventListener('change', updatePreview);
+  rightFieldSel.addEventListener('change', updatePreview);
+  document.querySelector('select[name="join_type_default"]').addEventListener('change', updatePreview);
+
+  function tableName(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) return null;
+    const m = opt.textContent.match(/\(([^)]+)\)/);
+    return m ? m[1] : null;
+  }
+
+  function updatePreview() {
+    const lt = tableName(leftTableSel);
+    const rt = tableName(rightTableSel);
+    const lf = leftFieldSel.value;
+    const rf = rightFieldSel.value;
+    const jt = document.querySelector('select[name="join_type_default"]').value.toUpperCase();
+    const el = document.getElementById('join-preview');
+    const txt = document.getElementById('join-preview-text');
+    if (lt && rt && lf && rf) {
+      txt.textContent = `${jt} JOIN ${rt} ON ${lt}.${lf} = ${rt}.${rf}`;
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
+  // Pre-load fields for pre-selected tables (validation error re-render)
+  if (prefillLeft)  loadFields(prefillLeft,  leftFieldSel,  prefillLeftField);
+  if (prefillRight) loadFields(prefillRight, rightFieldSel, prefillRightField);
+})();
+</script>
 {% endblock %}

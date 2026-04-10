@@ -7,6 +7,7 @@ export interface App {
   description: string | null;
   database_mode: DatabaseMode;
   database_config_json: string | null;
+  diagram_json: string | null;
   created_at: string;
   updated_at: string;
 }

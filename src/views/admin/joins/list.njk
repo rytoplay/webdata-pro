@@ -8,21 +8,29 @@
   </a>
 </div>
 
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show" role="alert">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 {% if joins.length === 0 %}
 <div class="text-center text-muted py-5">
   <i class="bi bi-diagram-2 fs-1 d-block mb-2"></i>
-  No joins defined yet.
+  <p>No joins defined yet.</p>
+  <a href="/admin/joins/new" class="btn btn-sm btn-outline-primary">Define your first join</a>
 </div>
 {% else %}
-<div class="card shadow-sm">
+<div class="card shadow-sm mb-4">
   <table class="table table-hover mb-0">
     <thead class="table-light">
       <tr>
-        <th>Left table</th>
-        <th>Left field</th>
+        <th>From table</th>
+        <th>Foreign key</th>
         <th></th>
-        <th>Right table</th>
-        <th>Right field</th>
+        <th>Referenced table</th>
+        <th>Referenced field</th>
         <th>Type</th>
         <th>Label</th>
         <th></th>
@@ -30,11 +38,13 @@
     </thead>
     <tbody>
       {% for join in joins %}
+      {% set lt = tableMap.get(join.left_table_id) %}
+      {% set rt = tableMap.get(join.right_table_id) %}
       <tr>
-        <td><code>{{ tableMap.get(join.left_table_id).table_name if tableMap.get(join.left_table_id) else join.left_table_id }}</code></td>
+        <td><code>{{ lt.table_name if lt else join.left_table_id }}</code></td>
         <td><code>{{ join.left_field_name }}</code></td>
         <td class="text-muted"><i class="bi bi-arrow-right"></i></td>
-        <td><code>{{ tableMap.get(join.right_table_id).table_name if tableMap.get(join.right_table_id) else join.right_table_id }}</code></td>
+        <td><code>{{ rt.table_name if rt else join.right_table_id }}</code></td>
         <td><code>{{ join.right_field_name }}</code></td>
         <td><span class="badge bg-light text-dark border">{{ join.join_type_default }}</span></td>
         <td class="text-muted small">{{ join.relationship_label or '—' }}</td>
@@ -50,4 +60,449 @@
   </table>
 </div>
 {% endif %}
+
+{# ── Schema Diagram ──────────────────────────────────────────────────────── #}
+{% if tables.length > 0 %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-diagram-3 me-2"></i><strong>Schema Diagram</strong></span>
+    <span id="diag-saved" class="text-muted small" style="opacity:0;transition:opacity 0.4s;">Saved</span>
+  </div>
+  <div class="card-body p-0" style="overflow:auto;min-height:320px;">
+    <div id="schema-diagram" style="line-height:0;"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const TABLES = {{ tables | dump | safe }};
+  const FIELDS = {{ tableFieldsMap | dump | safe }};
+  const JOINS  = {{ joins  | dump | safe }};
+  const SAVED  = {{ savedDiagram | dump | safe }};
+
+  const BOX_W   = 190;
+  const ROW_H   = 26;
+  const HDR_H   = 36;
+  const COL_GAP = 120;
+  const ROW_GAP = 60;
+  const PAD     = 30;
+  const NS      = 'http://www.w3.org/2000/svg';
+
+  if (!TABLES.length) return;
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function svgEl(tag, attrs, text) {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  const boxH    = id => HDR_H + (FIELDS[id] ?? []).length * ROW_H;
+  const tableById = new Map(TABLES.map(t => [t.id, t]));
+
+  // ── Layout (DFS from leaf) ────────────────────────────────────────────────
+
+  // Build undirected adjacency within this app's tables
+  const adj = new Map(TABLES.map(t => [t.id, new Set()]));
+  for (const j of JOINS) {
+    adj.get(j.left_table_id)?.add(j.right_table_id);
+    adj.get(j.right_table_id)?.add(j.left_table_id);
+  }
+
+  // Degree within a component subset
+  function degIn(id, subset) {
+    return [...(adj.get(id) ?? [])].filter(n => subset.includes(n)).length;
+  }
+
+  // DFS from a leaf: produces linear order with hubs in the middle
+  function arrangeComponent(ids) {
+    if (ids.length <= 1) return ids;
+
+    // Pick a leaf (degree 1 in this component) as start — or lowest-degree node
+    const start = ids.reduce((best, id) =>
+      degIn(id, ids) < degIn(best, ids) ? id : best
+    , ids[0]);
+
+    const visited = new Set();
+    const order   = [];
+
+    function dfs(id) {
+      if (visited.has(id)) return;
+      visited.add(id);
+      order.push(id);
+      // Visit neighbors sorted: higher-degree first so they go in middle
+      const neighbors = [...(adj.get(id) ?? [])]
+        .filter(n => ids.includes(n) && !visited.has(n))
+        .sort((a, b) => degIn(b, ids) - degIn(a, ids));
+      for (const n of neighbors) dfs(n);
+    }
+
+    dfs(start);
+    // Catch any disconnected stragglers
+    for (const id of ids) if (!visited.has(id)) order.push(id);
+    return order;
+  }
+
+  // Collect connected components, arrange each
+  const remaining = new Set(TABLES.map(t => t.id));
+  const rows = [];
+
+  while (remaining.size > 0) {
+    // Start component with any remaining node
+    const start = [...remaining][0];
+    const component = [];
+    const queue = [start];
+    const seen  = new Set([start]);
+    while (queue.length) {
+      const id = queue.shift();
+      component.push(id);
+      remaining.delete(id);
+      for (const nbr of (adj.get(id) ?? []))
+        if (seen.has(nbr) || !remaining.has(nbr)) continue;
+        else { seen.add(nbr); queue.push(nbr); }
+    }
+    rows.push(arrangeComponent(component));
+  }
+
+  // Assign initial (x, y) from layout
+  function computeInitialPositions() {
+    const rowMaxH = rows.map(row => Math.max(...row.map(id => boxH(id))));
+    const positions = {};
+    let rowY = PAD;
+    for (let r = 0; r < rows.length; r++) {
+      rows[r].forEach((id, c) => {
+        positions[id] = { x: PAD + c * (BOX_W + COL_GAP), y: rowY };
+      });
+      rowY += rowMaxH[r] + ROW_GAP;
+    }
+    return positions;
+  }
+
+  // Current positions — start from saved, fall back to computed layout
+  const positions = {};
+  const initialPos = computeInitialPositions();
+  for (const t of TABLES) {
+    const saved = SAVED[t.id] ?? SAVED[String(t.id)];
+    positions[t.id] = saved ?? initialPos[t.id];
+  }
+
+  // ── SVG canvas ────────────────────────────────────────────────────────────
+
+  const allX = Object.values(positions).map(p => p.x);
+  const allY = Object.values(positions).map(p => p.y);
+  const maxBH = Math.max(...TABLES.map(t => boxH(t.id)));
+  const svgW = Math.max(900, Math.max(...allX) + BOX_W + PAD + 200);
+  const svgH = Math.max(400, Math.max(...allY) + maxBH + PAD + 100);
+
+  const svg = svgEl('svg', { width: svgW, height: svgH });
+  svg.style.fontFamily  = 'inherit';
+  svg.style.display     = 'block';
+  svg.style.userSelect  = 'none';
+
+  const connLayer = svgEl('g', {});
+  svg.appendChild(connLayer);
+  const boxLayer  = svgEl('g', {});
+  svg.appendChild(boxLayer);
+
+  // ── Render table boxes ────────────────────────────────────────────────────
+
+  const boxEls = {};  // tableId → <g>
+
+  for (const t of TABLES) {
+    const pos    = positions[t.id];
+    const bh     = boxH(t.id);
+    const fields = FIELDS[t.id] ?? [];
+
+    const g = svgEl('g', {
+      transform: `translate(${pos.x},${pos.y})`,
+      'data-table-id': t.id
+    });
+    g.style.cursor = 'grab';
+
+    // Shadow
+    g.appendChild(svgEl('rect', {
+      x: 3, y: 3, width: BOX_W, height: bh, rx: 8,
+      fill: 'rgba(0,0,0,0.07)'
+    }));
+
+    // Body
+    g.appendChild(svgEl('rect', {
+      x: 0, y: 0, width: BOX_W, height: bh, rx: 8,
+      fill: '#fff', stroke: 'var(--border)', 'stroke-width': 1.5
+    }));
+
+    // Header clip (rounded top only)
+    const clipId = `hc${t.id}`;
+    const defs   = svgEl('defs', {});
+    const clip   = svgEl('clipPath', { id: clipId });
+    clip.appendChild(svgEl('rect', { x: 0, y: 0, width: BOX_W, height: HDR_H + 8, rx: 8 }));
+    defs.appendChild(clip);
+    g.appendChild(defs);
+
+    g.appendChild(svgEl('rect', {
+      x: 0, y: 0, width: BOX_W, height: HDR_H,
+      fill: 'var(--accent-soft)', 'clip-path': `url(#${clipId})`
+    }));
+
+    // Table name
+    g.appendChild(svgEl('text', {
+      x: BOX_W / 2, y: HDR_H / 2 + 5,
+      'text-anchor': 'middle', 'font-size': '12', 'font-weight': '700',
+      fill: 'var(--accent)'
+    }, t.table_name));
+
+    g.appendChild(svgEl('line', {
+      x1: 0, y1: HDR_H, x2: BOX_W, y2: HDR_H,
+      stroke: 'var(--border)', 'stroke-width': 1.5
+    }));
+
+    // Field rows
+    fields.forEach((f, i) => {
+      const fy = HDR_H + i * ROW_H;
+      if (f.is_primary_key)
+        g.appendChild(svgEl('rect', { x: 0, y: fy, width: BOX_W, height: ROW_H, fill: '#fff8e1' }));
+      if (i < fields.length - 1)
+        g.appendChild(svgEl('line', {
+          x1: 0, y1: fy + ROW_H, x2: BOX_W, y2: fy + ROW_H,
+          stroke: 'var(--border)', 'stroke-width': 0.75, 'stroke-dasharray': '3,3'
+        }));
+      if (f.is_primary_key)
+        g.appendChild(svgEl('text', { x: 10, y: fy + ROW_H / 2 + 4, 'font-size': '11', fill: '#b45309' }, '🔑'));
+      g.appendChild(svgEl('text', {
+        x: f.is_primary_key ? 26 : 12, y: fy + ROW_H / 2 + 4,
+        'font-size': '11', fill: f.is_primary_key ? '#b45309' : 'var(--text-main)'
+      }, f.field_name));
+      g.appendChild(svgEl('text', {
+        x: BOX_W - 8, y: fy + ROW_H / 2 + 4,
+        'text-anchor': 'end', 'font-size': '10', fill: 'var(--text-muted)'
+      }, f.data_type));
+    });
+
+    boxEls[t.id] = g;
+    boxLayer.appendChild(g);
+  }
+
+  // ── Render connectors ─────────────────────────────────────────────────────
+
+  const connEls = {};  // joinId → { path, dot1, dot2 }
+
+  function connectorEndpoints(j) {
+    const lPos    = positions[j.left_table_id];
+    const rPos    = positions[j.right_table_id];
+    const lFields = FIELDS[j.left_table_id]  ?? [];
+    const rFields = FIELDS[j.right_table_id] ?? [];
+    const lfi     = lFields.findIndex(f => f.field_name === j.left_field_name);
+    const rfi     = rFields.findIndex(f => f.field_name === j.right_field_name);
+    if (lfi < 0 || rfi < 0 || !lPos || !rPos) return null;
+
+    const lCx = lPos.x + BOX_W / 2;
+    const rCx = rPos.x + BOX_W / 2;
+    const ly  = lPos.y + HDR_H + lfi * ROW_H + ROW_H / 2;
+    const ry  = rPos.y + HDR_H + rfi * ROW_H + ROW_H / 2;
+
+    let x1, x2;
+    if (lCx <= rCx) { x1 = lPos.x + BOX_W; x2 = rPos.x; }
+    else             { x1 = lPos.x;          x2 = rPos.x + BOX_W; }
+
+    const dx  = Math.abs(x2 - x1);
+    const cp  = Math.max(dx * 0.5, 50);
+    const dir = x2 >= x1 ? 1 : -1;
+    const d   = `M ${x1} ${ly} C ${x1+dir*cp} ${ly}, ${x2-dir*cp} ${ry}, ${x2} ${ry}`;
+
+    return { d, x1, y1: ly, x2, y2: ry };
+  }
+
+  for (const j of JOINS) {
+    if (!tableById.has(j.left_table_id) || !tableById.has(j.right_table_id)) continue;
+    const pts = connectorEndpoints(j);
+    if (!pts) continue;
+
+    const path = svgEl('path', {
+      d: pts.d, fill: 'none',
+      stroke: 'var(--accent)', 'stroke-width': '2', opacity: '0.6'
+    });
+    const dot1 = svgEl('circle', { cx: pts.x1, cy: pts.y1, r: 4, fill: 'var(--accent)', opacity: '0.7' });
+    const dot2 = svgEl('circle', { cx: pts.x2, cy: pts.y2, r: 4, fill: 'var(--accent)', opacity: '0.7' });
+
+    connLayer.appendChild(path);
+    connLayer.appendChild(dot1);
+    connLayer.appendChild(dot2);
+    connEls[j.id] = { path, dot1, dot2 };
+  }
+
+  function redrawConnectors() {
+    for (const j of JOINS) {
+      const c = connEls[j.id];
+      if (!c) continue;
+      const pts = connectorEndpoints(j);
+      if (!pts) continue;
+      c.path.setAttribute('d', pts.d);
+      c.dot1.setAttribute('cx', pts.x1);
+      c.dot1.setAttribute('cy', pts.y1);
+      c.dot2.setAttribute('cx', pts.x2);
+      c.dot2.setAttribute('cy', pts.y2);
+    }
+  }
+
+  // ── Drag ─────────────────────────────────────────────────────────────────
+
+  let drag = null;   // { id, offsetX, offsetY }
+  let saveTimer = null;
+
+  function svgCoord(clientX, clientY) {
+    const rect = svg.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  svg.addEventListener('mousedown', e => {
+    const g = e.target.closest('[data-table-id]');
+    if (!g) return;
+    const id  = parseInt(g.dataset.tableId);
+    const pt  = svgCoord(e.clientX, e.clientY);
+    drag = { id, offsetX: pt.x - positions[id].x, offsetY: pt.y - positions[id].y };
+    g.style.cursor = 'grabbing';
+    // Bring to front
+    boxLayer.appendChild(g);
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!drag) return;
+    const pt = svgCoord(e.clientX, e.clientY);
+    positions[drag.id].x = pt.x - drag.offsetX;
+    positions[drag.id].y = pt.y - drag.offsetY;
+    boxEls[drag.id].setAttribute('transform',
+      `translate(${positions[drag.id].x},${positions[drag.id].y})`);
+    redrawConnectors();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!drag) return;
+    boxEls[drag.id].style.cursor = 'grab';
+    drag = null;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(savePositions, 700);
+  });
+
+  // ── Persist positions ─────────────────────────────────────────────────────
+
+  async function savePositions() {
+    try {
+      await fetch('/admin/joins/diagram-positions', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ positions })
+      });
+      const indicator = document.getElementById('diag-saved');
+      if (indicator) {
+        indicator.style.opacity = '1';
+        setTimeout(() => indicator.style.opacity = '0', 1500);
+      }
+    } catch (_) {}
+  }
+
+  document.getElementById('schema-diagram').appendChild(svg);
+})();
+</script>
+{% endif %}
+
+{# ── Query Builder Preview ───────────────────────────────────────────────── #}
+<div class="card shadow-sm">
+  <div class="card-header d-flex align-items-center justify-content-between" style="cursor:pointer;"
+    data-bs-toggle="collapse" data-bs-target="#qb-panel">
+    <span><i class="bi bi-terminal me-2"></i><strong>Query Builder Preview</strong></span>
+    <i class="bi bi-chevron-down" id="qb-chevron"></i>
+  </div>
+  <div class="collapse" id="qb-panel">
+    <div class="card-body p-4">
+      <p class="text-muted small mb-3">
+        Enter a from-table and a list of <code>table.field</code> references to see the SQL
+        the query builder would generate. Use this to verify your joins are wired correctly.
+      </p>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label">From table</label>
+          <select id="qb-from" class="form-select">
+            <option value="">— select —</option>
+            {% for t in tables %}
+            <option value="{{ t.table_name }}">{{ t.label }} ({{ t.table_name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">Columns <span class="text-muted small">(space or comma separated)</span></label>
+          <input type="text" id="qb-cols" class="form-control font-monospace"
+            placeholder="books.title authors.last_name book_authors.id">
+        </div>
+      </div>
+
+      <button id="qb-run" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-play-fill me-1"></i>Generate SQL
+      </button>
+
+      <div id="qb-result" class="mt-3" style="display:none;">
+        <pre id="qb-sql" class="p-3 rounded mb-0"
+          style="background:var(--accent-soft);font-size:0.82rem;white-space:pre-wrap;"></pre>
+      </div>
+      <div id="qb-error" class="alert alert-danger mt-3 mb-0 small" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // Chevron toggle
+  const panel = document.getElementById('qb-panel');
+  const chev  = document.getElementById('qb-chevron');
+  if (panel) {
+    panel.addEventListener('show.bs.collapse',  () => chev.className = 'bi bi-chevron-up');
+    panel.addEventListener('hide.bs.collapse',  () => chev.className = 'bi bi-chevron-down');
+  }
+
+  document.getElementById('qb-run').addEventListener('click', async () => {
+    const fromTable = document.getElementById('qb-from').value;
+    const columns   = document.getElementById('qb-cols').value.trim();
+    const resultEl  = document.getElementById('qb-result');
+    const sqlEl     = document.getElementById('qb-sql');
+    const errEl     = document.getElementById('qb-error');
+
+    resultEl.style.display = 'none';
+    errEl.style.display    = 'none';
+
+    if (!fromTable || !columns) {
+      errEl.textContent = 'Please select a from-table and enter at least one table.field reference.';
+      errEl.style.display = '';
+      return;
+    }
+
+    try {
+      const res  = await fetch('/admin/joins/preview', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ from_table: fromTable, columns })
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        errEl.textContent  = data.error;
+        errEl.style.display = '';
+      } else {
+        sqlEl.textContent       = data.sql;
+        resultEl.style.display  = '';
+      }
+    } catch (e) {
+      errEl.textContent  = 'Request failed: ' + e.message;
+      errEl.style.display = '';
+    }
+  });
+
+  // Also trigger on Enter in the columns input
+  document.getElementById('qb-cols').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('qb-run').click();
+  });
+})();
+</script>
 {% endblock %}
