@@ -1,0 +1,111 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ table.label }}</h1>
+  {% if tableExists %}
+  <a href="/admin/data/{{ table.table_name }}/new" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Add Record
+  </a>
+  {% endif %}
+</div>
+
+<div class="d-flex gap-4" style="align-items:flex-start;">
+
+  {# ── Table switcher sidebar ────────────────────────────── #}
+  <div style="min-width:190px;flex-shrink:0;">
+    <div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:0.5rem;">Tables</div>
+    <div class="d-flex flex-column gap-1">
+      {% for t in allTables %}
+      <a href="/admin/data/{{ t.table_name }}"
+        class="d-block px-3 py-2 rounded text-decoration-none"
+        style="font-size:0.875rem;font-weight:{% if t.table_name == table.table_name %}700{% else %}600{% endif %};
+               color:{% if t.table_name == table.table_name %}var(--accent){% else %}var(--text-main){% endif %};
+               background:{% if t.table_name == table.table_name %}var(--accent-soft){% else %}transparent{% endif %};
+               border:1.5px solid {% if t.table_name == table.table_name %}var(--border){% else %}transparent{% endif %};">
+        {{ t.label }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── Main area ─────────────────────────────────────────── #}
+  <div class="flex-grow-1" style="min-width:0;">
+
+    {% if not tableExists %}
+    <div class="alert alert-warning d-flex align-items-center gap-3">
+      <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+      <div>
+        The table <strong>{{ table.table_name }}</strong> doesn't exist in the database yet.
+        Try deleting and recreating it from the
+        <a href="/admin/tables" class="alert-link">Tables</a> screen.
+      </div>
+    </div>
+
+    {% elif records.length === 0 %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+      No records yet. <a href="/admin/data/{{ table.table_name }}/new">Add one</a>.
+    </div>
+
+    {% else %}
+    <div class="card shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              {% for field in visibleFields %}
+              <th>{{ field.label }}</th>
+              {% endfor %}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for record in records %}
+            <tr>
+              {% for field in visibleFields %}
+              <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {% set val = record[field.field_name] %}
+                {% if val === null or val === undefined %}
+                  <span class="text-muted" style="font-size:0.8rem;">—</span>
+                {% elif field.data_type == 'boolean' %}
+                  {% if val %}
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                  {% else %}
+                    <i class="bi bi-circle text-muted"></i>
+                  {% endif %}
+                {% else %}
+                  {{ val }}
+                {% endif %}
+              </td>
+              {% endfor %}
+              <td class="text-end" style="white-space:nowrap;">
+                {% if pkField %}
+                <a href="/admin/data/{{ table.table_name }}/{{ record[pkField.field_name] }}/edit"
+                   class="btn btn-sm btn-outline-primary me-1">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="POST"
+                  action="/admin/data/{{ table.table_name }}/{{ record[pkField.field_name] }}/delete"
+                  class="d-inline"
+                  onsubmit="return confirm('Delete this record?')">
+                  <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if records.length >= 200 %}
+      <div class="card-footer text-muted" style="font-size:0.8rem;">
+        Showing first 200 records.
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

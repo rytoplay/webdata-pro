@@ -7,6 +7,7 @@ import { appsRouter } from './apps';
 import { tablesRouter } from './tables';
 import { fieldsRouter } from './fields';
 import { joinsRouter } from './joins';
+import { dataRouter } from './data';
 
 export const adminRouter = Router();
 
@@ -60,6 +61,7 @@ adminRouter.get('/', async (req, res, next) => {
 adminRouter.use('/tables',    requireApp, tablesRouter);
 adminRouter.use('/fields',    requireApp, fieldsRouter);
 adminRouter.use('/joins',     requireApp, joinsRouter);
+adminRouter.use('/data',      requireApp, dataRouter);
 adminRouter.get('/views',     requireApp, (_req, res) => res.render('admin/stub', { title: 'Views' }));
 adminRouter.get('/templates', requireApp, (_req, res) => res.render('admin/stub', { title: 'Templates' }));
 adminRouter.get('/groups',    requireApp, (_req, res) => res.render('admin/stub', { title: 'Groups' }));

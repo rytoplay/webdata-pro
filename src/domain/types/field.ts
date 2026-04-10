@@ -23,7 +23,8 @@ export type UIWidget =
   | 'email'
   | 'url'
   | 'password'
-  | 'hidden';
+  | 'hidden'
+  | 'time';
 
 export interface AppField {
   id: number;
@@ -38,6 +39,7 @@ export interface AppField {
   is_searchable_default: boolean;
   is_visible_default: boolean;
   ui_widget: UIWidget;
+  ui_options_json: string | null;
   sort_order: number;
 }
 
@@ -53,6 +55,7 @@ export interface CreateFieldInput {
   is_searchable_default?: boolean;
   is_visible_default?: boolean;
   ui_widget?: UIWidget;
+  ui_options_json?: string | null;
   sort_order?: number;
 }
 
@@ -65,5 +68,6 @@ export interface UpdateFieldInput {
   is_searchable_default?: boolean;
   is_visible_default?: boolean;
   ui_widget?: UIWidget;
+  ui_options_json?: string | null;
   sort_order?: number;
 }

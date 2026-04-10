@@ -11,6 +11,16 @@ async function start() {
     process.exit(1);
   }
 
+  try {
+    const [completed] = await db.migrate.latest();
+    if (completed.length > 0) {
+      console.log(`Migrations applied: ${completed.join(', ')}`);
+    }
+  } catch (err) {
+    console.error('Migration failed:', err);
+    process.exit(1);
+  }
+
   const app = createApp();
 
   app.listen(config.port, () => {

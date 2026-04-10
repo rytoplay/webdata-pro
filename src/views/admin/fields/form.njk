@@ -2,88 +2,490 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>{{ title }}</h1>
-  <a href="/admin/fields?table_id={{ table.id }}" class="btn btn-sm btn-outline-secondary">&larr; Back</a>
+  <h1>Add Fields <span class="text-muted fw-normal fs-5">— {{ table.label }}</span></h1>
+  <a href="/admin/fields?table_id={{ table.id }}" class="btn btn-sm btn-outline-secondary">&larr; Fields</a>
 </div>
 
-<div class="card shadow-sm" style="max-width:640px">
-  <div class="card-body p-4">
-    <form method="POST" action="/admin/fields">
-      <input type="hidden" name="table_id" value="{{ table.id }}">
+<p class="text-muted mb-3" style="font-size:0.875rem;">
+  Type a field name and <kbd>Tab</kbd> through each column.
+  <kbd>Tab</kbd> past the last column moves to the next row automatically.
+  <kbd>Ctrl+Enter</kbd> saves. Drag <i class="bi bi-grip-vertical"></i> to reorder new rows.
+</p>
 
-      <div class="row g-3 mb-3">
-        <div class="col-md-6">
-          <label class="form-label fw-semibold">Field name <span class="text-danger">*</span></label>
-          <input type="text" name="field_name" class="form-control {% if errors.field_name %}is-invalid{% endif %}"
-            value="{{ field.field_name if field else '' }}" placeholder="e.g. title" required>
-          {% if errors.field_name %}<div class="invalid-feedback">{{ errors.field_name[0] }}</div>{% endif %}
-        </div>
-        <div class="col-md-6">
-          <label class="form-label fw-semibold">Label <span class="text-danger">*</span></label>
-          <input type="text" name="label" class="form-control {% if errors.label %}is-invalid{% endif %}"
-            value="{{ field.label if field else '' }}" placeholder="e.g. Title" required>
-          {% if errors.label %}<div class="invalid-feedback">{{ errors.label[0] }}</div>{% endif %}
-        </div>
-      </div>
-
-      <div class="row g-3 mb-3">
-        <div class="col-md-6">
-          <label class="form-label fw-semibold">Data type</label>
-          <select name="data_type" class="form-select">
-            {% for dt in dataTypes %}
-            <option value="{{ dt }}" {% if field and field.data_type == dt %}selected{% endif %}>{{ dt }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label fw-semibold">UI widget</label>
-          <select name="ui_widget" class="form-select">
-            {% for w in uiWidgets %}
-            <option value="{{ w }}" {% if field and field.ui_widget == w %}selected{% endif %}>{{ w }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label fw-semibold">Default value</label>
-        <input type="text" name="default_value" class="form-control"
-          value="{{ field.default_value if field else '' }}">
-      </div>
-
-      <div class="mb-4 d-flex flex-wrap gap-3">
-        <div class="form-check">
-          <input type="checkbox" name="is_required" value="true" class="form-check-input" id="req"
-            {% if field and field.is_required %}checked{% endif %}>
-          <label class="form-check-label" for="req">Required</label>
-        </div>
-        <div class="form-check">
-          <input type="checkbox" name="is_primary_key" value="true" class="form-check-input" id="pk"
-            {% if field and field.is_primary_key %}checked{% endif %}>
-          <label class="form-check-label" for="pk">Primary key</label>
-        </div>
-        <div class="form-check">
-          <input type="checkbox" name="is_auto_increment" value="true" class="form-check-input" id="ai"
-            {% if field and field.is_auto_increment %}checked{% endif %}>
-          <label class="form-check-label" for="ai">Auto-increment</label>
-        </div>
-        <div class="form-check">
-          <input type="checkbox" name="is_searchable_default" value="true" class="form-check-input" id="search"
-            {% if field and field.is_searchable_default %}checked{% endif %}>
-          <label class="form-check-label" for="search">Searchable by default</label>
-        </div>
-        <div class="form-check">
-          <input type="checkbox" name="is_visible_default" value="true" class="form-check-input" id="visible"
-            {% if field and (field.is_visible_default or not field) %}checked{% endif %}>
-          <label class="form-check-label" for="visible">Visible by default</label>
-        </div>
-      </div>
-
-      <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">Add Field</button>
-        <a href="/admin/fields?table_id={{ table.id }}" class="btn btn-outline-secondary">Cancel</a>
-      </div>
-    </form>
+{# ── Existing fields (read-only) ──────────────────────────────────────── #}
+{% if existingFields and existingFields.length > 0 %}
+<div class="card shadow-sm mb-3">
+  <div class="card-body p-0">
+    <div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;
+                color:var(--text-muted);padding:0.5rem 0.75rem 0.25rem;">
+      Existing fields ({{ existingFields.length }})
+    </div>
+    <table class="table table-sm mb-0" style="font-size:0.8rem;">
+      <thead class="table-light">
+        <tr>
+          <th style="width:32px;padding-left:0.75rem;">#</th>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Widget</th>
+          <th style="width:44px;">Req</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for field in existingFields %}
+        <tr style="color:var(--text-muted);">
+          <td style="padding-left:0.75rem;">{{ loop.index0 }}</td>
+          <td><code style="color:var(--text-muted);">{{ field.field_name }}</code></td>
+          <td>{{ field.data_type }}</td>
+          <td>{{ field.ui_widget }}</td>
+          <td>{% if field.is_required %}<i class="bi bi-check text-success"></i>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
+{% endif %}
+
+{# ── New field entry form ─────────────────────────────────────────────── #}
+<form id="fields-form" method="POST" action="/admin/fields/batch" onsubmit="return prepareSubmit()">
+  <input type="hidden" name="table_id" value="{{ table.id }}">
+  <input type="hidden" id="rows-json" name="rows_json" value="[]">
+
+  <div class="card shadow-sm mb-3">
+    <div class="table-responsive">
+      <table class="table mb-0" id="fields-table" style="table-layout:fixed;min-width:860px;">
+        <colgroup>
+          <col style="width:28px">     <!-- drag handle -->
+          <col style="width:28px">     <!-- # -->
+          <col style="width:170px">    <!-- field name -->
+          <col style="width:148px">    <!-- data type -->
+          <col style="width:130px">    <!-- widget -->
+          <col style="width:48px">     <!-- req -->
+          <col>                        <!-- params (flex) -->
+        </colgroup>
+        <thead class="table-light">
+          <tr>
+            <th style="width:28px;"></th>
+            <th style="font-size:0.7rem;color:var(--text-muted);">#</th>
+            <th>Field name</th>
+            <th>Type</th>
+            <th>Widget</th>
+            <th title="Required">Req</th>
+            <th>Parameters</th>
+          </tr>
+        </thead>
+        <tbody id="fields-tbody">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 align-items-center">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>Save Fields
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="addRow(true)">
+      <i class="bi bi-plus-lg me-1"></i>Add Row
+    </button>
+    <a href="/admin/fields?table_id={{ table.id }}" class="btn btn-outline-secondary">Cancel</a>
+    <span class="text-muted ms-2" style="font-size:0.8rem;" id="row-count-label"></span>
+  </div>
+</form>
+
+<style>
+  #fields-table input[type="text"],
+  #fields-table input[type="number"] {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    padding: 0.3rem 0.5rem;
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.875rem;
+    color: var(--text-main);
+    width: 100%;
+    background: #fff;
+  }
+  #fields-table input[type="text"]:focus,
+  #fields-table input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(91,110,245,0.13);
+  }
+  #fields-table select {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    padding: 0.3rem 0.4rem;
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.875rem;
+    color: var(--text-main);
+    background: #fff;
+    width: 100%;
+  }
+  #fields-table select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(91,110,245,0.13);
+  }
+  #fields-table textarea {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    padding: 0.3rem 0.5rem;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-main);
+    resize: vertical;
+    width: 100%;
+  }
+  #fields-table textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(91,110,245,0.13);
+  }
+  #fields-table td {
+    padding: 0.3rem 0.4rem;
+    vertical-align: top;
+  }
+  #fields-table .row-num {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    padding-top: 0.55rem;
+    text-align: center;
+    user-select: none;
+  }
+  #fields-table input[type="checkbox"] {
+    width: 16px; height: 16px;
+    margin-top: 0.4rem;
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+  .params-group { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .params-label { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+  .params-options-hint { font-size: 0.72rem; color: var(--text-muted); }
+  tr.field-row:hover td { background: #fafafe; }
+  kbd {
+    display: inline-block; padding: 0.1em 0.4em;
+    background: #f1f5f9; border: 1px solid #cbd5e1;
+    border-radius: 4px; font-size: 0.78rem;
+    font-family: monospace; color: var(--text-main);
+  }
+  /* Drag styles */
+  .row-drag-handle {
+    cursor: grab; color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    height: 28px; border-radius: 4px;
+    transition: color 0.1s, background 0.1s;
+  }
+  .row-drag-handle:hover { color: var(--accent); background: var(--accent-soft); }
+  .row-drag-handle:active { cursor: grabbing; }
+  tr.field-row.dragging { opacity: 0.35; }
+  tr.field-row.drag-over-top    { box-shadow: inset 0 2px 0 var(--accent); }
+  tr.field-row.drag-over-bottom { box-shadow: inset 0 -2px 0 var(--accent); }
+</style>
+
+<script>
+const DATA_TYPES = [
+  { value: 'string',     label: 'Text (short)' },
+  { value: 'text',       label: 'Text (long)' },
+  { value: 'integer',    label: 'Integer' },
+  { value: 'bigInteger', label: 'Big Integer' },
+  { value: 'decimal',    label: 'Decimal' },
+  { value: 'float',      label: 'Float' },
+  { value: 'boolean',    label: 'Boolean' },
+  { value: 'date',       label: 'Date' },
+  { value: 'datetime',   label: 'Date & Time' },
+  { value: 'time',       label: 'Time' },
+  { value: 'json',       label: 'JSON' },
+  { value: 'uuid',       label: 'UUID' }
+];
+
+const WIDGET_DEFAULTS = {
+  string: 'text', text: 'textarea', integer: 'text', bigInteger: 'text',
+  decimal: 'text', float: 'text', boolean: 'checkbox',
+  date: 'text', datetime: 'text', time: 'text', json: 'textarea', uuid: 'text'
+};
+
+let rowCount = 0;
+let dragSrc  = null;
+
+// ── Field name sanitization ───────────────────────────────────────────────
+function sanitizeFieldName(v) {
+  return v
+    .toLowerCase()
+    .replace(/[\s\-]+/g, '_')      // spaces and hyphens → underscore
+    .replace(/[^a-z0-9_]/g, '')    // strip everything else
+    .replace(/^[^a-z]*/, '');      // must start with a letter
+}
+
+function attachSanitizer(input) {
+  input.addEventListener('input', function () {
+    const pos = this.selectionStart;
+    const raw = this.value;
+    const clean = sanitizeFieldName(raw);
+    if (clean !== raw) {
+      const removed = raw.slice(0, pos).length - sanitizeFieldName(raw.slice(0, pos)).length;
+      this.value = clean;
+      const newPos = Math.max(0, pos - removed);
+      this.setSelectionRange(newPos, newPos);
+    }
+  });
+  input.addEventListener('paste', function (e) {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData).getData('text');
+    const cursorPos = this.selectionStart;
+    const before = sanitizeFieldName(this.value.slice(0, cursorPos));
+    const after  = sanitizeFieldName(this.value.slice(this.selectionEnd));
+    const mid    = sanitizeFieldName(pasted);
+    this.value   = sanitizeFieldName(before + mid + after);
+  });
+}
+
+// ── Row HTML builders ─────────────────────────────────────────────────────
+function buildTypeOptions(sel) {
+  return DATA_TYPES.map(dt =>
+    `<option value="${dt.value}"${dt.value === sel ? ' selected' : ''}>${dt.label}</option>`
+  ).join('');
+}
+
+function buildWidgetOptions(sel) {
+  return [
+    { value: 'text',     label: 'Text box'   },
+    { value: 'select',   label: 'Select list'},
+    { value: 'textarea', label: 'Text area'  },
+    { value: 'checkbox', label: 'Checkbox'   }
+  ].map(o => `<option value="${o.value}"${o.value === sel ? ' selected' : ''}>${o.label}</option>`).join('');
+}
+
+function buildParamsHtml(idx, widget, maxLen, options, taRows, taCols) {
+  maxLen = maxLen || 255;
+  taRows = taRows || 4;
+  taCols = taCols || 60;
+
+  return `<div class="params-wrapper" data-idx="${idx}">
+    <div class="params-group" data-widget="text">
+      <span class="params-label">Max length</span>
+      <input type="number" data-field="max_length" value="${maxLen}" min="1" max="65535" style="width:72px">
+    </div>
+    <div class="params-group" data-widget="select">
+      <div style="width:100%">
+        <div class="params-label mb-1">Options <span class="params-options-hint">(one per line)</span></div>
+        <textarea data-field="options" rows="3" style="width:100%;min-width:160px;"
+          placeholder="Option A&#10;Option B&#10;Option C">${options || ''}</textarea>
+      </div>
+    </div>
+    <div class="params-group" data-widget="textarea">
+      <span class="params-label">Rows</span>
+      <input type="number" data-field="textarea_rows" value="${taRows}" min="1" max="30" style="width:58px">
+      <span class="params-label">Cols</span>
+      <input type="number" data-field="textarea_cols" value="${taCols}" min="10" max="200" style="width:58px">
+    </div>
+    <div class="params-group" data-widget="checkbox">
+      <span class="params-label" style="font-style:italic;">—</span>
+    </div>
+  </div>`;
+}
+
+// ── Add a new row ─────────────────────────────────────────────────────────
+function addRow(focusNew) {
+  const idx  = rowCount++;
+  const tbody = document.getElementById('fields-tbody');
+  const tr   = document.createElement('tr');
+  tr.className = 'field-row';
+  tr.draggable = true;
+  tr.dataset.idx = idx;
+
+  tr.innerHTML = `
+    <td style="padding:0.2rem 0.3rem;vertical-align:middle;">
+      <div class="row-drag-handle"><i class="bi bi-grip-vertical"></i></div>
+    </td>
+    <td class="row-num">${idx + 1}</td>
+    <td>
+      <input type="text" data-field="field_name" placeholder="field_name"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </td>
+    <td>
+      <select data-field="data_type" onchange="onDataTypeChange(this,${idx})">
+        ${buildTypeOptions('string')}
+      </select>
+    </td>
+    <td>
+      <select data-field="widget" onchange="onWidgetChange(this,${idx})">
+        ${buildWidgetOptions('text')}
+      </select>
+    </td>
+    <td style="text-align:center;">
+      <input type="checkbox" data-field="is_required">
+    </td>
+    <td>${buildParamsHtml(idx, 'text')}</td>`;
+
+  tbody.appendChild(tr);
+  activateParams(idx, 'text');
+  updateRowNums();
+
+  // Attach field-name sanitizer
+  attachSanitizer(tr.querySelector('[data-field="field_name"]'));
+
+  // Tab key: last element of last row → add new row
+  tr.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab' || e.shiftKey) return;
+    const tabbables = getVisibleTabbables(tr);
+    if (tabbables.length && e.target === tabbables[tabbables.length - 1]) {
+      const allRows = document.querySelectorAll('#fields-tbody tr.field-row');
+      if (tr === allRows[allRows.length - 1]) {
+        e.preventDefault();
+        addRow(true);
+      }
+    }
+  });
+
+  // Drag-and-drop handlers
+  tr.addEventListener('dragstart', function (e) {
+    dragSrc = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+  });
+
+  tr.addEventListener('dragend', function () {
+    clearDragStyles();
+    dragSrc = null;
+  });
+
+  tr.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    if (this === dragSrc) return;
+    clearDragStyles();
+    dragSrc && dragSrc.classList.add('dragging');
+    const rect = this.getBoundingClientRect();
+    this.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+    e.dataTransfer.dropEffect = 'move';
+  });
+
+  tr.addEventListener('dragleave', function () {
+    this.classList.remove('drag-over-top', 'drag-over-bottom');
+  });
+
+  tr.addEventListener('drop', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragSrc || dragSrc === this) return;
+    const rect = this.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    before
+      ? tbody.insertBefore(dragSrc, this)
+      : (this.nextSibling ? tbody.insertBefore(dragSrc, this.nextSibling) : tbody.appendChild(dragSrc));
+    clearDragStyles();
+    updateRowNums();
+  });
+
+  if (focusNew) {
+    tr.querySelector('[data-field="field_name"]').focus();
+  }
+  return tr;
+}
+
+function clearDragStyles() {
+  document.querySelectorAll('#fields-tbody tr.field-row')
+    .forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom', 'dragging'));
+}
+
+function getVisibleTabbables(row) {
+  return [...row.querySelectorAll('input, select, textarea')].filter(el => {
+    let p = el;
+    while (p && p !== row) {
+      if (getComputedStyle(p).display === 'none') return false;
+      p = p.parentElement;
+    }
+    return true;
+  });
+}
+
+function updateRowNums() {
+  document.querySelectorAll('#fields-tbody tr.field-row').forEach((tr, i) => {
+    const cell = tr.querySelector('.row-num');
+    if (cell) cell.textContent = i + 1;
+  });
+  const count = document.querySelectorAll('#fields-tbody tr.field-row').length;
+  document.getElementById('row-count-label').textContent =
+    count === 1 ? '1 row' : `${count} rows`;
+}
+
+// ── Widget / type change handlers ─────────────────────────────────────────
+function onDataTypeChange(sel, idx) {
+  const widget = WIDGET_DEFAULTS[sel.value] || 'text';
+  sel.closest('tr').querySelector('[data-field="widget"]').value = widget;
+  activateParams(idx, widget);
+}
+
+function onWidgetChange(sel, idx) {
+  activateParams(idx, sel.value);
+}
+
+function activateParams(idx, widget) {
+  const wrapper = document.querySelector(`.params-wrapper[data-idx="${idx}"]`);
+  if (!wrapper) return;
+  wrapper.querySelectorAll('.params-group').forEach(g => {
+    g.style.display = g.dataset.widget === widget ? '' : 'none';
+  });
+}
+
+// ── Form submit ───────────────────────────────────────────────────────────
+function fieldNameToLabel(name) {
+  return name.replace(/_/g, ' ')
+    .split(' ')
+    .map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : '')
+    .join(' ');
+}
+
+function prepareSubmit() {
+  const rows = [];
+  document.querySelectorAll('#fields-tbody tr.field-row').forEach(tr => {
+    const fieldName = tr.querySelector('[data-field="field_name"]').value.trim();
+    if (!fieldName) return;
+
+    const dataType = tr.querySelector('[data-field="data_type"]').value;
+    const widget   = tr.querySelector('[data-field="widget"]').value;
+    const isReq    = tr.querySelector('[data-field="is_required"]').checked;
+    const wrapper  = tr.querySelector('.params-wrapper');
+
+    const row = { field_name: fieldName, label: fieldNameToLabel(fieldName),
+                  data_type: dataType, widget, is_required: isReq };
+
+    if (widget === 'text' || widget === 'number') {
+      const ml = wrapper.querySelector('[data-field="max_length"]');
+      if (ml) row.max_length = ml.value;
+    } else if (widget === 'select') {
+      const op = wrapper.querySelector('[data-field="options"]');
+      if (op) row.options = op.value;
+    } else if (widget === 'textarea') {
+      const r = wrapper.querySelector('[data-field="textarea_rows"]');
+      const c = wrapper.querySelector('[data-field="textarea_cols"]');
+      if (r) row.textarea_rows = r.value;
+      if (c) row.textarea_cols = c.value;
+    }
+    rows.push(row);
+  });
+
+  if (rows.length === 0) {
+    alert('Please enter at least one field name.');
+    document.querySelector('[data-field="field_name"]')?.focus();
+    return false;
+  }
+
+  document.getElementById('rows-json').value = JSON.stringify(rows);
+  return true;
+}
+
+// Ctrl/Cmd+Enter to submit from anywhere
+document.addEventListener('keydown', function (e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    document.getElementById('fields-form').requestSubmit();
+  }
+});
+
+// Init: 3 starter rows, focus first
+addRow(false);
+addRow(false);
+addRow(false);
+document.querySelector('[data-field="field_name"]').focus();
+</script>
 {% endblock %}

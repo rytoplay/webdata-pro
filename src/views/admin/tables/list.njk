@@ -37,6 +37,9 @@
           {% endif %}
         </td>
         <td class="text-end">
+          <a href="/admin/data/{{ table.table_name }}" class="btn btn-sm btn-outline-info me-1">
+            <i class="bi bi-grid-3x3-gap"></i> Browse
+          </a>
           <a href="/admin/fields?table_id={{ table.id }}" class="btn btn-sm btn-outline-secondary me-1">
             <i class="bi bi-list-columns"></i> Fields
           </a>
@@ -44,7 +47,7 @@
             <i class="bi bi-pencil"></i>
           </a>
           <form method="POST" action="/admin/tables/{{ table.id }}/delete" class="d-inline"
-            onsubmit="return confirm('Delete table {{ table.label }}?')">
+            onsubmit="return confirm('Delete table {{ table.label }}? This will also drop the table from the database.')">
             <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
           </form>
         </td>

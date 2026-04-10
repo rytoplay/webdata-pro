@@ -4,9 +4,9 @@
 <div class="page-header">
   <h1>Fields — <span class="text-muted fw-normal">{{ table.label }}</span></h1>
   <div class="d-flex gap-2">
-    <a href="/admin/tables?app_id={{ table.app_id }}" class="btn btn-sm btn-outline-secondary">&larr; Tables</a>
+    <a href="/admin/tables" class="btn btn-sm btn-outline-secondary">&larr; Tables</a>
     <a href="/admin/fields/new?table_id={{ table.id }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-lg me-1"></i>Add Field
+      <i class="bi bi-plus-lg me-1"></i>Add Fields
     </a>
   </div>
 </div>
@@ -17,24 +17,33 @@
   No fields yet. <a href="/admin/fields/new?table_id={{ table.id }}">Add one</a>.
 </div>
 {% else %}
+<p class="text-muted mb-2" style="font-size:0.8rem;">
+  <i class="bi bi-grip-vertical me-1"></i>Drag rows to reorder. Order is saved automatically.
+</p>
 <div class="card shadow-sm">
-  <table class="table table-hover mb-0">
+  <table class="table table-hover mb-0" id="fields-table">
     <thead class="table-light">
       <tr>
-        <th>#</th>
+        <th style="width:32px;"></th>
+        <th style="width:36px;">#</th>
         <th>Name</th>
         <th>Label</th>
         <th>Type</th>
         <th>Widget</th>
-        <th>Req</th>
-        <th>PK</th>
+        <th style="width:44px;" title="Required">Req</th>
+        <th style="width:44px;" title="Primary Key">PK</th>
         <th></th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="fields-tbody">
       {% for field in fields %}
-      <tr>
-        <td class="text-muted small">{{ field.sort_order }}</td>
+      <tr class="field-row" data-field-id="{{ field.id }}" draggable="true">
+        <td class="drag-handle-cell">
+          <span class="drag-handle" title="Drag to reorder">
+            <i class="bi bi-grip-vertical"></i>
+          </span>
+        </td>
+        <td class="sort-num text-muted small">{{ loop.index0 }}</td>
         <td><code>{{ field.field_name }}</code></td>
         <td>{{ field.label }}</td>
         <td><span class="badge bg-light text-dark border">{{ field.data_type }}</span></td>
@@ -42,10 +51,12 @@
         <td>{% if field.is_required %}<i class="bi bi-check text-success"></i>{% endif %}</td>
         <td>{% if field.is_primary_key %}<i class="bi bi-key text-warning"></i>{% endif %}</td>
         <td class="text-end">
+          {% if not field.is_primary_key %}
           <form method="POST" action="/admin/fields/{{ field.id }}/delete" class="d-inline"
-            onsubmit="return confirm('Delete field {{ field.label }}?')">
+            onsubmit="return confirm('Delete field {{ field.label }}? This will also drop the column.')">
             <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
           </form>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -53,4 +64,138 @@
   </table>
 </div>
 {% endif %}
+
+<style>
+  .drag-handle-cell { width: 32px; padding: 0 4px !important; vertical-align: middle; }
+  .drag-handle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 28px;
+    cursor: grab; color: var(--text-muted); border-radius: 4px;
+    transition: color 0.1s, background 0.1s;
+  }
+  .drag-handle:hover { color: var(--accent); background: var(--accent-soft); }
+  .drag-handle:active { cursor: grabbing; }
+  tr.field-row { transition: opacity 0.15s; }
+  tr.field-row.dragging { opacity: 0.35; }
+  tr.field-row.drag-over-top    { box-shadow: inset 0 2px 0 var(--accent); }
+  tr.field-row.drag-over-bottom { box-shadow: inset 0 -2px 0 var(--accent); }
+  #save-indicator {
+    position: fixed; bottom: 1.25rem; right: 1.5rem;
+    background: #166534; color: #fff;
+    padding: 0.4rem 1rem; border-radius: 8px;
+    font-size: 0.8rem; font-weight: 700;
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #save-indicator.visible { opacity: 1; }
+</style>
+
+<div id="save-indicator"><i class="bi bi-check-circle me-1"></i>Order saved</div>
+
+<script>
+(function () {
+  const tbody = document.getElementById('fields-tbody');
+  if (!tbody) return;
+
+  let dragSrc = null;
+
+  function getRows() {
+    return [...tbody.querySelectorAll('tr.field-row')];
+  }
+
+  function clearDragStyles() {
+    getRows().forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom', 'dragging'));
+  }
+
+  // Attach events to a row
+  function initRow(tr) {
+    tr.addEventListener('dragstart', function (e) {
+      dragSrc = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', this.dataset.fieldId);
+    });
+
+    tr.addEventListener('dragend', function () {
+      clearDragStyles();
+      dragSrc = null;
+    });
+
+    tr.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      if (this === dragSrc) return;
+      clearDragStyles();
+      dragSrc && dragSrc.classList.add('dragging');
+      // Determine top or bottom half
+      const rect = this.getBoundingClientRect();
+      const mid  = rect.top + rect.height / 2;
+      this.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    tr.addEventListener('dragleave', function () {
+      this.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+
+    tr.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!dragSrc || dragSrc === this) return;
+
+      const rect = this.getBoundingClientRect();
+      const mid  = rect.top + rect.height / 2;
+      const insertBefore = e.clientY < mid;
+
+      if (insertBefore) {
+        tbody.insertBefore(dragSrc, this);
+      } else {
+        this.nextSibling
+          ? tbody.insertBefore(dragSrc, this.nextSibling)
+          : tbody.appendChild(dragSrc);
+      }
+
+      clearDragStyles();
+      updateSortNums();
+      saveOrder();
+    });
+  }
+
+  getRows().forEach(initRow);
+
+  function updateSortNums() {
+    getRows().forEach((tr, i) => {
+      const cell = tr.querySelector('.sort-num');
+      if (cell) cell.textContent = i;
+    });
+  }
+
+  let saveTimer = null;
+  function saveOrder() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      const order = getRows().map((tr, i) => ({
+        id:         parseInt(tr.dataset.fieldId, 10),
+        sort_order: i
+      }));
+      try {
+        const res = await fetch('/admin/fields/reorder', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ order })
+        });
+        if (!res.ok) throw new Error('server error');
+        flashSaved();
+      } catch (err) {
+        console.error('Reorder failed:', err);
+      }
+    }, 300);
+  }
+
+  function flashSaved() {
+    const el = document.getElementById('save-indicator');
+    el.classList.add('visible');
+    setTimeout(() => el.classList.remove('visible'), 1800);
+  }
+})();
+</script>
 {% endblock %}

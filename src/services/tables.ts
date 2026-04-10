@@ -1,5 +1,7 @@
 import { db } from '../db/knex';
 import type { AppTable, CreateTableInput, UpdateTableInput, AppField } from '../domain/types';
+import { getApp } from './apps';
+import { getAppDb } from '../db/adapters/appDb';
 
 export async function listTables(appId: number): Promise<AppTable[]> {
   return db('app_tables').where({ app_id: appId }).orderBy('label');
@@ -38,6 +40,19 @@ export async function createTable(input: CreateTableInput): Promise<AppTable> {
     sort_order: 0
   });
 
+  // Create the actual table in the app database immediately
+  try {
+    const app = await getApp(input.app_id);
+    if (app) {
+      const appDb = getAppDb(app);
+      await appDb.raw(`CREATE TABLE "${input.table_name}" ("id" INTEGER PRIMARY KEY AUTOINCREMENT)`);
+    }
+  } catch (ddlErr) {
+    // Roll back the metadata if DDL fails
+    await db('app_tables').where({ id: tableId }).delete();
+    throw ddlErr;
+  }
+
   return db('app_tables').where({ id: tableId }).first() as Promise<AppTable>;
 }
 
@@ -47,6 +62,20 @@ export async function updateTable(id: number, input: UpdateTableInput): Promise<
 }
 
 export async function deleteTable(id: number): Promise<void> {
+  const table = await getTable(id);
+  if (table) {
+    // Drop the physical table from the app database
+    try {
+      const app = await getApp(table.app_id);
+      if (app) {
+        const appDb = getAppDb(app);
+        await appDb.raw(`DROP TABLE IF EXISTS "${table.table_name}"`);
+      }
+    } catch { /* non-fatal — metadata cleanup proceeds regardless */ }
+
+    // Delete related fields (SQLite FK cascade isn't enabled by default)
+    await db('app_fields').where({ table_id: id }).delete();
+  }
   await db('app_tables').where({ id }).delete();
 }
 

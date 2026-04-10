@@ -1,0 +1,166 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+
+{% set isEdit = record !== null %}
+{% set pkField = null %}
+{% for f in fields %}
+  {% if f.is_primary_key %}{% set pkField = f %}{% endif %}
+{% endfor %}
+
+<div class="page-header">
+  <h1>{{ title }}</h1>
+  <a href="/admin/data/{{ table.table_name }}" class="btn btn-sm btn-outline-secondary">&larr; Back</a>
+</div>
+
+<div class="card shadow-sm" style="max-width:640px;">
+  <div class="card-body p-4">
+
+    {% if isEdit and pkField %}
+    <form method="POST" action="/admin/data/{{ table.table_name }}/{{ record[pkField.field_name] }}">
+    {% else %}
+    <form method="POST" action="/admin/data/{{ table.table_name }}">
+    {% endif %}
+
+      {% for field in fields %}
+
+        {# Skip auto-increment PKs — they're assigned by the DB #}
+        {% if field.is_primary_key and field.is_auto_increment %}{% continue %}{% endif %}
+
+        {# Hidden widget fields are still submitted but not shown to the user #}
+        {% if field.ui_widget == 'hidden' %}
+          <input type="hidden" name="{{ field.field_name }}"
+            value="{{ record[field.field_name] if record else (field.default_value if field.default_value else '') }}">
+          {% continue %}
+        {% endif %}
+
+        {% set fieldVal = record[field.field_name] if (record and record[field.field_name] !== null and record[field.field_name] !== undefined) else (field.default_value if field.default_value else '') %}
+        {% set hasError = errors and errors[field.field_name] %}
+
+        <div class="mb-3">
+          <label class="form-label" for="field-{{ field.field_name }}">
+            {{ field.label }}
+            {% if field.is_required and not field.is_primary_key %}
+              <span class="text-danger">*</span>
+            {% endif %}
+            {% if field.is_primary_key %}
+              <span class="badge ms-1" style="background:var(--accent-soft);color:var(--accent);font-size:0.65rem;">PK</span>
+            {% endif %}
+          </label>
+
+          {# ── Boolean / checkbox ──────────────────────────── #}
+          {% if field.ui_widget == 'checkbox' or field.data_type == 'boolean' %}
+          <div class="form-check">
+            <input class="form-check-input {% if hasError %}is-invalid{% endif %}"
+              type="checkbox" name="{{ field.field_name }}"
+              id="field-{{ field.field_name }}" value="on"
+              {% if fieldVal == 1 or fieldVal == 'true' or fieldVal == 'on' %}checked{% endif %}>
+            <label class="form-check-label" for="field-{{ field.field_name }}">Yes</label>
+            {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+          </div>
+
+          {# ── Textarea ────────────────────────────────────── #}
+          {% elif field.ui_widget == 'textarea' or field.data_type == 'text' or field.data_type == 'json' %}
+          <textarea class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" rows="4"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>{{ fieldVal }}</textarea>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── Date ────────────────────────────────────────── #}
+          {% elif field.ui_widget == 'date' or field.data_type == 'date' %}
+          <input type="date"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" value="{{ fieldVal }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── Datetime ────────────────────────────────────── #}
+          {% elif field.ui_widget == 'datetime' or field.data_type == 'datetime' %}
+          <input type="datetime-local"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" value="{{ fieldVal }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── Time ────────────────────────────────────────── #}
+          {% elif field.data_type == 'time' %}
+          <input type="time"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" value="{{ fieldVal }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── Number ──────────────────────────────────────── #}
+          {% elif field.ui_widget == 'number' or field.data_type in ['integer', 'bigInteger'] %}
+          <input type="number" step="1"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" value="{{ fieldVal }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── Decimal / float ─────────────────────────────── #}
+          {% elif field.data_type in ['decimal', 'float'] %}
+          <input type="number" step="any"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" value="{{ fieldVal }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── Email ───────────────────────────────────────── #}
+          {% elif field.ui_widget == 'email' %}
+          <input type="email"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" value="{{ fieldVal }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── URL ─────────────────────────────────────────── #}
+          {% elif field.ui_widget == 'url' %}
+          <input type="url"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" value="{{ fieldVal }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── Password ────────────────────────────────────── #}
+          {% elif field.ui_widget == 'password' %}
+          <input type="password" autocomplete="new-password"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+
+          {# ── Default: text ───────────────────────────────── #}
+          {% else %}
+          <input type="text"
+            class="form-control {% if hasError %}is-invalid{% endif %}"
+            id="field-{{ field.field_name }}"
+            name="{{ field.field_name }}" value="{{ fieldVal }}"
+            {% if field.is_required and not field.is_primary_key %}required{% endif %}>
+          {% if hasError %}<div class="invalid-feedback">{{ errors[field.field_name][0] }}</div>{% endif %}
+          {% endif %}
+
+        </div>
+      {% endfor %}
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">
+          {% if isEdit %}Save Changes{% else %}Create Record{% endif %}
+        </button>
+        <a href="/admin/data/{{ table.table_name }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+{% endblock %}
