@@ -1,0 +1,82 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ title }}</h1>
+  <a href="/admin/joins" class="btn btn-sm btn-outline-secondary">&larr; Back</a>
+</div>
+
+<div class="card shadow-sm" style="max-width:620px">
+  <div class="card-body p-4">
+    <p class="text-muted small mb-4">
+      A join defines how two tables are related. The report engine uses joins to build
+      multi-table queries safely — without Cartesian products.
+    </p>
+
+    <form method="POST" action="/admin/joins">
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Left table <span class="text-danger">*</span></label>
+          <select name="left_table_id" class="form-select" required>
+            <option value="">— select —</option>
+            {% for t in tables %}
+            <option value="{{ t.id }}" {% if join and join.left_table_id == t.id %}selected{% endif %}>
+              {{ t.label }} ({{ t.table_name }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Left field <span class="text-danger">*</span></label>
+          <input type="text" name="left_field_name" class="form-control"
+            value="{{ join.left_field_name if join else '' }}"
+            placeholder="e.g. author_id" required>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Right table <span class="text-danger">*</span></label>
+          <select name="right_table_id" class="form-select" required>
+            <option value="">— select —</option>
+            {% for t in tables %}
+            <option value="{{ t.id }}" {% if join and join.right_table_id == t.id %}selected{% endif %}>
+              {{ t.label }} ({{ t.table_name }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Right field <span class="text-danger">*</span></label>
+          <input type="text" name="right_field_name" class="form-control"
+            value="{{ join.right_field_name if join else '' }}"
+            placeholder="e.g. id" required>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <label class="form-label">Join type</label>
+          <select name="join_type_default" class="form-select">
+            <option value="left"  {% if not join or join.join_type_default == 'left'  %}selected{% endif %}>LEFT JOIN</option>
+            <option value="inner" {% if join and join.join_type_default == 'inner' %}selected{% endif %}>INNER JOIN</option>
+            <option value="right" {% if join and join.join_type_default == 'right' %}selected{% endif %}>RIGHT JOIN</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Relationship label</label>
+          <input type="text" name="relationship_label" class="form-control"
+            value="{{ join.relationship_label if join else '' }}"
+            placeholder="e.g. has author">
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Create Join</button>
+        <a href="/admin/joins" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

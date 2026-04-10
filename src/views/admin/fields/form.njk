@@ -1,0 +1,89 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ title }}</h1>
+  <a href="/admin/fields?table_id={{ table.id }}" class="btn btn-sm btn-outline-secondary">&larr; Back</a>
+</div>
+
+<div class="card shadow-sm" style="max-width:640px">
+  <div class="card-body p-4">
+    <form method="POST" action="/admin/fields">
+      <input type="hidden" name="table_id" value="{{ table.id }}">
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Field name <span class="text-danger">*</span></label>
+          <input type="text" name="field_name" class="form-control {% if errors.field_name %}is-invalid{% endif %}"
+            value="{{ field.field_name if field else '' }}" placeholder="e.g. title" required>
+          {% if errors.field_name %}<div class="invalid-feedback">{{ errors.field_name[0] }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Label <span class="text-danger">*</span></label>
+          <input type="text" name="label" class="form-control {% if errors.label %}is-invalid{% endif %}"
+            value="{{ field.label if field else '' }}" placeholder="e.g. Title" required>
+          {% if errors.label %}<div class="invalid-feedback">{{ errors.label[0] }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Data type</label>
+          <select name="data_type" class="form-select">
+            {% for dt in dataTypes %}
+            <option value="{{ dt }}" {% if field and field.data_type == dt %}selected{% endif %}>{{ dt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">UI widget</label>
+          <select name="ui_widget" class="form-select">
+            {% for w in uiWidgets %}
+            <option value="{{ w }}" {% if field and field.ui_widget == w %}selected{% endif %}>{{ w }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Default value</label>
+        <input type="text" name="default_value" class="form-control"
+          value="{{ field.default_value if field else '' }}">
+      </div>
+
+      <div class="mb-4 d-flex flex-wrap gap-3">
+        <div class="form-check">
+          <input type="checkbox" name="is_required" value="true" class="form-check-input" id="req"
+            {% if field and field.is_required %}checked{% endif %}>
+          <label class="form-check-label" for="req">Required</label>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" name="is_primary_key" value="true" class="form-check-input" id="pk"
+            {% if field and field.is_primary_key %}checked{% endif %}>
+          <label class="form-check-label" for="pk">Primary key</label>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" name="is_auto_increment" value="true" class="form-check-input" id="ai"
+            {% if field and field.is_auto_increment %}checked{% endif %}>
+          <label class="form-check-label" for="ai">Auto-increment</label>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" name="is_searchable_default" value="true" class="form-check-input" id="search"
+            {% if field and field.is_searchable_default %}checked{% endif %}>
+          <label class="form-check-label" for="search">Searchable by default</label>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" name="is_visible_default" value="true" class="form-check-input" id="visible"
+            {% if field and (field.is_visible_default or not field) %}checked{% endif %}>
+          <label class="form-check-label" for="visible">Visible by default</label>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Add Field</button>
+        <a href="/admin/fields?table_id={{ table.id }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

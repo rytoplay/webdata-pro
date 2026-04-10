@@ -1,0 +1,61 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>App Selector</h1>
+  <a href="/admin/apps/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>New App</a>
+</div>
+
+{% if apps.length === 0 %}
+<div class="card text-center p-5">
+  <i class="bi bi-database-add fs-1 text-muted mb-3 d-block"></i>
+  <h5 class="text-muted">No apps yet</h5>
+  <p class="text-muted small mb-3">Create your first app to start defining tables, fields, and views.</p>
+  <a href="#" class="btn btn-primary">Create App</a>
+</div>
+
+{% else %}
+
+{% if not currentApp %}
+<p class="text-muted mb-4" style="font-size:0.9rem;">
+  <i class="bi bi-hand-index me-1"></i>Select an app below to start working with it.
+</p>
+{% endif %}
+
+<div class="row g-3">
+  {% for app in apps %}
+
+  {% set isActive = currentApp and currentApp.id == app.id %}
+
+  <div class="col-md-4">
+    {% if not isActive %}
+    <form id="select-{{ app.id }}" method="POST" action="/admin/apps/{{ app.id }}/select" style="display:none"></form>
+    {% endif %}
+    <div class="card h-100"
+      {% if not isActive %}
+        onclick="document.getElementById('select-{{ app.id }}').submit()"
+        style="cursor:pointer;transition:box-shadow 0.15s,border-color 0.15s;"
+        onmouseenter="this.style.boxShadow='0 4px 20px rgba(91,110,245,0.15)'"
+        onmouseleave="this.style.boxShadow=''"
+      {% else %}
+        style="border:2.5px solid #5b6ef5;box-shadow:0 0 0 4px rgba(91,110,245,0.12);"
+      {% endif %}
+    >
+      <div class="card-body">
+        {% if isActive %}
+        <span class="badge mb-2" style="background:#eef0ff;color:#3730a3;font-size:0.7rem;">
+          <i class="bi bi-circle-fill me-1" style="font-size:0.45rem;vertical-align:middle;color:#5b6ef5"></i>
+          Current app
+        </span>
+        {% endif %}
+        <h6 class="card-title mb-1">{{ app.name }}</h6>
+        <p class="text-muted mb-2" style="font-size:0.8rem;"><code>{{ app.slug }}</code></p>
+        <span class="badge bg-light text-dark border" style="font-size:0.75rem;">{{ app.database_mode }}</span>
+      </div>
+    </div>
+  </div>
+
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

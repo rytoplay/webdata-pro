@@ -1,0 +1,53 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Joins</h1>
+  <a href="/admin/joins/new" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>New Join
+  </a>
+</div>
+
+{% if joins.length === 0 %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-diagram-2 fs-1 d-block mb-2"></i>
+  No joins defined yet.
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <table class="table table-hover mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Left table</th>
+        <th>Left field</th>
+        <th></th>
+        <th>Right table</th>
+        <th>Right field</th>
+        <th>Type</th>
+        <th>Label</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for join in joins %}
+      <tr>
+        <td><code>{{ tableMap.get(join.left_table_id).table_name if tableMap.get(join.left_table_id) else join.left_table_id }}</code></td>
+        <td><code>{{ join.left_field_name }}</code></td>
+        <td class="text-muted"><i class="bi bi-arrow-right"></i></td>
+        <td><code>{{ tableMap.get(join.right_table_id).table_name if tableMap.get(join.right_table_id) else join.right_table_id }}</code></td>
+        <td><code>{{ join.right_field_name }}</code></td>
+        <td><span class="badge bg-light text-dark border">{{ join.join_type_default }}</span></td>
+        <td class="text-muted small">{{ join.relationship_label or '—' }}</td>
+        <td class="text-end">
+          <form method="POST" action="/admin/joins/{{ join.id }}/delete" class="d-inline"
+            onsubmit="return confirm('Delete this join?')">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
