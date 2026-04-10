@@ -136,21 +136,24 @@ joinsRouter.post('/preview', async (req, res, next) => {
 
 joinsRouter.post('/', async (req, res, next) => {
   try {
-    const app = res.locals.currentApp as App;
+    const app    = res.locals.currentApp as App;
+    const isJson = req.headers.accept?.includes('application/json');
     const parsed = JoinSchema.safeParse(req.body);
+
     if (!parsed.success) {
+      if (isJson) return res.json({ error: Object.values(parsed.error.flatten().fieldErrors).flat().join('; ') });
       const tables = await tablesService.listTables(app.id);
-      return res.render('admin/joins/form', {
-        title: 'New Join',
-        tables,
-        join: req.body,
-        errors: parsed.error.flatten().fieldErrors
-      });
+      return res.render('admin/joins/form', { title: 'New Join', tables, join: req.body, errors: parsed.error.flatten().fieldErrors });
     }
+
     await joinsService.createJoin({ app_id: app.id, ...parsed.data });
+
+    if (isJson) return res.json({ ok: true });
     req.session.flash = { type: 'success', message: 'Join created.' };
     res.redirect('/admin/joins');
-  } catch (err) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (req.headers.accept?.includes('application/json')) return res.json({ error: msg });
     next(err);
   }
 });

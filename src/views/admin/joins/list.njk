@@ -3,9 +3,6 @@
 {% block content %}
 <div class="page-header">
   <h1>Joins</h1>
-  <a href="/admin/joins/new" class="btn btn-sm btn-primary">
-    <i class="bi bi-plus-lg me-1"></i>New Join
-  </a>
 </div>
 
 {% if flash %}
@@ -15,24 +12,22 @@
 </div>
 {% endif %}
 
-{% if joins.length === 0 %}
-<div class="text-center text-muted py-5">
-  <i class="bi bi-diagram-2 fs-1 d-block mb-2"></i>
-  <p>No joins defined yet.</p>
-  <a href="/admin/joins/new" class="btn btn-sm btn-outline-primary">Define your first join</a>
-</div>
-{% else %}
+<div id="join-error" class="alert alert-danger mb-3" style="display:none;"></div>
+
 <div class="card shadow-sm mb-4">
-  <table class="table table-hover mb-0">
+  <table class="table table-hover mb-0" id="joins-table">
     <thead class="table-light">
       <tr>
-        <th>From table</th>
-        <th>Foreign key</th>
-        <th></th>
-        <th>Referenced table</th>
+        <th>
+          Many <span class="text-muted fw-normal small">(FK table)</span>
+        </th>
+        <th>Foreign key field</th>
+        <th style="width:28px;"></th>
+        <th>
+          One <span class="text-muted fw-normal small">(parent table)</span>
+        </th>
         <th>Referenced field</th>
         <th>Type</th>
-        <th>Label</th>
         <th></th>
       </tr>
     </thead>
@@ -43,11 +38,10 @@
       <tr>
         <td><code>{{ lt.table_name if lt else join.left_table_id }}</code></td>
         <td><code>{{ join.left_field_name }}</code></td>
-        <td class="text-muted"><i class="bi bi-arrow-right"></i></td>
+        <td class="text-muted text-center"><i class="bi bi-arrow-right"></i></td>
         <td><code>{{ rt.table_name if rt else join.right_table_id }}</code></td>
         <td><code>{{ join.right_field_name }}</code></td>
         <td><span class="badge bg-light text-dark border">{{ join.join_type_default }}</span></td>
-        <td class="text-muted small">{{ join.relationship_label or '—' }}</td>
         <td class="text-end">
           <form method="POST" action="/admin/joins/{{ join.id }}/delete" class="d-inline"
             onsubmit="return confirm('Delete this join?')">
@@ -56,10 +50,136 @@
         </td>
       </tr>
       {% endfor %}
+
+      {# ── Inline add row ── #}
+      <tr id="add-join-row" class="table-secondary">
+        <td>
+          <select id="aj-left-table" class="form-select form-select-sm">
+            <option value="">— many side —</option>
+            {% for t in tables %}
+            <option value="{{ t.id }}" data-name="{{ t.table_name }}">{{ t.table_name }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td>
+          <select id="aj-left-field" class="form-select form-select-sm" disabled>
+            <option value="">— pick table —</option>
+          </select>
+        </td>
+        <td class="text-center text-muted"><i class="bi bi-arrow-right"></i></td>
+        <td>
+          <select id="aj-right-table" class="form-select form-select-sm">
+            <option value="">— one side —</option>
+            {% for t in tables %}
+            <option value="{{ t.id }}" data-name="{{ t.table_name }}">{{ t.table_name }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td>
+          <select id="aj-right-field" class="form-select form-select-sm" disabled>
+            <option value="">— pick table —</option>
+          </select>
+        </td>
+        <td>
+          <select id="aj-type" class="form-select form-select-sm">
+            <option value="left">LEFT</option>
+            <option value="inner">INNER</option>
+          </select>
+        </td>
+        <td class="text-end">
+          <button id="aj-save" class="btn btn-sm btn-primary" disabled>
+            <i class="bi bi-plus-lg"></i>
+          </button>
+        </td>
+      </tr>
     </tbody>
   </table>
 </div>
-{% endif %}
+
+<script>
+(function () {
+  const leftTableSel  = document.getElementById('aj-left-table');
+  const leftFieldSel  = document.getElementById('aj-left-field');
+  const rightTableSel = document.getElementById('aj-right-table');
+  const rightFieldSel = document.getElementById('aj-right-field');
+  const typeSel       = document.getElementById('aj-type');
+  const saveBtn       = document.getElementById('aj-save');
+  const errEl         = document.getElementById('join-error');
+
+  async function loadFields(tableId, selectEl) {
+    selectEl.disabled = true;
+    selectEl.innerHTML = '<option value="">Loading…</option>';
+    try {
+      const res    = await fetch(`/admin/joins/fields/${tableId}`);
+      const fields = await res.json();
+      selectEl.innerHTML = '<option value="">— select field —</option>';
+      for (const f of fields) {
+        const opt = document.createElement('option');
+        opt.value       = f.field_name;
+        opt.textContent = f.field_name + (f.is_primary_key ? ' 🔑' : '');
+        selectEl.appendChild(opt);
+      }
+      selectEl.disabled = false;
+    } catch {
+      selectEl.innerHTML = '<option value="">error</option>';
+    }
+    checkReady();
+  }
+
+  leftTableSel.addEventListener('change', () => {
+    if (leftTableSel.value) loadFields(leftTableSel.value, leftFieldSel);
+    else { leftFieldSel.innerHTML = '<option value="">— pick table —</option>'; leftFieldSel.disabled = true; checkReady(); }
+  });
+
+  rightTableSel.addEventListener('change', () => {
+    if (rightTableSel.value) loadFields(rightTableSel.value, rightFieldSel);
+    else { rightFieldSel.innerHTML = '<option value="">— pick table —</option>'; rightFieldSel.disabled = true; checkReady(); }
+  });
+
+  leftFieldSel.addEventListener('change',  checkReady);
+  rightFieldSel.addEventListener('change', checkReady);
+
+  function checkReady() {
+    saveBtn.disabled = !(leftTableSel.value && leftFieldSel.value &&
+                         rightTableSel.value && rightFieldSel.value);
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    errEl.style.display = 'none';
+    saveBtn.disabled    = true;
+    saveBtn.innerHTML   = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+      const res  = await fetch('/admin/joins', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json',
+                   'Accept':       'application/json' },
+        body: JSON.stringify({
+          left_table_id:    parseInt(leftTableSel.value),
+          left_field_name:  leftFieldSel.value,
+          right_table_id:   parseInt(rightTableSel.value),
+          right_field_name: rightFieldSel.value,
+          join_type_default: typeSel.value
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        errEl.textContent  = data.error;
+        errEl.style.display = '';
+      } else {
+        // Reload page to show new row and rebuild diagram
+        window.location.reload();
+      }
+    } catch (e) {
+      errEl.textContent  = 'Request failed: ' + e.message;
+      errEl.style.display = '';
+    }
+
+    saveBtn.innerHTML = '<i class="bi bi-plus-lg"></i>';
+    checkReady();
+  });
+})();
+</script>
 
 {# ── Schema Diagram ──────────────────────────────────────────────────────── #}
 {% if tables.length > 0 %}
