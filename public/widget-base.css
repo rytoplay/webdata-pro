@@ -1,0 +1,137 @@
+/*!
+ * Webdata Pro — base widget styles
+ * Colors are controlled by CSS custom properties.
+ * Override the :root variables in your search_form template to theme the widget.
+ */
+
+:root {
+  --wdp-primary:    #1e3a5f;
+  --wdp-on-primary: #ffffff;
+  --wdp-accent:     #2e86de;
+  --wdp-bg:         #f0f4f8;
+  --wdp-surface:    #ffffff;
+  --wdp-text:       #1a2a3a;
+  --wdp-border:     #c8d8e8;
+}
+
+.wdp { font-family: system-ui, sans-serif; color: var(--wdp-text); line-height: 1.4; }
+.wdp * { box-sizing: border-box; }
+
+/* ── Search bar ─────────────────────────────────────────────────────────── */
+.wdp-sf {
+  background: var(--wdp-bg);
+  padding: 10px 12px;
+  border: 1px solid var(--wdp-border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.wdp-sf input[type=text] {
+  flex: 1;
+  padding: 7px 11px;
+  border: 1.5px solid var(--wdp-border);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: var(--wdp-surface);
+  color: var(--wdp-text);
+  outline: none;
+}
+.wdp-sf input[type=text]:focus { border-color: var(--wdp-accent); }
+.wdp-sf button {
+  padding: 7px 16px;
+  background: var(--wdp-primary);
+  color: var(--wdp-on-primary);
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.wdp-sf-clear { color: var(--wdp-primary); font-size: 0.8rem; cursor: pointer; text-decoration: none; padding: 0 4px; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.wdp-hdr {
+  background: var(--wdp-primary);
+  color: var(--wdp-on-primary);
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.wdp-hdr-title { font-size: 1.05rem; font-weight: bold; }
+.wdp-hdr-meta  { font-size: 0.8rem; opacity: 0.75; }
+
+/* ── Group header ───────────────────────────────────────────────────────── */
+.wdp-grp {
+  padding: 6px 14px;
+  background: var(--wdp-bg);
+  border-left: 1px solid var(--wdp-border);
+  border-right: 1px solid var(--wdp-border);
+  border-bottom: 1px solid var(--wdp-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wdp-grp-label { font-size: 0.7rem; font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wdp-accent); }
+.wdp-grp-bar   { flex: 1; height: 1px; background: var(--wdp-border); }
+
+/* ── Card rows ──────────────────────────────────────────────────────────── */
+.wdp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--wdp-surface);
+  border-left: 1px solid var(--wdp-border);
+  border-right: 1px solid var(--wdp-border);
+  border-bottom: 1px solid var(--wdp-border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.wdp-row:hover    { background: var(--wdp-bg); }
+.wdp-row-body     { flex: 1; min-width: 0; }
+.wdp-row-title    { font-size: 1rem; font-weight: bold; color: var(--wdp-text); }
+.wdp-row-sub      { color: var(--wdp-primary); font-size: 0.85rem; margin-top: 2px; }
+.wdp-row-meta     { color: var(--wdp-text); font-size: 0.8rem; opacity: 0.65; margin-top: 2px; }
+.wdp-arr          { color: var(--wdp-accent); font-size: 1.1rem; flex-shrink: 0; }
+
+/* ── Table rows ─────────────────────────────────────────────────────────── */
+.wdp-table { width: 100%; border-collapse: collapse; border-left: 1px solid var(--wdp-border); border-right: 1px solid var(--wdp-border); }
+.wdp-table tr[data-wdp-action] { cursor: pointer; }
+.wdp-table tr[data-wdp-action]:hover td { background: var(--wdp-bg); }
+.wdp-table th { background: var(--wdp-primary); color: var(--wdp-on-primary); padding: 8px 10px; font-size: 0.8rem; font-weight: bold; text-align: left; white-space: nowrap; }
+.wdp-table td { padding: 7px 10px; border-bottom: 1px solid var(--wdp-border); font-size: 0.85rem; background: var(--wdp-surface); }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.wdp-footer {
+  background: var(--wdp-bg);
+  padding: 8px 14px;
+  border: 1px solid var(--wdp-border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Pagination (built-in) ──────────────────────────────────────────────── */
+.wdp-pagination   { display: flex; gap: 6px; align-items: center; }
+.wdp-page-btn     { padding: 5px 13px; background: var(--wdp-surface); color: var(--wdp-primary); border: 1.5px solid var(--wdp-border); border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
+.wdp-page-btn:hover:not([disabled]) { background: var(--wdp-primary); color: var(--wdp-on-primary); border-color: var(--wdp-primary); }
+.wdp-page-btn[disabled] { opacity: 0.35; cursor: default; }
+.wdp-page-info    { color: var(--wdp-text); font-size: 0.82rem; opacity: 0.7; padding: 0 6px; }
+
+/* ── Detail view ────────────────────────────────────────────────────────── */
+.wdp-detail       { background: var(--wdp-bg); border: 1px solid var(--wdp-border); border-radius: 6px; padding: 20px 24px; }
+.wdp-back         { background: none; border: none; color: var(--wdp-primary); cursor: pointer; font-size: 0.875rem; padding: 0; margin-bottom: 16px; display: inline-block; }
+.wdp-detail-title { font-size: 1.6rem; color: var(--wdp-text); margin: 0 0 4px; font-weight: bold; }
+.wdp-detail-sub   { color: var(--wdp-primary); font-size: 0.95rem; margin-bottom: 8px; }
+.wdp-badge        { display: inline-block; background: var(--wdp-accent); color: #fff; font-size: 0.68rem; font-weight: bold; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 10px; margin-bottom: 14px; }
+.wdp-detail-body  { color: var(--wdp-text); font-size: 0.9rem; line-height: 1.7; border-top: 1px solid var(--wdp-border); padding-top: 14px; }
+.wdp-field        { margin-bottom: 8px; }
+.wdp-field-label  { font-size: 0.72rem; font-weight: bold; letter-spacing: 0.05em; text-transform: uppercase; color: var(--wdp-primary); margin-bottom: 2px; }
+.wdp-field-value  { color: var(--wdp-text); font-size: 0.9rem; }
+
+/* ── Utility ────────────────────────────────────────────────────────────── */
+.wdp-error        { color: #991b1b; padding: 12px; }
+.wdp-loading      { opacity: 0.6; pointer-events: none; }

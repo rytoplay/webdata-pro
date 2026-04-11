@@ -1,0 +1,94 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+<div class="page-header">
+  <h1>Views</h1>
+  <a href="/admin/views/new" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>New View
+  </a>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if views.length === 0 %}
+<div class="card shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-layout-text-window fs-1 text-muted d-block mb-2"></i>
+    <p class="text-muted mb-3">No views yet. Create one to build a public-facing report.</p>
+    <a href="/admin/views/new" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New View
+    </a>
+  </div>
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <table class="table table-hover mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Label</th>
+        <th>URL slug</th>
+        <th>Base table</th>
+        <th>Access</th>
+        <th>Embed snippet</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for view in views %}
+      {% set bt = tableById.get(view.base_table_id) %}
+      <tr>
+        <td><strong>{{ view.label }}</strong></td>
+        <td><code>{{ view.view_name }}</code></td>
+        <td><code>{{ bt.table_name if bt else '—' }}</code></td>
+        <td>
+          {% if view.is_public %}
+          <span class="badge bg-success">Public</span>
+          {% else %}
+          <span class="badge bg-secondary">Members only</span>
+          {% endif %}
+        </td>
+        <td>
+          <code style="font-size:0.72rem;">WDP.mount('#el', {app:'{{ currentApp.slug }}', view:'{{ view.view_name }}'})</code>
+        </td>
+        <td class="text-end" style="white-space:nowrap;">
+          <a href="/admin/views/{{ view.id }}/templates" class="btn btn-sm btn-outline-primary me-1">
+            <i class="bi bi-code-slash"></i> Templates
+          </a>
+          <a href="/admin/views/{{ view.id }}/edit" class="btn btn-sm btn-outline-secondary me-1">
+            <i class="bi bi-gear"></i>
+          </a>
+          <form method="POST" action="/admin/views/{{ view.id }}/delete" class="d-inline"
+            onsubmit="return confirm('Delete view {{ view.label }}?')">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card shadow-sm mt-4">
+  <div class="card-header"><i class="bi bi-box-arrow-up-right me-2"></i><strong>Embed Instructions</strong></div>
+  <div class="card-body">
+    <p class="text-muted small mb-2">Add to any HTML page or WordPress site:</p>
+    <pre class="p-3 rounded" style="background:var(--accent-soft);font-size:0.8rem;">&lt;!-- Place where you want the widget --&gt;
+&lt;div id="my-widget"&gt;&lt;/div&gt;
+
+&lt;!-- Before &lt;/body&gt; --&gt;
+&lt;script src="{{ request.protocol }}://{{ request.hostname }}{% if request.port != 80 and request.port != 443 %}:{{ request.port }}{% endif %}/static/embed.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  WDP.mount('#my-widget', {
+    app:     '{{ currentApp.slug }}',
+    view:    'your-view-name',
+    baseUrl: '{{ request.protocol }}://{{ request.hostname }}{% if request.port != 80 and request.port != 443 %}:{{ request.port }}{% endif %}'
+  });
+&lt;/script&gt;</pre>
+  </div>
+</div>
+{% endblock %}

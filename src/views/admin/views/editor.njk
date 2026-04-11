@@ -1,0 +1,365 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ view.label }} <span class="text-muted fw-normal fs-6">/ templates</span></h1>
+  <div class="d-flex gap-2">
+    <button type="button" id="btn-ai-design" class="btn btn-sm btn-warning"
+      data-bs-toggle="modal" data-bs-target="#aiModal">
+      <i class="bi bi-stars me-1"></i>AI Design
+    </button>
+    <a href="/admin/views/{{ view.id }}/edit" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-gear me-1"></i>Settings
+    </a>
+    <a href="/admin/views/{{ view.id }}/preview" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-play me-1"></i>Preview
+    </a>
+    <a href="/admin/views" class="btn btn-sm btn-outline-secondary">&larr; Views</a>
+  </div>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<form method="POST" action="/admin/views/{{ view.id }}/templates" id="editor-form">
+
+  {# Hidden SQL mode fields — updated by JS #}
+  <input type="hidden" name="query_mode" id="query_mode_input" value="{{ view.query_mode }}">
+  <input type="hidden" name="custom_sql"  id="custom_sql_input"  value="{{ view.custom_sql or '' }}">
+
+  <div class="row g-3">
+
+    {# ── Left: template selector ── #}
+    <div class="col-lg-2">
+      <div class="list-group" id="tpl-selector">
+        {% for type in templateTypes %}
+        <button type="button"
+          class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2 px-3
+                 {% if loop.first %}active{% endif %}"
+          data-tpl="{{ type }}" style="font-size:0.82rem;">
+          {{ templateLabels[type] }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ── Center: editor + right: field picker ── #}
+    <div class="col-lg-7">
+      {% for type in templateTypes %}
+      <div class="tpl-panel {% if not loop.first %}d-none{% endif %}" data-tpl="{{ type }}">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <label class="form-label mb-0 fw-semibold">{{ templateLabels[type] }}</label>
+          <span class="text-muted small">HTML — use <code>\${token}</code> for values</span>
+        </div>
+        <textarea name="{{ type }}" class="form-control font-monospace tpl-textarea"
+          data-tpl="{{ type }}" rows="16"
+          style="font-size:0.8rem;resize:vertical;">{{ templates[type] | escape }}</textarea>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# ── Right: field picker ── #}
+    <div class="col-lg-3">
+      <div class="card shadow-sm h-100" style="font-size:0.8rem;">
+        <div class="card-header py-2"><strong>Field tokens</strong></div>
+        <div class="card-body p-2" style="overflow-y:auto;max-height:420px;">
+
+          {% if baseFields.length %}
+          <div class="text-muted small mb-1" style="font-size:0.7rem;">BASE TABLE — {{ baseTable.table_name }}</div>
+          {% for f in baseFields %}
+          <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn"
+            data-token="${{ '{' }}{{ baseTable.table_name }}.{{ f.field_name }}{{ '}' }}"
+            style="background:var(--accent-soft);color:var(--accent);border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;">
+            \${{ '{' }}{{ baseTable.table_name }}.{{ f.field_name }}{{ '}' }}
+          </button>
+          {% endfor %}
+          {% endif %}
+
+          {% if joinedFields.length %}
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">JOINED TABLES</div>
+          {% for f in joinedFields %}
+          <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn"
+            data-token="${{ '{' }}{{ f.table_name }}.{{ f.field_name }}{{ '}' }}"
+            style="background:#f0fdf4;color:#166534;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;">
+            \${{ '{' }}{{ f.table_name }}.{{ f.field_name }}{{ '}' }}
+          </button>
+          {% endfor %}
+          {% endif %}
+
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">SYSTEM TOKENS</div>
+          {% set sysTokens = [
+            ['_pk',          'Primary key of this row'],
+            ['_row_num',     'Row number in results'],
+            ['_q',           'Current search term'],
+            ['_page',        'Current page number'],
+            ['_total',       'Total record count'],
+            ['_total_pages', 'Total pages'],
+            ['_has_prev',    'Non-empty if prev page exists'],
+            ['_has_next',    'Non-empty if next page exists'],
+            ['_prev_page',   'Previous page number'],
+            ['_next_page',   'Next page number'],
+            ['_pagination',  'Full pagination widget (HTML)'],
+            ['_sort',        'Current sort field'],
+            ['_dir',         'Current sort direction'],
+            ['_group_value', 'Value of grouping field (group templates)']
+          ] %}
+          {% for tok in sysTokens %}
+          <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn"
+            data-token="${{ '{' }}{{ tok[0] }}{{ '}' }}"
+            title="{{ tok[1] }}"
+            style="background:#fff3cd;color:#664d03;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;">
+            \${{ '{' }}{{ tok[0] }}{{ '}' }}
+          </button>
+          {% endfor %}
+
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">INTERACTION ATTRIBUTES</div>
+          <div style="font-size:0.72rem;color:#6b7280;line-height:1.8;">
+            <code>data-wdp-action="detail"</code><br>
+            <code>data-wdp-id="\${_pk}"</code><br>
+            <code>data-wdp-action="page"</code><br>
+            <code>data-wdp-page="\${_next_page}"</code><br>
+            <code>data-wdp-action="back"</code><br>
+            <code>data-wdp-action="sort"</code><br>
+            <code>data-wdp-field="title"</code><br>
+            <code>data-wdp-form="search"</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── SQL section ── #}
+  <div class="card shadow-sm mt-3">
+    <div class="card-header d-flex align-items-center justify-content-between py-2">
+      <span>
+        <i class="bi bi-terminal me-2"></i><strong>Query SQL</strong>
+        <span id="sql-mode-badge" class="badge ms-2
+          {{ 'bg-warning text-dark' if view.query_mode == 'advanced_sql' else 'bg-light text-dark border' }}">
+          {{ 'Custom SQL' if view.query_mode == 'advanced_sql' else 'Auto-generated' }}
+        </span>
+      </span>
+      <div class="d-flex gap-2">
+        <button type="button" id="btn-refresh-sql" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-arrow-clockwise me-1"></i>Refresh SQL
+        </button>
+        <button type="button" id="btn-customize-sql" class="btn btn-sm btn-outline-warning"
+          {% if view.query_mode == 'advanced_sql' %}style="display:none"{% endif %}>
+          Customize SQL
+        </button>
+        <button type="button" id="btn-reset-sql" class="btn btn-sm btn-outline-secondary"
+          {% if view.query_mode != 'advanced_sql' %}style="display:none"{% endif %}>
+          Reset to Auto
+        </button>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <textarea id="sql-editor" class="form-control font-monospace border-0 rounded-0"
+        rows="8" style="font-size:0.8rem;resize:vertical;border-radius:0 !important;"
+        {% if view.query_mode != 'advanced_sql' %}readonly{% endif %}>{{ view.custom_sql if view.query_mode == 'advanced_sql' else generatedSql }}</textarea>
+    </div>
+    <div class="card-footer py-2 text-muted small" id="sql-hint">
+      {% if view.query_mode == 'advanced_sql' %}
+      Custom SQL active. Column aliases become available as <code>\${alias}</code> tokens in templates.
+      {% else %}
+      Auto-generated from <code>\${table.field}</code> tokens found in your templates. Click <em>Customize SQL</em> to edit.
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Save ── #}
+  <div class="d-flex gap-2 mt-3 align-items-center">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>Save All Templates
+    </button>
+    <a href="/admin/views/{{ view.id }}/edit" class="btn btn-outline-secondary">Settings</a>
+    <span id="save-indicator" class="text-muted small ms-2" style="opacity:0;transition:opacity 0.4s;">Saved</span>
+  </div>
+</form>
+
+{# ── AI Design modal ── #}
+<div class="modal fade" id="aiModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-stars me-2"></i>AI Design</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          AI will read your table schema and sample data, then write all 7 templates for you.
+          Describe the style you want, or leave blank for a clean default.
+        </p>
+        <label class="form-label">Style description <span class="text-muted fw-normal">(optional)</span></label>
+        <textarea id="ai-style-hint" class="form-control" rows="3"
+          placeholder="e.g. racing results with times, positions, and owner names — bold headers, dark theme"></textarea>
+        <div id="ai-status" class="mt-3 small text-muted" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-ai-go" class="btn btn-warning">
+          <i class="bi bi-stars me-1"></i>Generate templates
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── Template tab switching ────────────────────────────────────────────────
+  const panels   = document.querySelectorAll('.tpl-panel');
+  const buttons  = document.querySelectorAll('#tpl-selector button[data-tpl]');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      panels.forEach(p => p.classList.add('d-none'));
+      btn.classList.add('active');
+      document.querySelector(`.tpl-panel[data-tpl="${btn.dataset.tpl}"]`)?.classList.remove('d-none');
+    });
+  });
+
+  // ── Token insertion at cursor ─────────────────────────────────────────────
+  let lastFocusedTextarea = document.querySelector('.tpl-textarea');
+
+  document.querySelectorAll('.tpl-textarea').forEach(ta => {
+    ta.addEventListener('focus', () => { lastFocusedTextarea = ta; });
+  });
+
+  document.querySelectorAll('.token-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ta    = lastFocusedTextarea;
+      const token = btn.dataset.token;
+      if (!ta || !token) return;
+      const start = ta.selectionStart;
+      const end   = ta.selectionEnd;
+      ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+      ta.selectionStart = ta.selectionEnd = start + token.length;
+      ta.focus();
+    });
+  });
+
+  // ── SQL mode ─────────────────────────────────────────────────────────────
+  const sqlEditor    = document.getElementById('sql-editor');
+  const modeInput    = document.getElementById('query_mode_input');
+  const customInput  = document.getElementById('custom_sql_input');
+  const badgeEl      = document.getElementById('sql-mode-badge');
+  const btnCustomize = document.getElementById('btn-customize-sql');
+  const btnReset     = document.getElementById('btn-reset-sql');
+  const hintEl       = document.getElementById('sql-hint');
+
+  function setCustomMode(isCustom) {
+    sqlEditor.readOnly = !isCustom;
+    modeInput.value    = isCustom ? 'advanced_sql' : 'automatic';
+    badgeEl.textContent = isCustom ? 'Custom SQL' : 'Auto-generated';
+    badgeEl.className   = 'badge ms-2 ' + (isCustom ? 'bg-warning text-dark' : 'bg-light text-dark border');
+    btnCustomize.style.display = isCustom ? 'none' : '';
+    btnReset.style.display     = isCustom ? '' : 'none';
+    hintEl.innerHTML = isCustom
+      ? 'Custom SQL active. Column aliases become available as <code>${alias}</code> tokens in templates.'
+      : 'Auto-generated from <code>${table.field}</code> tokens found in your templates.';
+  }
+
+  btnCustomize?.addEventListener('click', () => setCustomMode(true));
+
+  btnReset?.addEventListener('click', async () => {
+    await refreshSql();
+    setCustomMode(false);
+  });
+
+  // Before form submit, sync custom SQL if in custom mode
+  document.getElementById('editor-form')?.addEventListener('submit', () => {
+    if (modeInput.value === 'advanced_sql') {
+      customInput.value = sqlEditor.value;
+    }
+  });
+
+  // ── Refresh SQL from templates ────────────────────────────────────────────
+  async function refreshSql() {
+    const templates = {};
+    document.querySelectorAll('.tpl-textarea').forEach(ta => {
+      templates[ta.dataset.tpl] = ta.value;
+    });
+    try {
+      const res  = await fetch('/admin/views/{{ view.id }}/generate-sql', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(templates)
+      });
+      const data = await res.json();
+      if (data.error) {
+        sqlEditor.value = '-- Error: ' + data.error;
+      } else {
+        sqlEditor.value = data.sql;
+      }
+    } catch (e) {
+      sqlEditor.value = '-- Request failed: ' + e.message;
+    }
+  }
+
+  document.getElementById('btn-refresh-sql')?.addEventListener('click', refreshSql);
+
+  // ── AI Design ─────────────────────────────────────────────────────────────
+  // Bootstrap JS loads after this script, so never instantiate bootstrap.Modal
+  // at the top level — get it lazily inside handlers instead.
+
+  document.getElementById('aiModal')?.addEventListener('show.bs.modal', () => {
+    document.getElementById('ai-style-hint').value = '';
+    const status = document.getElementById('ai-status');
+    status.style.display = 'none';
+    status.style.color   = '';
+  });
+
+  document.getElementById('btn-ai-go')?.addEventListener('click', async () => {
+    const btnAiGo = document.getElementById('btn-ai-go');
+    const aiStatus = document.getElementById('ai-status');
+    const hint = document.getElementById('ai-style-hint').value.trim();
+
+    btnAiGo.disabled = true;
+    btnAiGo.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating…';
+    aiStatus.style.display = 'block';
+    aiStatus.style.color   = '';
+    aiStatus.textContent   = 'Calling AI — please wait. A large local model (qwen3.5) can take 2–5 minutes without a GPU. It is working…';
+
+    // Tick up a live timer so the user knows it hasn't frozen
+    let secs = 0;
+    let timer = setInterval(() => {
+      secs++;
+      aiStatus.textContent = `Working… ${secs}s elapsed. Large local models can take 2–5 minutes without a GPU.`;
+    }, 1000);
+
+    try {
+      const res  = await fetch('/admin/views/{{ view.id }}/generate-templates', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ style_hint: hint }),
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        aiStatus.textContent = '✗ ' + data.error;
+        aiStatus.style.color = '#991b1b';
+      } else {
+        for (const [type, content] of Object.entries(data.templates)) {
+          const ta = document.querySelector(`.tpl-textarea[data-tpl="${type}"]`);
+          if (ta) ta.value = content;
+        }
+        bootstrap.Modal.getInstance(document.getElementById('aiModal'))?.hide();
+        await refreshSql();
+      }
+    } catch (e) {
+      aiStatus.textContent = '✗ Request failed: ' + e.message;
+      aiStatus.style.color = '#991b1b';
+    } finally {
+      clearInterval(timer);
+      btnAiGo.disabled = false;
+      btnAiGo.innerHTML = '<i class="bi bi-stars me-1"></i>Generate templates';
+    }
+  });
+})();
+</script>
+{% endblock %}

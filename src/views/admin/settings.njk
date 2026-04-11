@@ -1,0 +1,113 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+<div class="page-header">
+  <h1>Settings</h1>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card shadow-sm" style="max-width:600px;">
+  <div class="card-header py-2"><strong><i class="bi bi-cpu me-2"></i>AI Provider</strong></div>
+  <div class="card-body p-4">
+    <form method="POST" action="/admin/settings">
+
+      <div class="mb-3">
+        <label class="form-label">Provider</label>
+        <select name="ai_provider" class="form-select" id="ai_provider">
+          <option value="ollama"    {% if settings.provider == 'ollama'    %}selected{% endif %}>Ollama (local — free)</option>
+          <option value="anthropic" {% if settings.provider == 'anthropic' %}selected{% endif %}>Anthropic (Claude)</option>
+          <option value="openai"    {% if settings.provider == 'openai'    %}selected{% endif %}>OpenAI (GPT)</option>
+        </select>
+      </div>
+
+      {# ── Ollama fields ── #}
+      <div id="section-ollama" {% if settings.provider != 'ollama' %}style="display:none"{% endif %}>
+        <div class="mb-3">
+          <label class="form-label">Ollama base URL</label>
+          <input type="text" name="ai_base_url" class="form-control font-monospace"
+            value="{{ settings.baseUrl }}" placeholder="http://localhost:11434">
+          <div class="form-text">Leave as default if Ollama is running on this machine.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Model</label>
+          <select name="ai_model" class="form-select" id="ollama_model_select">
+            {% if ollamaModels.length %}
+              {% for m in ollamaModels %}
+              <option value="{{ m }}" {% if settings.model == m %}selected{% endif %}>{{ m }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="{{ settings.model }}">{{ settings.model }}</option>
+            {% endif %}
+          </select>
+          <div class="form-text">
+            <strong>Recommended:</strong> qwen3.5 or gemma3 for best template quality. llama3.2 is faster.
+          </div>
+        </div>
+      </div>
+
+      {# ── Cloud fields ── #}
+      <div id="section-cloud" {% if settings.provider == 'ollama' %}style="display:none"{% endif %}>
+        <div class="mb-3">
+          <label class="form-label">Model</label>
+          <input type="text" name="ai_model_cloud" class="form-control font-monospace"
+            id="cloud_model_input"
+            value="{{ settings.model if settings.provider != 'ollama' else '' }}"
+            placeholder="e.g. claude-haiku-4-5-20251001 or gpt-4o-mini">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">API key</label>
+          <input type="password" name="ai_api_key" class="form-control font-monospace"
+            value="{{ settings.apiKey }}" placeholder="sk-…">
+          <div class="form-text">Stored locally on your server. Never sent anywhere except the AI provider.</div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 align-items-center">
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+        <button type="button" id="btn-test" class="btn btn-outline-secondary">Test connection</button>
+        <span id="test-result" class="small ms-2"></span>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  const providerSel  = document.getElementById('ai_provider');
+  const secOllama    = document.getElementById('section-ollama');
+  const secCloud     = document.getElementById('section-cloud');
+
+  providerSel.addEventListener('change', () => {
+    const isOllama = providerSel.value === 'ollama';
+    secOllama.style.display = isOllama ? '' : 'none';
+    secCloud.style.display  = isOllama ? 'none' : '';
+  });
+
+  document.getElementById('btn-test').addEventListener('click', async () => {
+    const el = document.getElementById('test-result');
+    el.textContent = 'Testing…';
+    el.style.color = '#6b7280';
+    try {
+      const res  = await fetch('/admin/settings/test-ai', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        el.textContent = '✓ Connected — model replied: ' + data.reply;
+        el.style.color = '#166534';
+      } else {
+        el.textContent = '✗ ' + data.error;
+        el.style.color = '#991b1b';
+      }
+    } catch (e) {
+      el.textContent = '✗ Request failed';
+      el.style.color = '#991b1b';
+    }
+  });
+})();
+</script>
+{% endblock %}

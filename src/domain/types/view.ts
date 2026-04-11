@@ -38,6 +38,22 @@ export interface CreateViewInput {
   grouping_field?: string | null;
 }
 
+export interface UpdateViewInput {
+  view_name?: string;
+  label?: string;
+  base_table_id?: number;
+  is_public?: boolean;
+  pagination_enabled?: boolean;
+  page_size?: number;
+  query_mode?: QueryMode;
+  custom_sql?: string | null;
+  primary_sort_field?: string | null;
+  primary_sort_direction?: SortDirection | null;
+  secondary_sort_field?: string | null;
+  secondary_sort_direction?: SortDirection | null;
+  grouping_field?: string | null;
+}
+
 export interface ViewGroupPermission {
   id: number;
   view_id: number;

@@ -8,6 +8,8 @@ import { tablesRouter } from './tables';
 import { fieldsRouter } from './fields';
 import { joinsRouter } from './joins';
 import { dataRouter } from './data';
+import { viewsRouter } from './views';
+import { settingsRouter } from './settings';
 
 export const adminRouter = Router();
 
@@ -62,7 +64,8 @@ adminRouter.use('/tables',    requireApp, tablesRouter);
 adminRouter.use('/fields',    requireApp, fieldsRouter);
 adminRouter.use('/joins',     requireApp, joinsRouter);
 adminRouter.use('/data',      requireApp, dataRouter);
-adminRouter.get('/views',     requireApp, (_req, res) => res.render('admin/stub', { title: 'Views' }));
+adminRouter.use('/views',     requireApp, viewsRouter);
+adminRouter.use('/settings', settingsRouter);
 adminRouter.get('/templates', requireApp, (_req, res) => res.render('admin/stub', { title: 'Templates' }));
 adminRouter.get('/groups',    requireApp, (_req, res) => res.render('admin/stub', { title: 'Groups' }));
 adminRouter.get('/members',   requireApp, (_req, res) => res.render('admin/stub', { title: 'Members' }));

@@ -4,6 +4,7 @@ import nunjucks from 'nunjucks';
 import path from 'path';
 import { config } from './config';
 import { adminRouter } from './routes/admin';
+import { apiViewsRouter } from './routes/api/views';
 
 export function createApp(): express.Application {
   const app = express();
@@ -30,6 +31,7 @@ export function createApp(): express.Application {
   app.use('/static', express.static(path.join(__dirname, '../public')));
 
   app.use('/admin', adminRouter);
+  app.use('/api/v/:appSlug', apiViewsRouter);
 
   app.get('/', (_req, res) => res.redirect('/admin'));
 

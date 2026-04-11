@@ -123,10 +123,11 @@ export async function buildJoinQuery(
     }
   }
 
-  // Build SELECT column list
+  // Build SELECT column list — always alias as table__field for conflict-free access
   const cols = columnRefs.map(c => {
-    const ref = `"${c.table}"."${c.field}"`;
-    return c.alias ? `${ref} AS "${c.alias}"` : ref;
+    const ref   = `"${c.table}"."${c.field}"`;
+    const alias = c.alias ?? `${c.table}__${c.field}`;
+    return `${ref} AS "${alias}"`;
   });
 
   // Assemble SQL

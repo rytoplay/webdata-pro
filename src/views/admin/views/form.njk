@@ -1,0 +1,191 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ title }}</h1>
+  <a href="/admin/views" class="btn btn-sm btn-outline-secondary">&larr; Views</a>
+</div>
+
+<div class="card shadow-sm" style="max-width:680px;">
+  <div class="card-body p-4">
+    <form method="POST" action="{{ '/admin/views/' + view.id + '/edit' if view and view.id else '/admin/views' }}">
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Label <span class="text-danger">*</span></label>
+          <input type="text" name="label" class="form-control"
+            value="{{ view.label if view else '' }}" placeholder="e.g. Book Catalog" required
+            id="lbl-label">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">URL slug <span class="text-danger">*</span></label>
+          <input type="text" name="view_name" class="form-control font-monospace"
+            value="{{ view.view_name if view else '' }}" placeholder="e.g. book-catalog" required
+            id="lbl-slug">
+          <div class="form-text">Lowercase, numbers, hyphens only. Used in the embed URL.</div>
+          {% if errors and errors.view_name %}
+          <div class="text-danger small">{{ errors.view_name[0] }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Base table <span class="text-danger">*</span></label>
+        <select name="base_table_id" class="form-select" required id="base_table_select">
+          <option value="">— select —</option>
+          {% for t in tables %}
+          <option value="{{ t.id }}"
+            {% if view and view.base_table_id == t.id %}selected{% endif %}>
+            {{ t.label }} ({{ t.table_name }})
+          </option>
+          {% endfor %}
+        </select>
+        <div class="form-text">The primary table this view is built from.</div>
+      </div>
+
+      <div class="mb-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_public" id="is_public" value="on"
+            {% if not view or view.is_public %}checked{% endif %}>
+          <label class="form-check-label" for="is_public">
+            <strong>Public view</strong> — accessible without login
+          </label>
+        </div>
+        <div class="form-text ms-4">Uncheck to restrict to logged-in members with permission.</div>
+      </div>
+
+      <hr class="my-4">
+      <h6 class="text-muted mb-3">Pagination &amp; Sorting</h6>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <div class="form-check mt-4">
+            <input class="form-check-input" type="checkbox" name="pagination_enabled" value="on"
+              id="pag_en" {% if not view or view.pagination_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="pag_en">Enable pagination</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Records per page</label>
+          <input type="number" name="page_size" class="form-control" min="1" max="500"
+            value="{{ view.page_size if view else 25 }}">
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-5">
+          <label class="form-label">Sort field</label>
+          <select name="primary_sort_field" class="form-select field-select" id="sort_field_select">
+            <option value="">— none —</option>
+            {% for f in baseFields %}
+            <option value="{{ f.field_name }}"
+              {% if view and view.primary_sort_field == f.field_name %}selected{% endif %}>
+              {{ f.label or f.field_name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Direction</label>
+          <select name="primary_sort_direction" class="form-select">
+            <option value="asc"  {% if not view or view.primary_sort_direction == 'asc' %}selected{% endif %}>Ascending</option>
+            <option value="desc" {% if view and view.primary_sort_direction == 'desc' %}selected{% endif %}>Descending</option>
+          </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end pb-2">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="group_by_sort" id="group_by_sort" value="on"
+              {% if view and view.grouping_field %}checked{% endif %}>
+            <label class="form-check-label" for="group_by_sort">
+              Group rows by this field
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-5">
+          <label class="form-label">Secondary sort <span class="text-muted fw-normal">(optional)</span></label>
+          <select name="secondary_sort_field" class="form-select field-select" id="secondary_sort_select">
+            <option value="">— none —</option>
+            {% for f in baseFields %}
+            <option value="{{ f.field_name }}"
+              {% if view and view.secondary_sort_field == f.field_name %}selected{% endif %}>
+              {{ f.label or f.field_name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Direction</label>
+          <select name="secondary_sort_direction" class="form-select">
+            <option value="asc"  {% if not view or view.secondary_sort_direction == 'asc' %}selected{% endif %}>Ascending</option>
+            <option value="desc" {% if view and view.secondary_sort_direction == 'desc' %}selected{% endif %}>Descending</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          {% if view and view.id %}Save Settings{% else %}Create View{% endif %}
+        </button>
+        <a href="/admin/views" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ── Auto-slug from label ────────────────────────────────────────────────────
+  const label = document.getElementById('lbl-label');
+  const slug  = document.getElementById('lbl-slug');
+  if (label && slug && !slug.value) {
+    label.addEventListener('input', () => {
+      if (!slug.dataset.manual) {
+        slug.value = label.value.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      }
+    });
+    slug.addEventListener('input', () => { slug.dataset.manual = '1'; });
+  }
+
+  // ── Populate field selects when base table changes ──────────────────────────
+  const baseTableSel = document.getElementById('base_table_select');
+  const fieldSelects = document.querySelectorAll('.field-select');
+
+  function buildOptions(fields, currentVals) {
+    let html = '<option value="">— none —</option>';
+    for (const f of fields) {
+      const label = f.label || f.field_name;
+      html += `<option value="${f.field_name}">${label}</option>`;
+    }
+    return html;
+  }
+
+  async function loadFields(tableId) {
+    if (!tableId) {
+      fieldSelects.forEach(sel => { sel.innerHTML = '<option value="">— none —</option>'; });
+      return;
+    }
+    try {
+      const res    = await fetch(`/admin/views/fields/${tableId}`);
+      const fields = await res.json();
+      fieldSelects.forEach(sel => {
+        const prev = sel.value;
+        sel.innerHTML = buildOptions(fields);
+        // Restore previous selection if still valid
+        const opt = sel.querySelector(`option[value="${prev}"]`);
+        if (opt) opt.selected = true;
+      });
+    } catch (_) {}
+  }
+
+  baseTableSel?.addEventListener('change', () => loadFields(baseTableSel.value));
+
+  // On page load for new view: if table already selected (e.g. after validation error), load fields
+  if (baseTableSel?.value && fieldSelects.length && !fieldSelects[0].querySelector('option[value]:not([value=""])')) {
+    loadFields(baseTableSel.value);
+  }
+})();
+</script>
+{% endblock %}
