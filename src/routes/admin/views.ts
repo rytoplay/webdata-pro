@@ -319,7 +319,14 @@ viewsRouter.post('/:id/generate-templates', async (req, res) => {
 
     const systemPrompt = `You write HTML templates for a data widget. Use \${token} placeholders for data values. Output each template between delimiters exactly as shown — no JSON, no markdown, nothing else.`;
 
-    const userPrompt = `Write 7 HTML templates for a "${baseTable.table_name}" widget.
+    const editFieldsHtml = tokenLines.map(t => {
+      const tok       = t.split(' — ')[0];
+      const lbl       = (t.split(' — ')[1] ?? tok).split(' (')[0];
+      const fieldName = tok.replace(/^\$\{[^.]+\./, '').replace(/\}$/, '');
+      return `<div class='wdp-field'><label class='wdp-field-label'>${lbl}</label><input name='${fieldName}' value='${tok}' class='wdp-input'></div>`;
+    }).join('');
+
+    const userPrompt = `Write 8 HTML templates for a "${baseTable.table_name}" widget.
 ${styleHintLine}
 
 TOKENS — copy these exactly, dollar sign and curly braces included:
@@ -333,7 +340,7 @@ ${tokenLines.join('\n')}
 SAMPLE DATA:
 ${sampleText}
 
-COLOR THEME — copy this style tag verbatim into search_form and detail:
+COLOR THEME — copy this style tag verbatim into search_form, detail, and edit_form:
 <style>:root{${colorVars}}</style>
 
 OUTPUT FORMAT — output each template between its markers, exactly like this:
@@ -343,7 +350,7 @@ OUTPUT FORMAT — output each template between its markers, exactly like this:
 ===HEADER===
 (html here)
 ===END===
-...and so on for GROUP_HEADER, ROW, GROUP_FOOTER, FOOTER, DETAIL.
+...and so on for GROUP_HEADER, ROW, GROUP_FOOTER, FOOTER, DETAIL, EDIT_FORM.
 
 TEMPLATE INSTRUCTIONS:
 
@@ -364,12 +371,15 @@ GROUP_FOOTER — leave empty.
 FOOTER — close the outer wrapper div:
 <div class='wdp-footer'>\${_pagination}</div></div>
 
-DETAIL — include style tag, back button, all field tokens:
-<style>:root{${colorVars}}</style><div class='wdp'><div class='wdp-detail'><button data-wdp-action='back' class='wdp-back'>‹ Back</button><div class='wdp-detail-title'>${nameToken}</div><div class='wdp-detail-sub'>${subToken || nameToken}</div><div class='wdp-detail-body'>${tokenLines.map(t => {
+DETAIL — include style tag, back button, all field tokens, and an Edit button that triggers edit mode:
+<style>:root{${colorVars}}</style><div class='wdp'><div class='wdp-detail'><button data-wdp-action='back' class='wdp-back'>‹ Back</button><button data-wdp-action='edit' data-wdp-id='\${_pk}' class='wdp-btn' style='float:right'>Edit</button><div class='wdp-detail-title'>${nameToken}</div><div class='wdp-detail-sub'>${subToken || nameToken}</div><div class='wdp-detail-body'>${tokenLines.map(t => {
       const tok = t.split(' — ')[0];
       const lbl = (t.split(' — ')[1] ?? tok).split(' (')[0];
       return `<div class='wdp-field'><div class='wdp-field-label'>${lbl}</div><div class='wdp-field-value'>${tok}</div></div>`;
     }).join('')}</div></div></div>
+
+EDIT_FORM — include style tag, back button, a form with data-wdp-form='edit' data-wdp-id='\${_pk}', one labeled input per field (name= field name without table prefix, value= the token):
+<style>:root{${colorVars}}</style><div class='wdp'><div class='wdp-detail'><button data-wdp-action='back' class='wdp-back'>‹ Back</button><form data-wdp-form='edit' data-wdp-id='\${_pk}' class='wdp-edit-form'>${editFieldsHtml}<div class='wdp-edit-actions'><button type='submit' class='wdp-btn'>Save</button><button type='button' data-wdp-action='back' class='wdp-btn-link'>Cancel</button></div></form></div></div>
 
 Use actual \${token} values from the list — never use placeholder text like "Name" or "Value".`;
 

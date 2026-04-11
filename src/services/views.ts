@@ -1,7 +1,8 @@
 import { db } from '../db/knex';
 import { getAppDb } from '../db/adapters/appDb';
 import { buildJoinQuery, parseColumnRefs } from './queryBuilder';
-import type { App, View, CreateViewInput, UpdateViewInput } from '../domain/types';
+import type { GroupConcatSpec } from './queryBuilder';
+import type { App, View, CreateViewInput, UpdateViewInput, UIWidget } from '../domain/types';
 
 // ── Template types ──────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ export const TEMPLATE_TYPES = [
   'group_footer',
   'footer',
   'detail',
+  'edit_form',
 ] as const;
 
 export type ViewTemplateType = typeof TEMPLATE_TYPES[number];
@@ -26,6 +28,7 @@ export const TEMPLATE_LABELS: Record<ViewTemplateType, string> = {
   group_footer: 'Group Footer',
   footer:       'Footer',
   detail:       'Detail View',
+  edit_form:    'Edit Form',
 };
 
 export const DEFAULT_TEMPLATES: ViewTemplates = {
@@ -48,6 +51,19 @@ export const DEFAULT_TEMPLATES: ViewTemplates = {
   <div class="wdp-detail-body" style="margin-top:1rem;">
     Record #\${_pk}
   </div>
+</div>`,
+  edit_form: `<div class="wdp-detail">
+  <button data-wdp-action="back" class="wdp-btn-link">&lsaquo; Back</button>
+  <form data-wdp-form="edit" data-wdp-id="\${_pk}" style="margin-top:1rem;">
+    <p class="wdp-muted" style="font-size:0.85rem;color:#6b7280;">
+      Design your edit form here.<br>
+      Example: <code>&lt;input name="title" value="\${table.title}" class="wdp-input"&gt;</code>
+    </p>
+    <div style="margin-top:1rem;">
+      <button type="submit" class="wdp-btn">Save</button>
+      <button type="button" data-wdp-action="back" class="wdp-btn-link" style="margin-left:0.5rem;">Cancel</button>
+    </div>
+  </form>
 </div>`,
 };
 
@@ -120,11 +136,107 @@ export async function saveViewTemplates(
   }
 }
 
+// ── Group tag parsing ────────────────────────────────────────────────────────
+
+interface GroupTagInfo {
+  fullMatch:  string;       // the entire <group ...>...</group> string
+  delimiter:  string;       // delimiter= attribute value
+  refs:       import('./queryBuilder').ColumnRef[];  // field tokens inside the tag
+  separators: string[];     // text fragments between/around tokens
+  alias:      string;       // _group_0, _group_1, …
+}
+
+const GROUP_TAG_RE = /<group\s+delimiter="([^"]*)">([\s\S]*?)<\/group>/gi;
+
+/**
+ * Parse all <group> tags from a combined template string.
+ * Assigns stable positional aliases (_group_0, _group_1, …) in order of first appearance.
+ */
+function parseGroupTags(combined: string): GroupTagInfo[] {
+  const tags: GroupTagInfo[] = [];
+  const seen = new Map<string, string>(); // fullMatch → alias
+
+  for (const m of combined.matchAll(new RegExp(GROUP_TAG_RE.source, 'gi'))) {
+    if (seen.has(m[0])) continue;
+    const alias = `_group_${tags.length}`;
+    seen.set(m[0], alias);
+
+    const inner = m[2];
+    const tokenRe = /\$\{([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\}/gi;
+    const refs: import('./queryBuilder').ColumnRef[] = [];
+    const separators: string[] = [];
+    let lastEnd = 0;
+
+    for (const tm of inner.matchAll(new RegExp(tokenRe.source, 'gi'))) {
+      separators.push(inner.slice(lastEnd, tm.index!));
+      refs.push({ table: tm[1].toLowerCase(), field: tm[2].toLowerCase() });
+      lastEnd = tm.index! + tm[0].length;
+    }
+    separators.push(inner.slice(lastEnd));
+
+    tags.push({ fullMatch: m[0], delimiter: m[1], refs, separators, alias });
+  }
+  return tags;
+}
+
+/**
+ * Build a GROUP_CONCAT SQL expression for one <group> tag.
+ * Separators between tokens are included only when the preceding field is non-empty,
+ * so absent values don't leave double-spaces.
+ */
+function buildGroupConcatExpr(
+  refs: import('./queryBuilder').ColumnRef[],
+  separators: string[],
+  delimiter: string
+): string {
+  if (refs.length === 0) return "''";
+
+  const esc = (s: string) => s.replace(/'/g, "''");
+  const parts: string[] = [];
+
+  // separators[0] = text before first token (prefix — usually empty)
+  if (separators[0]) parts.push(`'${esc(separators[0])}'`);
+
+  for (let i = 0; i < refs.length; i++) {
+    const col      = `"${refs[i].table}"."${refs[i].field}"`;
+    const followSep = separators[i + 1] ?? '';
+
+    if (followSep) {
+      // Append the separator string only when this field is non-empty
+      parts.push(`COALESCE(NULLIF(${col}, '') || '${esc(followSep)}', '')`);
+    } else {
+      parts.push(`COALESCE(${col}, '')`);
+    }
+  }
+
+  const expr     = parts.join(' || ');
+  const safeDelim = esc(delimiter);
+  return `NULLIF(TRIM(GROUP_CONCAT(TRIM(${expr}), '${safeDelim}')), '')`;
+}
+
+/**
+ * Replace every <group> tag in a single template string with its ${_group_N} alias.
+ * Call this on each template before renderTokens so the alias is resolved normally.
+ */
+function applyGroupTags(template: string, tags: GroupTagInfo[]): string {
+  let out = template;
+  for (const tag of tags) {
+    // replaceAll-safe: escape special regex chars in fullMatch
+    out = out.split(tag.fullMatch).join(`\${${tag.alias}}`);
+  }
+  return out;
+}
+
 // ── SQL generation ──────────────────────────────────────────────────────────
 
-/** Parse ${table.field} tokens from view templates, ignoring system ${_*} tokens */
+/**
+ * Parse ${table.field} tokens from view templates, ignoring system ${_*} tokens
+ * and tokens that live inside <group> tags (those are handled by GROUP_CONCAT).
+ */
 export function parseViewTokens(templates: Partial<ViewTemplates>) {
-  const combined = Object.values(templates).filter(Boolean).join('\n');
+  let combined = Object.values(templates).filter(Boolean).join('\n');
+  // Strip group-tag content so those tokens don't end up in the plain SELECT
+  combined = combined.replace(new RegExp(GROUP_TAG_RE.source, 'gi'), '');
   return parseColumnRefs(combined).filter(r => !r.table.startsWith('_'));
 }
 
@@ -133,10 +245,23 @@ export async function generateViewSql(
   baseTableName: string,
   templates: Partial<ViewTemplates>
 ): Promise<string> {
-  const tokens = parseViewTokens(templates);
+  const combined  = Object.values(templates).filter(Boolean).join('\n');
+  const groupTags = parseGroupTags(combined);
 
-  // Always include the base table's PK so ${_pk} and detail navigation work,
-  // even when the template never explicitly references it.
+  // Regular tokens (outside <group> tags)
+  const regularTokens = parseViewTokens(templates);
+
+  // Group-tag tokens are needed for JOIN path finding but not the plain SELECT
+  const groupTokens = groupTags.flatMap(g => g.refs);
+
+  // Merge all unique refs for join path resolution
+  const seen = new Set<string>();
+  const allTokens = [...regularTokens, ...groupTokens].filter(t => {
+    const k = `${t.table}.${t.field}`;
+    return seen.has(k) ? false : (seen.add(k), true);
+  });
+
+  // Always include the base table's PK
   const pkField = await db('app_fields')
     .join('app_tables', 'app_fields.table_id', 'app_tables.id')
     .where({ 'app_tables.app_id': appId, 'app_tables.table_name': baseTableName, 'app_fields.is_primary_key': true })
@@ -145,21 +270,148 @@ export async function generateViewSql(
 
   if (pkField) {
     const pkRef = { table: baseTableName, field: pkField.field_name as string };
-    const alreadyPresent = tokens.some(t => t.table === pkRef.table && t.field === pkRef.field);
-    if (!alreadyPresent) tokens.unshift(pkRef);
+    if (!allTokens.some(t => t.table === pkRef.table && t.field === pkRef.field))
+      allTokens.unshift(pkRef);
   }
 
-  if (tokens.length === 0) {
-    return `SELECT *\nFROM "${baseTableName}"`;
-  }
-  const result = await buildJoinQuery(appId, baseTableName, tokens);
+  if (allTokens.length === 0) return `SELECT *\nFROM "${baseTableName}"`;
+
+  // Build GROUP_CONCAT specs from <group> tags
+  const groupConcatSpecs: GroupConcatSpec[] = groupTags.map(tag => ({
+    alias: tag.alias,
+    expr:  buildGroupConcatExpr(tag.refs, tag.separators, tag.delimiter),
+  }));
+
+  const result = await buildJoinQuery(
+    appId, baseTableName, allTokens,
+    groupConcatSpecs.length ? groupConcatSpecs : undefined
+  );
   return result.sql;
 }
 
 // ── Token rendering ─────────────────────────────────────────────────────────
 
+// ── $if() helpers ────────────────────────────────────────────────────────────
+
+function resolveField(name: string, data: Record<string, unknown>): unknown {
+  if (name in data) return data[name];
+  if (name.includes('.')) {
+    const alias = name.replace('.', '__');
+    if (alias in data) return data[alias];
+  }
+  return undefined;
+}
+
+/** Split `s` by commas at depth-0 (not inside parens or quote pairs). */
+function splitIfArgs(s: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let inStr: string | null = null;
+  let cur = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      cur += c;
+      if (c === inStr) inStr = null;
+    } else if (c === '"' || c === "'") {
+      inStr = c; cur += c;
+    } else if (c === '(' || c === '[') {
+      depth++; cur += c;
+    } else if (c === ')' || c === ']') {
+      depth--; cur += c;
+    } else if (c === ',' && depth === 0) {
+      parts.push(cur.trim()); cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  parts.push(cur.trim());
+  return parts;
+}
+
+function stripBranchQuotes(s: string): string {
+  if (s.length >= 2 &&
+      ((s[0] === '"' && s[s.length - 1] === '"') ||
+       (s[0] === "'" && s[s.length - 1] === "'"))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+const IF_CMP_RE = /^(.+?)\s*(>=|<=|!=|<>|>|<|==|=)\s*(.+)$/s;
+
+function evalIfCondition(condition: string, data: Record<string, unknown>): boolean {
+  const m = condition.trim().match(IF_CMP_RE);
+  if (!m) {
+    // No operator — simple truthiness check on the field value
+    const val = resolveField(condition.trim(), data);
+    return val !== undefined && val !== null && val !== '' && val !== '0' && val !== 0;
+  }
+  const [, leftRaw, op, rightRaw] = m;
+  const rawLeft    = resolveField(leftRaw.trim(), data);
+  const leftStr    = String(rawLeft ?? '');
+  const rightStr   = stripBranchQuotes(rightRaw.trim());
+  const leftNum    = parseFloat(leftStr);
+  const rightNum   = parseFloat(rightStr);
+  const numericCmp = !isNaN(leftNum) && !isNaN(rightNum);
+  const lv = numericCmp ? leftNum  : leftStr.toLowerCase();
+  const rv = numericCmp ? rightNum : rightStr.toLowerCase();
+  switch (op) {
+    case '>':          return lv >  rv;
+    case '<':          return lv <  rv;
+    case '>=':         return lv >= rv;
+    case '<=':         return lv <= rv;
+    case '=': case '==': return lv == rv;  // eslint-disable-line eqeqeq
+    case '!=': case '<>': return lv != rv; // eslint-disable-line eqeqeq
+    default:           return false;
+  }
+}
+
+/**
+ * Replace `$if(condition, trueVal[, falseVal])` tags in `template`.
+ * Runs before ${...} substitution so branches can themselves contain tokens.
+ * Branch values may optionally be wrapped in single or double quotes.
+ * Example: $if(books.price > 30, "<b>Free shipping</b>", "No free shipping")
+ */
+function processIfTags(template: string, data: Record<string, unknown>): string {
+  const TAG = '$if(';
+  let result = '';
+  let i = 0;
+  while (i < template.length) {
+    const idx = template.indexOf(TAG, i);
+    if (idx === -1) { result += template.slice(i); break; }
+    result += template.slice(i, idx);
+    // Find the matching closing paren
+    let depth = 1;
+    let j = idx + TAG.length;
+    let inStr: string | null = null;
+    while (j < template.length && depth > 0) {
+      const c = template[j];
+      if (inStr) {
+        if (c === inStr) inStr = null;
+      } else if (c === '"' || c === "'") {
+        inStr = c;
+      } else if (c === '(') {
+        depth++;
+      } else if (c === ')') {
+        if (--depth === 0) break;
+      }
+      j++;
+    }
+    if (depth !== 0) { result += TAG; i = idx + TAG.length; continue; }
+    const inner   = template.slice(idx + TAG.length, j);
+    const args    = splitIfArgs(inner);
+    const trueVal  = stripBranchQuotes(args[1] ?? '');
+    const falseVal = stripBranchQuotes(args[2] ?? '');
+    result += evalIfCondition(args[0] ?? '', data) ? trueVal : falseVal;
+    i = j + 1;
+  }
+  return result;
+}
+
 export function renderTokens(template: string, data: Record<string, unknown>): string {
-  return template.replace(/\$\{([^}]+)\}/g, (_, token: string) => {
+  const afterIf = processIfTags(template, data);
+  return afterIf.replace(/\$\{([^}]+)\}/g, (_, token: string) => {
     if (token in data) return String(data[token] ?? '');
     if (token.includes('.')) {
       const alias = token.replace('.', '__');
@@ -187,6 +439,8 @@ export interface RenderParams {
   page?: number;
   sort?: string;
   dir?: 'asc' | 'desc';
+  searchOnly?: boolean;
+  fieldFilters?: Record<string, string>;  // "table__field" → value
 }
 
 export async function renderViewList(
@@ -206,6 +460,26 @@ export async function renderViewList(
     .where({ table_id: view.base_table_id, is_primary_key: true })
     .first();
   const pkName = pkField?.field_name ?? 'id';
+
+  // Pre-process <group> tags: replace each tag with its ${_group_N} alias so
+  // renderTokens can resolve it from the GROUP_CONCAT column in the SQL result.
+  // Custom SQL bypasses group tag SQL generation but tags are still stripped from templates.
+  const combinedForGroups = Object.values(templates).filter(Boolean).join('\n');
+  const groupTags         = parseGroupTags(combinedForGroups);
+  const tpl = groupTags.length
+    ? (Object.fromEntries(
+        Object.entries(templates).map(([k, v]) => [k, v ? applyGroupTags(v, groupTags) : v])
+      ) as ViewTemplates)
+    : templates;
+
+  // Search-only mode: return just the search form, skip all DB work
+  if (params.searchOnly && !(params.q?.trim())) {
+    const sys = { _q: '', _page: 1, _total: 0, _total_pages: 0,
+                  _has_prev: '', _has_next: '', _prev_page: 1, _next_page: 1,
+                  _sort: '', _dir: 'asc', _pagination: '' };
+    const searchFormTpl = await renderWidgetTokens(tpl.search_form, app.id, {}, 'search');
+    return renderTokens(searchFormTpl, sys);
+  }
 
   // Build base SQL
   let baseSql: string;
@@ -227,37 +501,53 @@ export async function renderViewList(
   const groupField = rawGroup ? (isAuto ? `${baseTableName}__${rawGroup}` : rawGroup) : null;
 
   // Wrap for search + sort + count
-  const q = params.q?.trim() ?? '';
-  let whereSql = '';
+  const q            = params.q?.trim() ?? '';
+  const fieldFilters = params.fieldFilters ?? {};
+  const whereParts:  string[] = [];
+  const bindings:    string[] = [];
 
+  // Global keyword search across all text columns (auto SQL only)
   if (q && view.query_mode !== 'advanced_sql') {
-    // Determine searchable fields from tokens
     const tokens = parseViewTokens(templates);
+    const combined = Object.values(templates).filter(Boolean).join('\n');
+    const groupTagsList = parseGroupTags(combined);
+
+    // Columns inside <group> tags are folded into a GROUP_CONCAT alias in the outer
+    // query — they no longer exist as individual columns. Skip them and search the
+    // alias (e.g. "_group_0") instead, which contains the concatenated text.
+    const groupedColKeys = new Set(
+      groupTagsList.flatMap(g => g.refs.map(r => `${r.table}.${r.field}`))
+    );
+
     const fieldTypes = await db('app_fields')
       .whereIn('table_id', await db('app_tables').where({ app_id: app.id }).pluck('id'))
       .select('field_name', 'data_type');
-    const textTypes = new Set(['text', 'varchar', 'char', 'string', 'json']);
-    const fieldTypeMap = new Map(fieldTypes.map(f => [f.field_name, f.data_type]));
+    const textTypes    = new Set(['text', 'varchar', 'char', 'string', 'json']);
+    const fieldTypeMap = new Map(fieldTypes.map((f: { field_name: string; data_type: string }) => [f.field_name, f.data_type]));
 
-    const searchableCols = tokens
-      .filter(t => {
-        const dt = fieldTypeMap.get(t.field) ?? 'text';
-        return textTypes.has(dt.toLowerCase());
-      })
+    const regularCols = tokens
+      .filter(t => !groupedColKeys.has(`${t.table}.${t.field}`))
+      .filter(t => textTypes.has((fieldTypeMap.get(t.field) ?? 'text').toLowerCase()))
       .map(t => `"${t.table}__${t.field}"`);
 
-    if (searchableCols.length > 0) {
-      const likeClause = searchableCols.map(c => `${c} LIKE ?`).join(' OR ');
-      whereSql = `WHERE (${likeClause})`;
+    // GROUP_CONCAT aliases are plain text — safe to LIKE search
+    const groupAliasCols = groupTagsList.map(g => `"${g.alias}"`);
+
+    const allSearchCols = [...regularCols, ...groupAliasCols];
+    if (allSearchCols.length > 0) {
+      whereParts.push(`(${allSearchCols.map(c => `${c} LIKE ?`).join(' OR ')})`);
+      bindings.push(...Array(allSearchCols.length).fill(`%${q}%`));
     }
   }
 
-  const likeBindings = q && whereSql
-    ? whereSql.split('?').length - 1 > 0
-      ? Array(whereSql.split('?').length - 1).fill(`%${q.replace(/'/g, "''")}%`)
-      : []
-    : [];
+  // Per-field filters from $search[...] inputs ("table__field" → value)
+  for (const [col, val] of Object.entries(fieldFilters)) {
+    if (!val.trim()) continue;
+    whereParts.push(`"${col}" LIKE ?`);
+    bindings.push(`%${val.trim()}%`);
+  }
 
+  const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
   const outerSql = `SELECT * FROM (${baseSql}) AS _v ${whereSql}`;
 
   let sortSql = '';
@@ -269,7 +559,7 @@ export async function renderViewList(
   // Total count
   const countResult = await appDb.raw(
     `SELECT COUNT(*) AS _t FROM (${outerSql}) AS _c`,
-    likeBindings
+    bindings
   );
   const total      = Number(((countResult as unknown[])[0] as Record<string, unknown>)?.['_t'] ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -277,7 +567,7 @@ export async function renderViewList(
   // Data rows
   const rows = await appDb.raw(
     `${outerSql}${sortSql} LIMIT ? OFFSET ?`,
-    [...likeBindings, pageSize, offset]
+    [...bindings, pageSize, offset]
   ) as Record<string, unknown>[];
 
   // System data
@@ -297,8 +587,9 @@ export async function renderViewList(
 
   const parts: string[] = [];
 
-  parts.push(renderTokens(templates.search_form, sys));
-  parts.push(renderTokens(templates.header, sys));
+  const searchFormTpl = await renderWidgetTokens(tpl.search_form, app.id, {}, 'search');
+  parts.push(renderTokens(searchFormTpl, sys));
+  parts.push(renderTokens(tpl.header, sys));
 
   let lastGroup: unknown = Symbol('none');
   for (let i = 0; i < rows.length; i++) {
@@ -309,21 +600,21 @@ export async function renderViewList(
     if (groupField) {
       const gv = row[groupField];
       if (gv !== lastGroup) {
-        if (lastGroup !== Symbol('none') && templates.group_footer)
-          parts.push(renderTokens(templates.group_footer, { ...rowData, _group_value: String(lastGroup) }));
-        if (templates.group_header)
-          parts.push(renderTokens(templates.group_header, { ...rowData, _group_value: String(gv) }));
+        if (lastGroup !== Symbol('none') && tpl.group_footer)
+          parts.push(renderTokens(tpl.group_footer, { ...rowData, _group_value: String(lastGroup) }));
+        if (tpl.group_header)
+          parts.push(renderTokens(tpl.group_header, { ...rowData, _group_value: String(gv) }));
         lastGroup = gv;
       }
     }
 
-    parts.push(renderTokens(templates.row, rowData));
+    parts.push(renderTokens(tpl.row, rowData));
   }
 
-  if (groupField && lastGroup !== Symbol('none') && templates.group_footer)
-    parts.push(renderTokens(templates.group_footer, { ...sys, _group_value: String(lastGroup) }));
+  if (groupField && lastGroup !== Symbol('none') && tpl.group_footer)
+    parts.push(renderTokens(tpl.group_footer, { ...sys, _group_value: String(lastGroup) }));
 
-  parts.push(renderTokens(templates.footer, sys));
+  parts.push(renderTokens(tpl.footer, sys));
 
   return parts.join('\n');
 }
@@ -362,5 +653,195 @@ export async function renderViewDetail(
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
   const rowData = { _pk: pkVal, _row_num: 1, ...row };
 
-  return renderTokens(templates.detail, rowData);
+  const detailTags = parseGroupTags(templates.detail);
+  const detailTpl  = detailTags.length ? applyGroupTags(templates.detail, detailTags) : templates.detail;
+  return renderTokens(detailTpl, rowData);
+}
+
+export async function renderViewEditForm(
+  app: App,
+  view: View,
+  baseTableName: string,
+  templates: ViewTemplates,
+  recordId: string
+): Promise<string> {
+  const appDb   = getAppDb(app);
+  const pkField = await db('app_fields')
+    .where({ table_id: view.base_table_id, is_primary_key: true })
+    .first();
+  const pkName = pkField?.field_name ?? 'id';
+
+  let baseSql: string;
+  let pkAlias: string;
+  if (view.query_mode === 'advanced_sql' && view.custom_sql) {
+    baseSql = view.custom_sql;
+    pkAlias = pkName;
+  } else {
+    baseSql = await generateViewSql(app.id, baseTableName, templates);
+    pkAlias = `${baseTableName}__${pkName}`;
+  }
+
+  const rows = await appDb.raw(
+    `SELECT * FROM (${baseSql}) AS _v WHERE "${pkAlias}" = ? LIMIT 1`,
+    [recordId]
+  ) as Record<string, unknown>[];
+
+  if (!rows.length) return '<p class="wdp-error">Record not found.</p>';
+
+  const row     = rows[0];
+  const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
+  const rowData = { _pk: pkVal, _row_num: 1, ...row };
+
+  const editTags  = parseGroupTags(templates.edit_form);
+  const editTpl   = editTags.length ? applyGroupTags(templates.edit_form, editTags) : templates.edit_form;
+  const processed = await renderWidgetTokens(editTpl, app.id, rowData, 'update');
+  return renderTokens(autoNameEditInputs(processed), rowData);
+}
+
+// ── Edit-form helpers ────────────────────────────────────────────────────────
+
+/**
+ * For every <input> in the edit_form template that has a value="${table.field}" token,
+ * auto-set its name attribute to "field" (overwriting whatever the admin typed).
+ * This runs before renderTokens so the token is still visible.
+ */
+function autoNameEditInputs(template: string): string {
+  return template.replace(/<input([^>]*)>/gi, (_match, attrs: string) => {
+    const tokenMatch = attrs.match(/value="\$\{[^.]+\.([^}]+)\}"/);
+    if (!tokenMatch) return `<input${attrs}>`;
+    const field    = tokenMatch[1];
+    const newAttrs = /\bname=/.test(attrs)
+      ? attrs.replace(/\bname="[^"]*"/, `name="${field}"`)
+      : attrs + ` name="${field}"`;
+    return `<input${newAttrs}>`;
+  });
+}
+
+function escHtmlAttr(s: string): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function parseSelectOptions(json: string | null): string[] {
+  if (!json) return [];
+  try { return (JSON.parse(json) as { options?: string[] }).options ?? []; }
+  catch { return []; }
+}
+
+function parseTextareaOptions(json: string | null): { rows: number; cols: number } {
+  if (!json) return { rows: 4, cols: 60 };
+  try {
+    const p = JSON.parse(json) as { rows?: number; cols?: number };
+    return { rows: p.rows ?? 4, cols: p.cols ?? 60 };
+  } catch { return { rows: 4, cols: 60 }; }
+}
+
+/**
+ * Replace $update[table.field] tokens with the appropriate input widget,
+ * pre-filled with the current record value, based on the field's ui_widget definition.
+ *
+ * Checkbox fields emit a hidden sentinel <input name="_wdpcb_field"> so the PATCH
+ * handler can detect unchecked state (checkboxes omit themselves when unchecked).
+ */
+async function renderWidgetTokens(
+  template: string,
+  appId: number,
+  rowData: Record<string, unknown>,
+  mode: 'update' | 'search'
+): Promise<string> {
+  const tokenRe = /\$(?:update|search)\[([^\].]+)\.([^\]]+)\]/g;
+  const matches = [...template.matchAll(tokenRe)];
+  if (matches.length === 0) return template;
+
+  // Load tables + fields for all referenced table names
+  const tableNames = [...new Set(matches.map(m => m[1]))];
+  const tables     = await db('app_tables').whereIn('table_name', tableNames).where({ app_id: appId });
+  const allTableIds = tables.map((t: { id: number }) => t.id);
+  const fields = allTableIds.length ? await db('app_fields').whereIn('table_id', allTableIds) : [];
+
+  // "tableName.fieldName" → field row
+  const fieldMap = new Map<string, {
+    field_name: string; label: string; ui_widget: UIWidget;
+    ui_options_json: string | null; is_required: boolean;
+  }>();
+  for (const f of fields) {
+    const tid    = f.table_id as number;
+    const tEntry = tables.find((t: { id: number }) => t.id === tid);
+    if (tEntry) fieldMap.set(`${tEntry.table_name}.${f.field_name}`, f);
+  }
+
+  return template.replace(tokenRe, (_match, tableName: string, fieldName: string) => {
+    const field = fieldMap.get(`${tableName}.${fieldName}`);
+    if (!field) return `<!-- unknown field: ${tableName}.${fieldName} -->`;
+
+    const alias    = `${tableName}__${fieldName}`;
+    // search mode: inputs always start empty; update mode: pre-fill from row data
+    const rawValue = mode === 'search' ? '' : (rowData[alias] ?? rowData[fieldName] ?? '');
+    const value    = String(rawValue ?? '');
+    const label    = escHtmlAttr(field.label || fieldName);
+    const widget   = (field.ui_widget as UIWidget) || 'text';
+    // search fields are never required
+    const req      = (mode === 'update' && field.is_required) ? ' required' : '';
+    const id       = `wdp-f-${fieldName}`;
+    const v        = escHtmlAttr(value);
+    // search mode: use full "table__field" alias so the server can locate the column unambiguously
+    const n        = mode === 'search' ? alias : fieldName;
+
+    switch (widget) {
+      case 'textarea': {
+        const { rows, cols } = parseTextareaOptions(field.ui_options_json);
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<textarea id="${id}" name="${n}" rows="${rows}" cols="${cols}" class="wdp-input"${req}>${escHtmlAttr(value)}</textarea></div>`;
+      }
+      case 'select': {
+        const opts    = parseSelectOptions(field.ui_options_json);
+        const optHtml = ['', ...opts].map(o =>
+          `<option value="${escHtmlAttr(o)}"${o === value ? ' selected' : ''}>${o || '—'}</option>`
+        ).join('');
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<select id="${id}" name="${n}" class="wdp-input"${req}>${optHtml}</select></div>`;
+      }
+      case 'checkbox': {
+        // In search mode render as a tri-state select (any / yes / no) rather than a checkbox
+        if (mode === 'search') {
+          return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+               + `<select id="${id}" name="${n}" class="wdp-input">`
+               + `<option value="">— any —</option>`
+               + `<option value="1">Yes</option>`
+               + `<option value="0">No</option>`
+               + `</select></div>`;
+        }
+        const checked = (value === '1' || value === 'true' || value === 't') ? ' checked' : '';
+        return `<div class="wdp-field wdp-field-check">`
+             + `<input type="hidden" name="_wdpcb_${n}" value="">`
+             + `<input type="checkbox" id="${id}" name="${n}" value="1"${checked}>`
+             + `<label class="wdp-field-label" for="${id}">${label}</label></div>`;
+      }
+      case 'date':
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="date" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+      case 'datetime':
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="datetime-local" id="${id}" name="${n}" value="${value.replace(' ', 'T')}" class="wdp-input"${req}></div>`;
+      case 'time':
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="time" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+      case 'number':
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="number" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+      case 'email':
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="email" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+      case 'url':
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="url" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+      case 'password':
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="password" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+      case 'hidden':
+        return `<input type="hidden" name="${n}" value="${v}">`;
+      default:
+        return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+    }
+  });
 }

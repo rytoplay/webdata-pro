@@ -107,11 +107,26 @@
     if (state.get('page')) p.set('page', state.get('page'));
     if (state.get('sort')) p.set('sort', state.get('sort'));
     if (state.get('dir'))  p.set('dir',  state.get('dir'));
+    // Forward per-field filters (stored as f_* in hash state)
+    var hasFieldFilters = false;
+    for (var pair of state.entries()) {
+      if (pair[0].startsWith('f_') && pair[1]) { p.set(pair[0], pair[1]); hasFieldFilters = true; }
+    }
+    // requireSearch: pass searchOnly=1 when nothing has been entered yet
+    if (cfg.requireSearch && !state.get('q') && !hasFieldFilters) p.set('searchOnly', '1');
     const qs = p.toString();
     return `/api/v/${cfg.app}/${cfg.view}` + (qs ? '?' + qs : '');
   }
 
   function detailPath(cfg, id) {
+    return `/api/v/${cfg.app}/${cfg.view}/${encodeURIComponent(id)}`;
+  }
+
+  function editPath(cfg, id) {
+    return `/api/v/${cfg.app}/${cfg.view}/${encodeURIComponent(id)}/edit`;
+  }
+
+  function patchPath(cfg, id) {
     return `/api/v/${cfg.app}/${cfg.view}/${encodeURIComponent(id)}`;
   }
 
@@ -128,6 +143,8 @@
       let html;
       if (mode === 'record') {
         html = await fetchFragment(cfg, detailPath(cfg, state.get('id') || ''));
+      } else if (mode === 'edit') {
+        html = await fetchFragment(cfg, editPath(cfg, state.get('id') || ''));
       } else {
         html = await fetchFragment(cfg, listPath(cfg, state));
       }
@@ -157,10 +174,47 @@
       e.preventDefault();
       const formType = form.dataset.wdpForm;
       if (formType === 'search') {
-        const q = (form.querySelector('[name="q"]') || {}).value || '';
-        const state = new URLSearchParams({ mode: 'list', q, page: '1' });
+        const state = new URLSearchParams({ mode: 'list', page: '1' });
+        // Collect the legacy single-q input if present
+        const qEl = form.querySelector('[name="q"]');
+        if (qEl && qEl.value) state.set('q', qEl.value);
+        // Collect per-field $search[...] inputs (name="table__field") as f_* params
+        new FormData(form).forEach(function(val, key) {
+          if (key === 'q') return;
+          if (String(val).trim()) state.set('f_' + key, String(val));
+        });
         writeHash(instanceId, state);
         render(instance);
+      } else if (formType === 'edit') {
+        const id      = form.dataset.wdpId || readHash(instanceId).get('id') || '';
+        const base    = (instance.cfg.baseUrl || '').replace(/\/$/, '');
+        const url     = base + patchPath(instance.cfg, id);
+        const body    = new URLSearchParams(new FormData(form)).toString();
+        const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        const access  = getAccess(instance.cfg);
+        if (access) headers['Authorization'] = 'Bearer ' + access;
+
+        fetch(url, { method: 'PATCH', headers, credentials: 'include', body })
+          .then(function (res) {
+            if (res.ok) {
+              const state = new URLSearchParams({ mode: 'record', id });
+              writeHash(instanceId, state);
+              render(instance);
+            } else {
+              res.json().then(function (data) {
+                const errEl = document.createElement('p');
+                errEl.className = 'wdp-error';
+                errEl.textContent = data.error || 'Save failed.';
+                form.prepend(errEl);
+              });
+            }
+          })
+          .catch(function (err) {
+            const errEl = document.createElement('p');
+            errEl.className = 'wdp-error';
+            errEl.textContent = 'Save failed: ' + String(err);
+            form.prepend(errEl);
+          });
       }
     });
   }
@@ -177,9 +231,24 @@
       pushHash(instanceId, new URLSearchParams({ mode: 'record', id }));
       instance.render();
 
+    } else if (action === 'edit') {
+      const id = el.dataset.wdpId;
+      if (!id) return;
+      instance._lastDetailId = id;
+      pushHash(instanceId, new URLSearchParams({ mode: 'edit', id }));
+      instance.render();
+
     } else if (action === 'back') {
-      const lastList = instance._lastListState || new URLSearchParams({ mode: 'list' });
-      writeHash(instanceId, lastList);
+      const curMode = current.get('mode');
+      if (curMode === 'edit') {
+        const id = current.get('id') || instance._lastDetailId || '';
+        const state = id
+          ? new URLSearchParams({ mode: 'record', id })
+          : (instance._lastListState || new URLSearchParams({ mode: 'list' }));
+        writeHash(instanceId, state);
+      } else {
+        writeHash(instanceId, instance._lastListState || new URLSearchParams({ mode: 'list' }));
+      }
       instance.render();
 
     } else if (action === 'page') {
@@ -254,7 +323,7 @@
       if (cfg.token) setTokens(cfg, cfg.token, null);
 
       const instanceId = 'i' + (++_idCounter);
-      const instance   = { cfg, el, instanceId, _lastListState: null };
+      const instance   = { cfg, el, instanceId, _lastListState: null, _lastDetailId: null };
       instance.render  = wrapRender(instance);
 
       // Style the container (minimal — host page can override)

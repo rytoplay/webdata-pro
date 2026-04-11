@@ -1,6 +1,31 @@
 import { db } from '../db/knex';
 import type { Group, CreateGroupInput, UpdateGroupInput, GroupTablePermission, UpsertGroupTablePermissionInput } from '../domain/types';
 
+// ── Row types for permission grids ───────────────────────────────────────────
+
+export interface TablePermRow {
+  table_id: number;
+  table_name: string;
+  label: string;
+  can_view: boolean;
+  can_add: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  can_view_all_records: boolean;
+  can_view_own_records_only: boolean;
+  can_edit_all_records: boolean;
+  can_edit_own_records_only: boolean;
+}
+
+export interface ViewPermRow {
+  view_id: number;
+  view_name: string;
+  label: string;
+  can_view: boolean;
+  can_search_all_records: boolean;
+  can_search_own_records_only: boolean;
+}
+
 export async function listGroups(appId: number): Promise<Group[]> {
   return db('groups').where({ app_id: appId }).orderBy('group_name');
 }
@@ -45,15 +70,86 @@ export async function upsertTablePermission(input: UpsertGroupTablePermissionInp
       .update(input);
   } else {
     await db('group_table_permissions').insert({
-      can_add: false,
-      can_edit: false,
-      can_delete: false,
-      can_view: false,
-      can_edit_all_records: false,
-      can_edit_own_records_only: false,
-      can_view_all_records: false,
-      can_view_own_records_only: false,
+      can_add: false, can_edit: false, can_delete: false, can_view: false,
+      can_edit_all_records: false, can_edit_own_records_only: false,
+      can_view_all_records: false, can_view_own_records_only: false,
       ...input
     });
+  }
+}
+
+// ── Permission grid helpers ──────────────────────────────────────────────────
+
+/** All tables for an app merged with this group's current permissions */
+export async function getTablePermGrid(appId: number, groupId: number): Promise<TablePermRow[]> {
+  const tables = await db('app_tables').where({ app_id: appId }).orderBy('table_name');
+  const perms  = await db('group_table_permissions').where({ group_id: groupId });
+  const pm     = new Map(perms.map((p: { table_id: number }) => [p.table_id, p]));
+  return tables.map((t: { id: number; table_name: string; label: string }) => {
+    const p = (pm.get(t.id) ?? {}) as Partial<GroupTablePermission>;
+    return {
+      table_id: t.id, table_name: t.table_name, label: t.label || t.table_name,
+      can_view:                  p.can_view                  ?? false,
+      can_add:                   p.can_add                   ?? false,
+      can_edit:                  p.can_edit                  ?? false,
+      can_delete:                p.can_delete                ?? false,
+      can_view_all_records:      p.can_view_all_records      ?? false,
+      can_view_own_records_only: p.can_view_own_records_only ?? false,
+      can_edit_all_records:      p.can_edit_all_records      ?? false,
+      can_edit_own_records_only: p.can_edit_own_records_only ?? false,
+    };
+  });
+}
+
+/** Save an entire table-permission grid for a group (replaces all rows) */
+export async function saveTablePermGrid(
+  groupId: number,
+  rows: { table_id: number; [key: string]: boolean | number }[]
+): Promise<void> {
+  for (const row of rows) {
+    await upsertTablePermission({
+      group_id: groupId, table_id: row.table_id,
+      can_view:                  !!row.can_view,
+      can_add:                   !!row.can_add,
+      can_edit:                  !!row.can_edit,
+      can_delete:                !!row.can_delete,
+      can_view_all_records:      !!row.can_view_all_records,
+      can_view_own_records_only: !!row.can_view_own_records_only,
+      can_edit_all_records:      !!row.can_edit_all_records,
+      can_edit_own_records_only: !!row.can_edit_own_records_only,
+    });
+  }
+}
+
+/** All views for an app merged with this group's current view permissions */
+export async function getViewPermGrid(appId: number, groupId: number): Promise<ViewPermRow[]> {
+  const views = await db('views').where({ app_id: appId }).orderBy('label');
+  const perms = await db('view_group_permissions').where({ group_id: groupId });
+  const pm    = new Map(perms.map((p: { view_id: number }) => [p.view_id, p]));
+  return views.map((v: { id: number; view_name: string; label: string }) => {
+    const p = (pm.get(v.id) ?? {}) as { can_view?: boolean; can_search_all_records?: boolean; can_search_own_records_only?: boolean };
+    return {
+      view_id: v.id, view_name: v.view_name, label: v.label || v.view_name,
+      can_view:                    p.can_view                    ?? false,
+      can_search_all_records:      p.can_search_all_records      ?? false,
+      can_search_own_records_only: p.can_search_own_records_only ?? false,
+    };
+  });
+}
+
+/** Save the view-permission grid for a group */
+export async function saveViewPermGrid(
+  groupId: number,
+  rows: { view_id: number; can_view: boolean; can_search_all_records: boolean; can_search_own_records_only: boolean }[]
+): Promise<void> {
+  for (const row of rows) {
+    const existing = await db('view_group_permissions')
+      .where({ group_id: groupId, view_id: row.view_id }).first();
+    const data = { group_id: groupId, view_id: row.view_id,
+      can_view: !!row.can_view,
+      can_search_all_records:      !!row.can_search_all_records,
+      can_search_own_records_only: !!row.can_search_own_records_only };
+    if (existing) await db('view_group_permissions').where({ id: existing.id }).update(data);
+    else           await db('view_group_permissions').insert(data);
   }
 }

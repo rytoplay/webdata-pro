@@ -1,0 +1,204 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ title }}</h1>
+  <a href="/admin/groups" class="btn btn-sm btn-outline-secondary">&larr; Groups</a>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show" role="alert">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# ── Settings form ──────────────────────────────────────────────────────────── #}
+<div class="card shadow-sm mb-4" style="max-width:680px;">
+  <div class="card-header"><strong>Group Settings</strong></div>
+  <div class="card-body p-4">
+    <form method="POST" action="{{ '/admin/groups/' + group.id + '/edit' if group and group.id else '/admin/groups' }}">
+
+      <div class="mb-3">
+        <label class="form-label">Name <span class="text-danger">*</span></label>
+        <input type="text" name="group_name" class="form-control"
+          value="{{ group.group_name if group else '' }}" required>
+        {% if errors and errors.group_name %}
+        <div class="text-danger small">{{ errors.group_name[0] }}</div>
+        {% endif %}
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Description</label>
+        <textarea name="description" class="form-control" rows="2">{{ group.description if group else '' }}</textarea>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Default home view</label>
+        <select name="default_home_view_id" class="form-select">
+          <option value="">— none —</option>
+          {% for v in views %}
+          <option value="{{ v.id }}"
+            {% if group and group.default_home_view_id == v.id %}selected{% endif %}>
+            {{ v.label }}
+          </option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Where members land after login.</div>
+      </div>
+
+      <div class="mb-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="self_register_enabled" id="self_reg" value="on"
+            {% if group and group.self_register_enabled %}checked{% endif %}>
+          <label class="form-check-label" for="self_reg">
+            Allow self-registration
+          </label>
+        </div>
+        <div class="form-check mt-1">
+          <input class="form-check-input" type="checkbox" name="tfa_required" id="tfa_req" value="on"
+            {% if group and group.tfa_required %}checked{% endif %}>
+          <label class="form-check-label" for="tfa_req">
+            Require two-factor authentication
+          </label>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 pt-2">
+        <button type="submit" class="btn btn-primary">
+          {% if group and group.id %}Save Settings{% else %}Create Group{% endif %}
+        </button>
+        <a href="/admin/groups" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+{# ── Permissions grid (only on edit) ─────────────────────────────────────────── #}
+{% if group and group.id %}
+
+<form method="POST" action="/admin/groups/{{ group.id }}/permissions">
+
+  {# Table permissions #}
+  {% if tablePerm.length > 0 %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+      <strong>Table Permissions</strong>
+      <span class="text-muted small">— what members of this group can do</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered mb-0 align-middle text-center" style="font-size:.85rem;">
+        <thead class="table-light">
+          <tr>
+            <th class="text-start ps-3" style="min-width:140px;">Table</th>
+            <th title="Can view records">View</th>
+            <th title="Can add records">Add</th>
+            <th title="Can edit records">Edit</th>
+            <th title="Can delete records">Delete</th>
+            <th title="Can view all records (not just own)">View All</th>
+            <th title="Can view only own records">View Own</th>
+            <th title="Can edit all records">Edit All</th>
+            <th title="Can edit only own records">Edit Own</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in tablePerm %}
+          <tr>
+            <td class="text-start ps-3">
+              <strong>{{ row.label }}</strong>
+              <div class="text-muted" style="font-size:.78rem;"><code>{{ row.table_name }}</code></div>
+            </td>
+            {% set flags = ['can_view','can_add','can_edit','can_delete',
+                            'can_view_all_records','can_view_own_records_only',
+                            'can_edit_all_records','can_edit_own_records_only'] %}
+            {% for f in flags %}
+            <td>
+              <input type="checkbox" name="tp_{{ row.table_id }}_{{ f }}" value="on"
+                class="form-check-input"
+                {% if row[f] %}checked{% endif %}>
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# View permissions #}
+  {% if viewPerm.length > 0 %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+      <strong>View Permissions</strong>
+      <span class="text-muted small">— which views members can access</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered mb-0 align-middle text-center" style="font-size:.85rem;">
+        <thead class="table-light">
+          <tr>
+            <th class="text-start ps-3" style="min-width:160px;">View</th>
+            <th title="Can view this view">Can View</th>
+            <th title="Can search all records">Search All</th>
+            <th title="Can search only own records">Search Own</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in viewPerm %}
+          <tr>
+            <td class="text-start ps-3">
+              <strong>{{ row.label }}</strong>
+              <div class="text-muted" style="font-size:.78rem;"><code>{{ row.view_name }}</code></div>
+            </td>
+            <td>
+              <input type="checkbox" name="vp_{{ row.view_id }}_can_view" value="on"
+                class="form-check-input" {% if row.can_view %}checked{% endif %}>
+            </td>
+            <td>
+              <input type="checkbox" name="vp_{{ row.view_id }}_can_search_all_records" value="on"
+                class="form-check-input" {% if row.can_search_all_records %}checked{% endif %}>
+            </td>
+            <td>
+              <input type="checkbox" name="vp_{{ row.view_id }}_can_search_own_records_only" value="on"
+                class="form-check-input" {% if row.can_search_own_records_only %}checked{% endif %}>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if tablePerm.length > 0 or viewPerm.length > 0 %}
+  <div class="mb-4">
+    <button type="submit" class="btn btn-primary">Save Permissions</button>
+  </div>
+  {% endif %}
+
+  {% if tablePerm.length === 0 and viewPerm.length === 0 %}
+  <div class="text-muted fst-italic mb-4">
+    No tables or views exist yet. Create some first to configure permissions.
+  </div>
+  {% endif %}
+
+</form>
+
+{# ── Danger zone ──────────────────────────────────────────────────────────────── #}
+<div class="card border-danger shadow-sm" style="max-width:680px;">
+  <div class="card-header text-danger"><strong>Danger Zone</strong></div>
+  <div class="card-body d-flex align-items-center justify-content-between">
+    <div>
+      <strong>Delete this group</strong>
+      <div class="text-muted small">Removes the group and all its permissions. Members in this group will be unaffected but lose group-based access.</div>
+    </div>
+    <form method="POST" action="/admin/groups/{{ group.id }}/delete"
+      onsubmit="return confirm('Delete group {{ group.group_name }}? This cannot be undone.')">
+      <button class="btn btn-outline-danger btn-sm">Delete Group</button>
+    </form>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}

@@ -10,6 +10,7 @@ import { joinsRouter } from './joins';
 import { dataRouter } from './data';
 import { viewsRouter } from './views';
 import { settingsRouter } from './settings';
+import { groupsRouter } from './groups';
 
 export const adminRouter = Router();
 
@@ -67,6 +68,6 @@ adminRouter.use('/data',      requireApp, dataRouter);
 adminRouter.use('/views',     requireApp, viewsRouter);
 adminRouter.use('/settings', settingsRouter);
 adminRouter.get('/templates', requireApp, (_req, res) => res.render('admin/stub', { title: 'Templates' }));
-adminRouter.get('/groups',    requireApp, (_req, res) => res.render('admin/stub', { title: 'Groups' }));
+adminRouter.use('/groups',    requireApp, groupsRouter);
 adminRouter.get('/members',   requireApp, (_req, res) => res.render('admin/stub', { title: 'Members' }));
 adminRouter.get('/auth',      requireApp, (_req, res) => res.render('admin/stub', { title: 'Auth / SSO' }));

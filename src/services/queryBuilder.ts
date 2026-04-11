@@ -6,6 +6,15 @@ export interface ColumnRef {
   alias?: string;
 }
 
+/**
+ * A GROUP_CONCAT expression to add to the SELECT, triggered by a <group> tag in the template.
+ * `expr` is the full SQL expression (already built); `alias` is the column name in the result.
+ */
+export interface GroupConcatSpec {
+  alias: string;   // e.g. '_group_0'
+  expr:  string;   // e.g. NULLIF(TRIM(GROUP_CONCAT(...)), '')
+}
+
 export interface JoinStep {
   table: string;
   condition: string;
@@ -37,7 +46,8 @@ interface TraversalEdge {
 export async function buildJoinQuery(
   appId: number,
   fromTableName: string,
-  columnRefs: ColumnRef[]
+  columnRefs: ColumnRef[],
+  groupConcatSpecs?: GroupConcatSpec[]
 ): Promise<QueryResult> {
 
   // Load all joins for this app, resolving table names from IDs
@@ -123,12 +133,33 @@ export async function buildJoinQuery(
     }
   }
 
-  // Build SELECT column list — always alias as table__field for conflict-free access
-  const cols = columnRefs.map(c => {
-    const ref   = `"${c.table}"."${c.field}"`;
+  const hasGroups = groupConcatSpecs && groupConcatSpecs.length > 0;
+
+  // Build SELECT column list.
+  // When <group> tags are present: only base-table columns go in the regular SELECT
+  // (joined-table tokens are covered by the GROUP_CONCAT expressions).
+  // When no <group> tags: all column refs go into a plain SELECT (raw JOIN rows).
+  const cols: string[] = [];
+  const groupByExprs: string[] = [];
+
+  for (const c of columnRefs) {
     const alias = c.alias ?? `${c.table}__${c.field}`;
-    return `${ref} AS "${alias}"`;
-  });
+    if (hasGroups) {
+      if (c.table === fromTableName) {
+        cols.push(`"${c.table}"."${c.field}" AS "${alias}"`);
+        groupByExprs.push(`"${c.table}"."${c.field}"`);
+      }
+      // Non-base-table columns are handled by GROUP_CONCAT specs — skip here.
+    } else {
+      cols.push(`"${c.table}"."${c.field}" AS "${alias}"`);
+    }
+  }
+
+  if (hasGroups) {
+    for (const spec of groupConcatSpecs!) {
+      cols.push(`${spec.expr} AS "${spec.alias}"`);
+    }
+  }
 
   // Assemble SQL
   const parts: string[] = [
@@ -138,6 +169,9 @@ export async function buildJoinQuery(
   ];
   for (const j of neededJoins) {
     parts.push(`${j.type} "${j.table}" ON ${j.condition}`);
+  }
+  if (groupByExprs.length > 0) {
+    parts.push(`GROUP BY ${groupByExprs.join(', ')}`);
   }
 
   return {

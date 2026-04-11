@@ -65,8 +65,22 @@
     {# ── Right: field picker ── #}
     <div class="col-lg-3">
       <div class="card shadow-sm h-100" style="font-size:0.8rem;">
-        <div class="card-header py-2"><strong>Field tokens</strong></div>
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <strong>Field tokens</strong>
+          <button type="button" id="help-toggle" title="Show / hide template help"
+            style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.72rem;padding:1px 7px;cursor:pointer;line-height:1.6;">
+            ? Help
+          </button>
+        </div>
+        <div id="help-panel" class="d-none" style="font-size:0.78rem;line-height:1.55;max-height:400px;overflow-y:auto;background:#f8fafc;border-bottom:1px solid #e2e8f0;"></div>
         <div class="card-body p-2" style="overflow-y:auto;max-height:420px;">
+
+          <div id="search-hint" class="d-none mb-2 p-2 rounded" style="font-size:0.7rem;background:#dcfce7;color:#166534;line-height:1.4;">
+            Click <code>$search[…]</code> to insert an auto-rendered search input based on the field type defined in Fields.
+          </div>
+          <div id="update-hint" class="d-none mb-2 p-2 rounded" style="font-size:0.7rem;background:#fef9c3;color:#713f12;line-height:1.4;">
+            Click <code>$update[…]</code> to insert an auto-rendered input widget based on the field type defined in Fields.
+          </div>
 
           {% if baseFields.length %}
           <div class="text-muted small mb-1" style="font-size:0.7rem;">BASE TABLE — {{ baseTable.table_name }}</div>
@@ -74,7 +88,17 @@
           <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn"
             data-token="${{ '{' }}{{ baseTable.table_name }}.{{ f.field_name }}{{ '}' }}"
             style="background:var(--accent-soft);color:var(--accent);border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;">
-            \${{ '{' }}{{ baseTable.table_name }}.{{ f.field_name }}{{ '}' }}
+            ${{ '{' }}{{ baseTable.table_name }}.{{ f.field_name }}{{ '}' }}
+          </button>
+          <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn search-token-btn d-none"
+            data-token="$search[{{ baseTable.table_name }}.{{ f.field_name }}]"
+            style="background:#dcfce7;color:#166534;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px 2px 16px;">
+            $search[{{ baseTable.table_name }}.{{ f.field_name }}]
+          </button>
+          <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn update-token-btn d-none"
+            data-token="$update[{{ baseTable.table_name }}.{{ f.field_name }}]"
+            style="background:#dbeafe;color:#1e40af;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px 2px 16px;">
+            $update[{{ baseTable.table_name }}.{{ f.field_name }}]
           </button>
           {% endfor %}
           {% endif %}
@@ -85,7 +109,17 @@
           <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn"
             data-token="${{ '{' }}{{ f.table_name }}.{{ f.field_name }}{{ '}' }}"
             style="background:#f0fdf4;color:#166534;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;">
-            \${{ '{' }}{{ f.table_name }}.{{ f.field_name }}{{ '}' }}
+            ${{ '{' }}{{ f.table_name }}.{{ f.field_name }}{{ '}' }}
+          </button>
+          <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn search-token-btn d-none"
+            data-token="$search[{{ f.table_name }}.{{ f.field_name }}]"
+            style="background:#dcfce7;color:#166534;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px 2px 16px;">
+            $search[{{ f.table_name }}.{{ f.field_name }}]
+          </button>
+          <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn update-token-btn d-none"
+            data-token="$update[{{ f.table_name }}.{{ f.field_name }}]"
+            style="background:#dbeafe;color:#1e40af;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px 2px 16px;">
+            $update[{{ f.table_name }}.{{ f.field_name }}]
           </button>
           {% endfor %}
           {% endif %}
@@ -112,7 +146,7 @@
             data-token="${{ '{' }}{{ tok[0] }}{{ '}' }}"
             title="{{ tok[1] }}"
             style="background:#fff3cd;color:#664d03;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;">
-            \${{ '{' }}{{ tok[0] }}{{ '}' }}
+            ${{ '{' }}{{ tok[0] }}{{ '}' }}
           </button>
           {% endfor %}
 
@@ -120,12 +154,31 @@
           <div style="font-size:0.72rem;color:#6b7280;line-height:1.8;">
             <code>data-wdp-action="detail"</code><br>
             <code>data-wdp-id="\${_pk}"</code><br>
+            <code>data-wdp-action="edit"</code><br>
+            <code>data-wdp-action="back"</code><br>
             <code>data-wdp-action="page"</code><br>
             <code>data-wdp-page="\${_next_page}"</code><br>
-            <code>data-wdp-action="back"</code><br>
             <code>data-wdp-action="sort"</code><br>
             <code>data-wdp-field="title"</code><br>
-            <code>data-wdp-form="search"</code>
+            <code>data-wdp-form="search"</code><br>
+            <code>data-wdp-form="edit"</code><br>
+            <code>$update[table.field]</code>
+          </div>
+
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">TEMPLATE TAGS</div>
+          <div style="font-size:0.72rem;color:#6b7280;line-height:1.6;">
+            <div class="mb-1"><strong style="color:#374151;">$if()</strong> — conditional output</div>
+            <code style="font-size:0.7rem;word-break:break-all;">$if(field &gt; value, "true html", "false html")</code>
+            <div class="text-muted mt-1 mb-2" style="font-size:0.68rem;">
+              Operators: <code>&gt; &lt; &gt;= &lt;= == != &lt;&gt;</code><br>
+              Wrap branch values in quotes if they contain commas.<br>
+              Branches may contain <code>\${...}</code> tokens.
+            </div>
+            <div class="mb-1"><strong style="color:#374151;">&lt;group&gt;</strong> — multi-row concat</div>
+            <code style="font-size:0.7rem;word-break:break-all;">&lt;group delimiter=", "&gt;\${authors.first_name} \${authors.last_name}&lt;/group&gt;</code>
+            <div class="text-muted mt-1" style="font-size:0.68rem;">
+              Groups joined rows into a single delimited value via SQL GROUP_CONCAT.
+            </div>
           </div>
         </div>
       </div>
@@ -190,7 +243,7 @@
       </div>
       <div class="modal-body">
         <p class="text-muted small mb-3">
-          AI will read your table schema and sample data, then write all 7 templates for you.
+          AI will read your table schema and sample data, then write all 8 templates for you.
           Describe the style you want, or leave blank for a clean default.
         </p>
         <label class="form-label">Style description <span class="text-muted fw-normal">(optional)</span></label>
@@ -214,13 +267,199 @@
   const panels   = document.querySelectorAll('.tpl-panel');
   const buttons  = document.querySelectorAll('#tpl-selector button[data-tpl]');
 
+  function applyTabState(tpl) {
+    const isEdit   = tpl === 'edit_form';
+    const isSearch = tpl === 'search_form';
+    document.querySelectorAll('.update-token-btn').forEach(b => b.classList.toggle('d-none', !isEdit));
+    document.querySelectorAll('.search-token-btn').forEach(b => b.classList.toggle('d-none', !isSearch));
+    const updateHint = document.getElementById('update-hint');
+    if (updateHint) updateHint.classList.toggle('d-none', !isEdit);
+    const searchHint = document.getElementById('search-hint');
+    if (searchHint) searchHint.classList.toggle('d-none', !isSearch);
+  }
+
   buttons.forEach(btn => {
     btn.addEventListener('click', () => {
       buttons.forEach(b => b.classList.remove('active'));
       panels.forEach(p => p.classList.add('d-none'));
       btn.classList.add('active');
       document.querySelector(`.tpl-panel[data-tpl="${btn.dataset.tpl}"]`)?.classList.remove('d-none');
+      applyTabState(btn.dataset.tpl);
+      updateHelp(btn.dataset.tpl);
     });
+  });
+
+  // Apply initial tab state for whichever tab is active on page load
+  const activeBtn = document.querySelector('#tpl-selector button[data-tpl].active');
+  if (activeBtn) applyTabState(activeBtn.dataset.tpl);
+
+  // ── Inline help panel ─────────────────────────────────────────────────────
+
+  const HS = 'padding:10px 14px;';   // section padding shorthand
+  const H  = s => `<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#475569;margin:10px 0 4px;">${s}</div>`;
+  const P  = s => `<p style="margin:0 0 7px;color:#374151;">${s}</p>`;
+  const EX = s => `<pre style="margin:0 0 7px;background:#e2e8f0;border-radius:3px;padding:5px 8px;font-size:0.72rem;white-space:pre-wrap;word-break:break-all;color:#1e293b;">${s}</pre>`;
+  const N  = s => `<p style="margin:0 0 7px;color:#64748b;font-style:italic;font-size:0.74rem;">${s}</p>`;
+
+  const COMMON = `
+    ${H('$if() — Conditional output')}
+    ${P('Show different content based on a field value. Operators: <code>&gt; &lt; &gt;= &lt;= == != &lt;&gt;</code>. Wrap branch text in quotes if it contains a comma.')}
+    ${EX('$if(books.price &gt; 30, "&lt;b&gt;Free shipping!&lt;/b&gt;", "Standard shipping")\n$if(books.featured, "&lt;span class=\\"badge\\"&gt;Featured&lt;/span&gt;")')}
+    ${N('The true/false branches can contain ${...} tokens too.')}
+
+    ${H('<group> — Multi-row concat')}
+    ${P('When a book has multiple authors, a plain join produces one row per author. Wrap the repeating content in a <code>&lt;group&gt;</code> tag so the system rolls them up into one value using SQL <code>GROUP_CONCAT</code>.')}
+    ${EX('&lt;group delimiter=", "&gt;\${authors.first_name} \${authors.last_name}&lt;/group&gt;')}
+    ${N('The delimiter appears between each concatenated value. Any text or tokens inside the tag become part of each item.')}
+  `;
+
+  const HELP = {
+    search_form: `<div style="${HS}">
+      ${P('<em>This template renders once at the very top of the view. It stays visible while the user browses results below it.</em>')}
+
+      ${H('data-wdp-form="search" (required)')}
+      ${P('Put this attribute on your <code>&lt;form&gt;</code> tag. Without it the submit button does nothing — the widget won\'t know it\'s a search form.')}
+      ${EX('&lt;form data-wdp-form="search"&gt; ... &lt;/form&gt;')}
+
+      ${H('name="q" — Global keyword search')}
+      ${P('A single text input that runs a <code>LIKE</code> search across <em>every</em> text column in your query at once.')}
+      ${EX('&lt;input type="text" name="q" value="\${_q}" placeholder="Search..."&gt;')}
+      ${N('\${_q} pre-fills the box when the user navigates back to the list.')}
+
+      ${H('$search[table.field] — Per-field search')}
+      ${P('Generates a search input whose type matches the field\'s widget setting — text box, date picker, dropdown, or a Yes/No/Any selector for checkboxes. The input is always blank on load.')}
+      ${EX('$search[books.title]\n$search[books.type]\n$search[authors.last_name]')}
+      ${N('You can mix name="q" and $search[...] fields in the same form — they combine with AND.')}
+
+      ${H('data-wdp-action="clear"')}
+      ${P('Resets all search fields and reloads the full result set. Put it on any clickable element.')}
+      ${EX('&lt;a data-wdp-action="clear"&gt;✕ Clear&lt;/a&gt;')}
+
+      ${H('Available tokens')}
+      ${EX('\${_q}          Current search term\n\${_total}      Number of matching records')}
+      ${COMMON}
+    </div>`,
+
+    header: `<div style="${HS}">
+      ${P('<em>Renders once between the search form and the first result row. Use it for column headings, record counts, and sort controls.</em>')}
+
+      ${H('Record count & search state')}
+      ${EX('\${_total}        Total records found\n\${_q}           Current search term (empty if none)\n\${_page}        Current page number\n\${_total_pages} Total number of pages')}
+
+      ${H('Sort buttons')}
+      ${P('Add <code>data-wdp-action="sort"</code> and <code>data-wdp-field="fieldname"</code> to any clickable element to make a sortable column header. The widget toggles asc/desc on repeated clicks.')}
+      ${EX('&lt;span data-wdp-action="sort" data-wdp-field="title" style="cursor:pointer;"&gt;\n  Title \${_sort == "title" ? (_dir == "asc" ? "▲" : "▼") : ""}\n&lt;/span&gt;')}
+      ${N('Use just the field name (no table prefix) in data-wdp-field.')}
+      ${COMMON}
+    </div>`,
+
+    group_header: `<div style="${HS}">
+      ${P('<em>Renders once each time the grouping field\'s value changes — like a section divider between groups of rows. Requires a grouping field to be set in the view\'s Settings.</em>')}
+
+      ${H('Key token')}
+      ${EX('\${_group_value}   The value of the grouping field for this group')}
+      ${P('All standard row tokens are also available here (see Row help).')}
+
+      ${H('Typical use')}
+      ${EX('&lt;div class="group-header"&gt;\${_group_value}&lt;/div&gt;')}
+      ${COMMON}
+    </div>`,
+
+    row: `<div style="${HS}">
+      ${P('<em>Renders once per record. This is where you lay out each result — title, author, description, thumbnail, etc.</em>')}
+
+      ${H('Field values')}
+      ${EX('\${books.title}          A field value (table.field)\n\${_pk}                 The primary key of this row\n\${_row_num}            Row number, starting at 1')}
+
+      ${H('Clickable row → detail view')}
+      ${P('Add these two attributes to any element (a div, tr, li…) to make it open the detail view when clicked.')}
+      ${EX('&lt;div data-wdp-action="detail" data-wdp-id="\${_pk}"&gt;\n  \${books.title}\n&lt;/div&gt;')}
+
+      ${H('Sort controls (often in Header, but can go here too)')}
+      ${EX('&lt;span data-wdp-action="sort" data-wdp-field="title"&gt;Title&lt;/span&gt;')}
+
+      ${COMMON}
+    </div>`,
+
+    group_footer: `<div style="${HS}">
+      ${P('<em>Renders once after the last row of each group closes. Use it for group subtotals, dividers, or spacing. Often left blank.</em>')}
+
+      ${H('Available tokens')}
+      ${EX('\${_group_value}   The value of the group that just ended')}
+      ${P('All standard row tokens (last row\'s values) are available here too.')}
+      ${COMMON}
+    </div>`,
+
+    footer: `<div style="${HS}">
+      ${P('<em>Renders once after all rows. The natural home for pagination controls.</em>')}
+
+      ${H('Built-in pagination widget')}
+      ${P('Drop this token in and you\'re done — it renders Prev / Page X of Y / Next buttons automatically.')}
+      ${EX('\${_pagination}')}
+
+      ${H('Manual pagination (build your own buttons)')}
+      ${EX('\${_page}          Current page\n\${_total_pages}  Total pages\n\${_has_prev}     Non-empty string if a previous page exists\n\${_has_next}     Non-empty string if a next page exists\n\${_prev_page}    Previous page number\n\${_next_page}    Next page number')}
+      ${EX('&lt;button data-wdp-action="page" data-wdp-page="\${_prev_page}"\n  \${_has_prev ? "" : "disabled"}&gt;← Prev&lt;/button&gt;\n&lt;button data-wdp-action="page" data-wdp-page="\${_next_page}"\n  \${_has_next ? "" : "disabled"}&gt;Next →&lt;/button&gt;')}
+      ${COMMON}
+    </div>`,
+
+    detail: `<div style="${HS}">
+      ${P('<em>Shown when the user clicks a row. Replaces the list view inside the widget. All field values for that single record are available.</em>')}
+
+      ${H('Back button (required for navigation)')}
+      ${EX('&lt;button data-wdp-action="back"&gt;← Back&lt;/button&gt;')}
+
+      ${H('Edit button (shows to authorized members)')}
+      ${EX('&lt;button data-wdp-action="edit" data-wdp-id="\${_pk}"&gt;Edit&lt;/button&gt;')}
+
+      ${H('Field values')}
+      ${EX('\${books.title}\n\${books.long_description}\n\${_pk}    Primary key')}
+      ${N('Every column returned by your query is available here as \${table.field} or \${alias}.')}
+      ${COMMON}
+    </div>`,
+
+    edit_form: `<div style="${HS}">
+      ${P('<em>Shown to authorized members when they click Edit on a detail view. The form is pre-filled with the current record\'s values.</em>')}
+
+      ${H('data-wdp-form="edit" + data-wdp-id (required)')}
+      ${P('Both attributes are required on the <code>&lt;form&gt;</code> tag. Without them the Save button won\'t submit correctly.')}
+      ${EX('&lt;form data-wdp-form="edit" data-wdp-id="\${_pk}"&gt;...&lt;/form&gt;')}
+
+      ${H('$update[table.field] — Auto-rendered input')}
+      ${P('Generates the right input widget for the field — text box, textarea, date picker, dropdown, checkbox, etc. — pre-filled with the current value. The <code>name</code> attribute is set automatically.')}
+      ${EX('$update[books.title]\n$update[books.type]\n$update[books.long_description]')}
+
+      ${H('Save & cancel buttons')}
+      ${EX('&lt;button type="submit"&gt;Save&lt;/button&gt;\n&lt;button type="button" data-wdp-action="back"&gt;Cancel&lt;/button&gt;')}
+      ${N('After a successful save the widget returns to the detail view automatically.')}
+      ${COMMON}
+    </div>`,
+  };
+
+  let helpVisible = false;
+  let currentTpl  = (activeBtn && activeBtn.dataset.tpl) || 'search_form';
+
+  function updateHelp(tpl) {
+    currentTpl = tpl;
+    const panel = document.getElementById('help-panel');
+    if (panel && helpVisible) panel.innerHTML = HELP[tpl] || '';
+  }
+
+  document.getElementById('help-toggle')?.addEventListener('click', () => {
+    helpVisible = !helpVisible;
+    const panel  = document.getElementById('help-panel');
+    const toggle = document.getElementById('help-toggle');
+    if (!panel) return;
+    if (helpVisible) {
+      panel.innerHTML = HELP[currentTpl] || '';
+      panel.classList.remove('d-none');
+      toggle.textContent = '✕ Help';
+      toggle.style.color = '#0f172a';
+    } else {
+      panel.classList.add('d-none');
+      toggle.textContent = '? Help';
+      toggle.style.color = '';
+    }
   });
 
   // ── Token insertion at cursor ─────────────────────────────────────────────
