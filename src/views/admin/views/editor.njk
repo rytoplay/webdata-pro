@@ -415,6 +415,10 @@
       ${H('Field values')}
       ${EX('\${books.title}\n\${books.long_description}\n\${_pk}    Primary key')}
       ${N('Every column returned by your query is available here as \${table.field} or \${alias}.')}
+
+      ${H('Record ownership tokens')}
+      ${P('Available once a member has saved the record via an edit form.')}
+      ${EX('\${_meta.created_by}   Name of the member who first saved this record\n\${_meta.created_at}   When it was first saved\n\${_meta.updated_by}   Name of the last member to edit it\n\${_meta.updated_at}   When it was last edited')}
       ${COMMON}
     </div>`,
 
@@ -432,6 +436,10 @@
       ${H('Save & cancel buttons')}
       ${EX('&lt;button type="submit"&gt;Save&lt;/button&gt;\n&lt;button type="button" data-wdp-action="back"&gt;Cancel&lt;/button&gt;')}
       ${N('After a successful save the widget returns to the detail view automatically.')}
+
+      ${H('Record ownership tokens')}
+      ${P('Show who created/last edited this record — useful as read-only info inside the form.')}
+      ${EX('\${_meta.created_by}   Who first saved this record\n\${_meta.created_at}   When it was created\n\${_meta.updated_by}   Last editor\n\${_meta.updated_at}   Last edited time')}
       ${COMMON}
     </div>`,
   };

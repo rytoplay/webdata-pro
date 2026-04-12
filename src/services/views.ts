@@ -1,6 +1,7 @@
 import { db } from '../db/knex';
 import { getAppDb } from '../db/adapters/appDb';
 import { buildJoinQuery, parseColumnRefs } from './queryBuilder';
+import { getRecordMeta, metaToRowKeys } from './recordMeta';
 import type { GroupConcatSpec } from './queryBuilder';
 import type { App, View, CreateViewInput, UpdateViewInput, UIWidget } from '../domain/types';
 
@@ -651,7 +652,8 @@ export async function renderViewDetail(
 
   const row     = rows[0];
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
-  const rowData = { _pk: pkVal, _row_num: 1, ...row };
+  const meta    = await getRecordMeta(app.id, baseTableName, pkVal);
+  const rowData = { _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta) };
 
   const detailTags = parseGroupTags(templates.detail);
   const detailTpl  = detailTags.length ? applyGroupTags(templates.detail, detailTags) : templates.detail;
@@ -690,7 +692,8 @@ export async function renderViewEditForm(
 
   const row     = rows[0];
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
-  const rowData = { _pk: pkVal, _row_num: 1, ...row };
+  const meta    = await getRecordMeta(app.id, baseTableName, pkVal);
+  const rowData = { _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta) };
 
   const editTags  = parseGroupTags(templates.edit_form);
   const editTpl   = editTags.length ? applyGroupTags(templates.edit_form, editTags) : templates.edit_form;

@@ -197,6 +197,17 @@ apiViewsRouter.patch('/:viewName/:recordId', async (req, res, next) => {
 
     if (!updated) return res.status(404).json({ error: 'Record not found' });
 
+    // Record ownership metadata
+    const { touchRecordMeta } = await import('../../services/recordMeta');
+    const memberSession = (req.session as any)?.member;
+    const memberId   = memberSession?.memberId ?? null;
+    const memberName = memberId
+      ? await db('members').where({ id: memberId }).first().then((m: any) =>
+          m ? (m.first_name && m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.email) : null
+        )
+      : null;
+    await touchRecordMeta(app.id, baseTable.table_name, recordId, memberId, memberName, new Date().toISOString());
+
     res.json({ ok: true });
   } catch (err) {
     next(err);

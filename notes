@@ -1,0 +1,11 @@
+1. in "Tables" there is an "apply schema" button.
+It directs the browser to /admin/schema/apply
+-- Error
+   The "path" arguement must be of type string. Received undefined
+   [ back to dashboard ]
+
+2. When on the dashboard page. If you click the app that is already selected, it should take you to the tables page.
+
+3. The Data link takes the browser to /admin/data/authors (the first table in the list)
+Contents is the same as in /admin/schema/apply
+
