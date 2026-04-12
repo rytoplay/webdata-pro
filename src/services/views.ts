@@ -652,7 +652,7 @@ export async function renderViewDetail(
 
   const row     = rows[0];
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
-  const meta    = await getRecordMeta(app.id, baseTableName, pkVal);
+  const meta    = await getRecordMeta(app, baseTableName, pkVal);
   const rowData = { _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta) };
 
   const detailTags = parseGroupTags(templates.detail);
@@ -692,7 +692,7 @@ export async function renderViewEditForm(
 
   const row     = rows[0];
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
-  const meta    = await getRecordMeta(app.id, baseTableName, pkVal);
+  const meta    = await getRecordMeta(app, baseTableName, pkVal);
   const rowData = { _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta) };
 
   const editTags  = parseGroupTags(templates.edit_form);

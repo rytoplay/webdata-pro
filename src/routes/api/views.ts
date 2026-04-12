@@ -206,7 +206,7 @@ apiViewsRouter.patch('/:viewName/:recordId', async (req, res, next) => {
           m ? (m.first_name && m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.email) : null
         )
       : null;
-    await touchRecordMeta(app.id, baseTable.table_name, recordId, memberId, memberName, new Date().toISOString());
+    await touchRecordMeta(app, baseTable.table_name, recordId, memberId, memberName, new Date().toISOString());
 
     res.json({ ok: true });
   } catch (err) {
