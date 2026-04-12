@@ -11,6 +11,8 @@ import { dataRouter } from './data';
 import { viewsRouter } from './views';
 import { settingsRouter } from './settings';
 import { groupsRouter } from './groups';
+import { membersRouter } from './members';
+import { homeRouter } from './home';
 
 export const adminRouter = Router();
 
@@ -69,5 +71,6 @@ adminRouter.use('/views',     requireApp, viewsRouter);
 adminRouter.use('/settings', settingsRouter);
 adminRouter.get('/templates', requireApp, (_req, res) => res.render('admin/stub', { title: 'Templates' }));
 adminRouter.use('/groups',    requireApp, groupsRouter);
-adminRouter.get('/members',   requireApp, (_req, res) => res.render('admin/stub', { title: 'Members' }));
+adminRouter.use('/members',    requireApp, membersRouter);
+adminRouter.use('/home',       requireApp, homeRouter);
 adminRouter.get('/auth',      requireApp, (_req, res) => res.render('admin/stub', { title: 'Auth / SSO' }));

@@ -5,6 +5,7 @@ import path from 'path';
 import { config } from './config';
 import { adminRouter } from './routes/admin';
 import { apiViewsRouter } from './routes/api/views';
+import { memberRouter } from './routes/member';
 
 export function createApp(): express.Application {
   const app = express();
@@ -32,6 +33,7 @@ export function createApp(): express.Application {
 
   app.use('/admin', adminRouter);
   app.use('/api/v/:appSlug', apiViewsRouter);
+  app.use('/app/:appSlug', memberRouter);
 
   app.get('/', (_req, res) => res.redirect('/admin'));
 

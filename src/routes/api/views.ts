@@ -1,10 +1,43 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { db } from '../../db/knex';
 import { appCors } from '../../middleware/cors';
 import type { App } from '../../domain/types';
 import * as viewsService from '../../services/views';
 
 export const apiViewsRouter = Router({ mergeParams: true });
+
+// ── Auth helper ──────────────────────────────────────────────────────────────
+// Returns true if the request is allowed to access the view.
+// Sends a 401 response and returns false if not.
+
+async function checkViewAccess(req: Request, res: Response, app: App, view: { id: number; is_public: boolean; view_name?: string }, asJson = false): Promise<boolean> {
+  if (view.is_public) return true;
+
+  // Admin session: full access
+  if ((req.session as any)?.admin?.isAdmin === true) return true;
+
+  // Member session: must be logged into this app and have a group with can_view
+  const memberSession = (req.session as any)?.member;
+  if (memberSession?.appId === app.id && Array.isArray(memberSession.groupIds) && memberSession.groupIds.length > 0) {
+    const perm = await db('view_group_permissions')
+      .whereIn('group_id', memberSession.groupIds)
+      .where({ view_id: view.id, can_view: true })
+      .first();
+    if (perm) return true;
+  }
+
+  // Not authorised — send login link
+  const loginUrl = `/app/${app.slug}/login?returnTo=${encodeURIComponent(req.originalUrl)}`;
+  if (asJson) {
+    res.status(401).json({ error: 'Authentication required', loginUrl });
+  } else {
+    res.status(401).send(
+      `<p class="wdp-error">This view requires authentication. ` +
+      `<a href="${loginUrl}">Sign in</a></p>`
+    );
+  }
+  return false;
+}
 
 // ── Load app by slug, apply CORS ────────────────────────────────────────────
 
@@ -34,12 +67,7 @@ apiViewsRouter.get('/:viewName', async (req, res, next) => {
     const view = await viewsService.getViewByName(app.id, viewName);
     if (!view) return res.status(404).send('<p class="wdp-error">View not found.</p>');
 
-    // Auth check: private views require a JWT (stub — always allow for now)
-    if (!view.is_public) {
-      // TODO: JWT verification against member/group permissions
-      // For now, return 401 placeholder
-      return res.status(401).send('<p class="wdp-error">This view requires authentication.</p>');
-    }
+    if (!await checkViewAccess(req, res, app, view)) return;
 
     const baseTable = await db('app_tables').where({ id: view.base_table_id }).first();
     if (!baseTable) return res.status(500).send('<p class="wdp-error">Base table not configured.</p>');
@@ -73,9 +101,7 @@ apiViewsRouter.get('/:viewName/:recordId', async (req, res, next) => {
     const view = await viewsService.getViewByName(app.id, viewName);
     if (!view) return res.status(404).send('<p class="wdp-error">View not found.</p>');
 
-    if (!view.is_public) {
-      return res.status(401).send('<p class="wdp-error">This view requires authentication.</p>');
-    }
+    if (!await checkViewAccess(req, res, app, view)) return;
 
     const baseTable = await db('app_tables').where({ id: view.base_table_id }).first();
     if (!baseTable) return res.status(500).send('<p class="wdp-error">Base table not configured.</p>');
@@ -100,9 +126,7 @@ apiViewsRouter.get('/:viewName/:recordId/edit', async (req, res, next) => {
     const view = await viewsService.getViewByName(app.id, viewName);
     if (!view) return res.status(404).send('<p class="wdp-error">View not found.</p>');
 
-    if (!view.is_public) {
-      return res.status(401).send('<p class="wdp-error">This view requires authentication.</p>');
-    }
+    if (!await checkViewAccess(req, res, app, view)) return;
 
     const baseTable = await db('app_tables').where({ id: view.base_table_id }).first();
     if (!baseTable) return res.status(500).send('<p class="wdp-error">Base table not configured.</p>');
@@ -127,9 +151,7 @@ apiViewsRouter.patch('/:viewName/:recordId', async (req, res, next) => {
     const view = await viewsService.getViewByName(app.id, viewName);
     if (!view) return res.status(404).json({ error: 'View not found' });
 
-    if (!view.is_public) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
+    if (!await checkViewAccess(req, res, app, view, true)) return;
 
     const baseTable = await db('app_tables').where({ id: view.base_table_id }).first();
     if (!baseTable) return res.status(500).json({ error: 'Base table not configured' });

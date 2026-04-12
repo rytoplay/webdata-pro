@@ -1,0 +1,108 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Member Home Page</h1>
+  <a href="/admin/home/preview" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-play me-1"></i>Preview
+  </a>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-3">
+
+  {# ── Editor ── #}
+  <div class="col-lg-8">
+    <form method="POST" action="/admin/home">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex align-items-center gap-2 py-2">
+          <span class="fw-semibold small">Home Template</span>
+          <span class="text-muted small ms-2">HTML + Nunjucks — rendered when a member logs in</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+            id="btn-reset" title="Reset to default">Reset to default</button>
+        </div>
+        <div class="card-body p-0">
+          <textarea name="home_template" id="home-editor" class="form-control font-monospace border-0 rounded-0"
+            rows="28" style="resize:vertical; font-size:0.82rem; tab-size:2;"
+            placeholder="Leave blank to use the default view list.">{{ app.home_template or '' }}</textarea>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+          <button type="submit" class="btn btn-primary btn-sm">Save Template</button>
+          <span class="text-muted small">Leave blank to show the default view list.</span>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {# ── Reference panel ── #}
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header py-2"><strong class="small">Available Variables</strong></div>
+      <div class="card-body p-3" style="font-size:0.82rem;">
+
+        <p class="text-muted small mb-2">App</p>
+        <ul class="list-unstyled font-monospace mb-3">
+          <li><code>{{ '{{ app.name }}' }}</code></li>
+          <li><code>{{ '{{ app.slug }}' }}</code></li>
+        </ul>
+
+        <p class="text-muted small mb-2">Member</p>
+        <ul class="list-unstyled font-monospace mb-3">
+          <li><code>{{ '{{ member.first_name }}' }}</code></li>
+          <li><code>{{ '{{ member.last_name }}' }}</code></li>
+          <li><code>{{ '{{ member.email }}' }}</code></li>
+        </ul>
+
+        <p class="text-muted small mb-2">Views (accessible to this member)</p>
+        <ul class="list-unstyled font-monospace mb-3">
+          <li><code>{{ '{{ views }}' }}</code> — array</li>
+          <li><code>{{ '{{ v.label }}' }}</code></li>
+          <li><code>{{ '{{ v.view_name }}' }}</code></li>
+          <li><code>{{ '{{ v.url }}' }}</code> — ready-to-use link</li>
+        </ul>
+
+        <p class="text-muted small mb-2">Example loop</p>
+        <pre class="bg-light rounded p-2 small mb-0">{% raw %}{% for v in views %}
+<a href="{{ v.url }}">{{ v.label }}</a>
+{% endfor %}{% endraw %}</pre>
+
+      </div>
+    </div>
+
+    <div class="card shadow-sm mt-3">
+      <div class="card-header py-2"><strong class="small">Group Default Views</strong></div>
+      <div class="card-body p-3 small text-muted">
+        If a member's group has a <strong>Default home view</strong> set, they are redirected
+        straight to that view on login — skipping this template entirely.
+        Configure this in <a href="/admin/groups">Groups → Edit</a>.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.getElementById('btn-reset').addEventListener('click', function() {
+  if (confirm('Reset to the default template?')) {
+    document.getElementById('home-editor').value = {{ defaultTemplate | dump | safe }};
+  }
+});
+
+// Tab key inserts spaces in the textarea
+document.getElementById('home-editor').addEventListener('keydown', function(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = this.selectionStart;
+    this.value = this.value.slice(0, s) + '  ' + this.value.slice(this.selectionEnd);
+    this.selectionStart = this.selectionEnd = s + 2;
+  }
+});
+</script>
+
+{% endblock %}

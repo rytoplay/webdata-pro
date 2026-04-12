@@ -1,0 +1,157 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ title }}</h1>
+  <a href="/admin/members" class="btn btn-sm btn-outline-secondary">&larr; Members</a>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show" role="alert">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# ── Member details ──────────────────────────────────────────────────────── #}
+<form method="POST" action="{{ '/admin/members/' + member.id + '/edit' if member else '/admin/members' }}">
+  <div class="card shadow-sm mb-4">
+    <div class="card-header"><strong>Member Details</strong></div>
+    <div class="card-body">
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Email <span class="text-danger">*</span></label>
+          <input type="email" name="email" class="form-control {% if errors.email %}is-invalid{% endif %}"
+            value="{{ member.email or '' }}" required>
+          {% if errors.email %}<div class="invalid-feedback">{{ errors.email[0] }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Username</label>
+          <input type="text" name="username" class="form-control"
+            value="{{ member.username or '' }}" placeholder="optional">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">First Name</label>
+          <input type="text" name="first_name" class="form-control"
+            value="{{ member.first_name or '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Last Name</label>
+          <input type="text" name="last_name" class="form-control"
+            value="{{ member.last_name or '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Phone</label>
+          <input type="text" name="phone" class="form-control"
+            value="{{ member.phone or '' }}">
+        </div>
+        {% if member %}
+        <div class="col-md-6 d-flex align-items-end">
+          <div class="form-check">
+            <input type="checkbox" name="is_active" id="is_active" class="form-check-input"
+              value="on" {% if member.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="is_active">Active</label>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if not member %}
+      {# Password fields for new member #}
+      <hr class="my-3">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Password <span class="text-danger">*</span></label>
+          <input type="password" name="password" class="form-control {% if errors.password %}is-invalid{% endif %}"
+            required minlength="8" autocomplete="new-password">
+          {% if errors.password %}<div class="invalid-feedback">{{ errors.password[0] }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Confirm Password <span class="text-danger">*</span></label>
+          <input type="password" name="password_confirm" class="form-control {% if errors.password_confirm %}is-invalid{% endif %}"
+            required minlength="8" autocomplete="new-password">
+          {% if errors.password_confirm %}<div class="invalid-feedback">{{ errors.password_confirm[0] }}</div>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  {# ── Group assignments ─────────────────────────────────────────────────── #}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header"><strong>Group Membership</strong></div>
+    <div class="card-body">
+      {% if groups.length === 0 %}
+        <p class="text-muted mb-0">No groups defined. <a href="/admin/groups/new">Create a group</a> first.</p>
+      {% else %}
+        <div class="row g-2">
+          {% for g in groups %}
+          <div class="col-sm-6 col-md-4">
+            <div class="form-check">
+              <input type="checkbox" name="group_ids" id="grp_{{ g.id }}"
+                class="form-check-input" value="{{ g.id }}"
+                {% if g.id in memberGroups %}checked{% endif %}>
+              <label class="form-check-label" for="grp_{{ g.id }}">
+                <strong>{{ g.group_name }}</strong>
+                {% if g.description %}<br><small class="text-muted">{{ g.description }}</small>{% endif %}
+              </label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      {{ 'Save Changes' if member else 'Create Member' }}
+    </button>
+    <a href="/admin/members" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+
+{% if member %}
+{# ── Change password ───────────────────────────────────────────────────── #}
+<div class="card shadow-sm mt-4">
+  <div class="card-header"><strong>Change Password</strong></div>
+  <div class="card-body">
+    <form method="POST" action="/admin/members/{{ member.id }}/password">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">New Password</label>
+          <input type="password" name="password" class="form-control {% if errors.password %}is-invalid{% endif %}"
+            required minlength="8" autocomplete="new-password">
+          {% if errors.password %}<div class="invalid-feedback">{{ errors.password[0] }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Confirm Password</label>
+          <input type="password" name="password_confirm" class="form-control {% if errors.password_confirm %}is-invalid{% endif %}"
+            required minlength="8" autocomplete="new-password">
+          {% if errors.password_confirm %}<div class="invalid-feedback">{{ errors.password_confirm[0] }}</div>{% endif %}
+        </div>
+      </div>
+      <button type="submit" class="btn btn-warning mt-3">Update Password</button>
+    </form>
+  </div>
+</div>
+
+{# ── Danger zone ───────────────────────────────────────────────────────── #}
+<div class="card border-danger shadow-sm mt-4">
+  <div class="card-header text-danger"><strong>Danger Zone</strong></div>
+  <div class="card-body d-flex align-items-center justify-content-between">
+    <div>
+      <strong>Delete this member</strong>
+      <div class="text-muted small">Permanently removes the account and all group assignments.</div>
+    </div>
+    <form method="POST" action="/admin/members/{{ member.id }}/delete"
+      onsubmit="return confirm('Delete member {{ member.email }}? This cannot be undone.')">
+      <button class="btn btn-outline-danger btn-sm">Delete Member</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
