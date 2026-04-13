@@ -5,6 +5,7 @@ import type { App } from '../../domain/types';
 import * as viewsService from '../../services/views';
 import * as tablesService from '../../services/tables';
 import * as aiService from '../../services/ai';
+import { CSS_CLASS_REFERENCE } from '../../services/blueprintPrompt';
 
 export const viewsRouter = Router();
 
@@ -277,7 +278,9 @@ viewsRouter.post('/:id/generate-templates', async (req, res) => {
 
     if (!baseTable) return res.json({ error: 'Base table not found' });
 
-    // Available tokens list for the prompt
+    // Separate decimal/currency fields so we can use $currency[] tokens for them
+    const currencyTypes = new Set(['decimal', 'float', 'bigInteger']);
+
     const tokenLines: string[] = [];
     for (const f of baseFields)  tokenLines.push(`\${${baseTable.table_name}.${f.field_name}} — ${f.label || f.field_name} (${f.data_type})`);
     for (const f of joinedFields) tokenLines.push(`\${${f.table_name}.${f.field_name}} — ${f.label || f.field_name} (${f.data_type})`);
@@ -296,109 +299,200 @@ viewsRouter.post('/:id/generate-templates', async (req, res) => {
       ? sampleRows.map((r, i) => `Row ${i + 1}: ` + Object.entries(r).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')).join('\n')
       : '(no sample data available)';
 
-    // ── Assemble prompts ─────────────────────────────────────────────────────
-    // The CSS framework is now served as a static file (widget-base.css) and
-    // injected by embed.js — the model does NOT need to output any CSS.
-    // It only needs to: (a) set 7 color variables, and (b) use the right tokens.
-
-    const styleHintLine = styleHint
-      ? `Style: ${styleHint}`
-      : 'Style: clean and professional.';
-
-    // Pick color variable values based on common style keywords in the hint
+    // ── Color theme from style hint ──────────────────────────────────────────
     const hint = styleHint.toLowerCase();
     let colorVars = '--wdp-primary:#1e3a5f;--wdp-on-primary:#fff;--wdp-accent:#2e86de;--wdp-bg:#f0f4f8;--wdp-surface:#fff;--wdp-text:#1a2a3a;--wdp-border:#c8d8e8';
-    if (hint.includes('orange'))    colorVars = '--wdp-primary:#c44b00;--wdp-on-primary:#fff;--wdp-accent:#e87722;--wdp-bg:#fff8f0;--wdp-surface:#fff;--wdp-text:#1a0e00;--wdp-border:#f0c090';
-    else if (hint.includes('dark')) colorVars = '--wdp-primary:#1a1a2e;--wdp-on-primary:#e0e0e0;--wdp-accent:#e94560;--wdp-bg:#16213e;--wdp-surface:#0f3460;--wdp-text:#e0e0e0;--wdp-border:#1a4a7a';
-    else if (hint.includes('green'))colorVars = '--wdp-primary:#1a5c2a;--wdp-on-primary:#fff;--wdp-accent:#2d9e4a;--wdp-bg:#f0fff4;--wdp-surface:#fff;--wdp-text:#1a3a1a;--wdp-border:#b7e4c7';
-    else if (hint.includes('red'))  colorVars = '--wdp-primary:#8b1a1a;--wdp-on-primary:#fff;--wdp-accent:#c0392b;--wdp-bg:#fff5f5;--wdp-surface:#fff;--wdp-text:#1a0000;--wdp-border:#f5b7b1';
+    if (hint.includes('orange'))      colorVars = '--wdp-primary:#c44b00;--wdp-on-primary:#fff;--wdp-accent:#e87722;--wdp-bg:#fff8f0;--wdp-surface:#fff;--wdp-text:#1a0e00;--wdp-border:#f0c090';
+    else if (hint.includes('dark'))   colorVars = '--wdp-primary:#1a1a2e;--wdp-on-primary:#e0e0e0;--wdp-accent:#e94560;--wdp-bg:#16213e;--wdp-surface:#0f3460;--wdp-text:#e0e0e0;--wdp-border:#1a4a7a';
+    else if (hint.includes('green'))  colorVars = '--wdp-primary:#1a5c2a;--wdp-on-primary:#fff;--wdp-accent:#2d9e4a;--wdp-bg:#f0fff4;--wdp-surface:#fff;--wdp-text:#1a3a1a;--wdp-border:#b7e4c7';
+    else if (hint.includes('red'))    colorVars = '--wdp-primary:#8b1a1a;--wdp-on-primary:#fff;--wdp-accent:#c0392b;--wdp-bg:#fff5f5;--wdp-surface:#fff;--wdp-text:#1a0000;--wdp-border:#f5b7b1';
     else if (hint.includes('purple')) colorVars = '--wdp-primary:#4a1a6b;--wdp-on-primary:#fff;--wdp-accent:#8e44ad;--wdp-bg:#f9f0ff;--wdp-surface:#fff;--wdp-text:#1a001a;--wdp-border:#d7b8f0';
 
-    // Identify first few field tokens for the template examples
-    const pkToken   = tokenLines[0]?.split(' — ')[0] ?? '\${_pk}';
-    const nameToken = tokenLines[1]?.split(' — ')[0] ?? pkToken;
-    const subToken  = tokenLines[2]?.split(' — ')[0] ?? '';
+    // ── Determine layout pattern ─────────────────────────────────────────────
+    const useTable = hint.includes('table') || hint.includes('spreadsheet') || hint.includes('grid');
 
-    const systemPrompt = `You write HTML templates for a data widget. Use \${token} placeholders for data values. Output each template between delimiters exactly as shown — no JSON, no markdown, nothing else.`;
+    // ── Pre-build concrete template examples using real field names ──────────
+    // This gives the AI working examples with actual tokens already filled in,
+    // dramatically improving output quality.
+    const allFields = [...baseFields, ...joinedFields];
+    const titleField = allFields[0];
+    const subField   = allFields[1];
+    const metaField  = allFields[2];
+    const titleTok   = titleField ? `\${${titleField.table_name ?? baseTable.table_name}.${titleField.field_name}}` : '';
+    const subTok     = subField   ? `\${${subField.table_name   ?? baseTable.table_name}.${subField.field_name}}`   : '';
 
-    const editFieldsHtml = tokenLines.map(t => {
-      const tok       = t.split(' — ')[0];
-      const lbl       = (t.split(' — ')[1] ?? tok).split(' (')[0];
-      const fieldName = tok.replace(/^\$\{[^.]+\./, '').replace(/\}$/, '');
-      return `<div class='wdp-field'><label class='wdp-field-label'>${lbl}</label><input name='${fieldName}' value='${tok}' class='wdp-input'></div>`;
+    // Format currency fields with $currency[], others with plain ${token}
+    const metaTok = metaField
+      ? (currencyTypes.has(metaField.data_type)
+          ? `$currency[${metaField.table_name ?? baseTable.table_name}.${metaField.field_name},2]`
+          : `\${${metaField.table_name ?? baseTable.table_name}.${metaField.field_name}}`)
+      : '';
+
+    // Build the detail body: one .wdp-field per field
+    const detailFields = allFields.map(f => {
+      const tbl = f.table_name ?? baseTable.table_name;
+      const val = currencyTypes.has(f.data_type)
+        ? `$currency[${tbl}.${f.field_name},2]`
+        : `\${${tbl}.${f.field_name}}`;
+      return `<div class="wdp-field"><div class="wdp-field-label">${f.label || f.field_name}</div><div class="wdp-field-value">${val}</div></div>`;
     }).join('');
 
-    const userPrompt = `Write 8 HTML templates for a "${baseTable.table_name}" widget.
-${styleHintLine}
+    // Map data_type to HTML input type (no ui_widget available at this level)
+    const inputTypeFor = (dataType: string) =>
+      dataType === 'integer' || dataType === 'decimal' || dataType === 'float' || dataType === 'bigInteger' ? 'number'
+      : dataType === 'date' ? 'date'
+      : dataType === 'datetime' ? 'datetime-local'
+      : dataType === 'boolean' ? 'checkbox'
+      : 'text';
 
-TOKENS — copy these exactly, dollar sign and curly braces included:
+    // Build the form fields: one .wdp-form-group per field
+    const formFields = allFields.map(f => {
+      const tbl       = f.table_name ?? baseTable.table_name;
+      const valTok    = `\${${tbl}.${f.field_name}}`;
+      const fieldName = f.field_name;
+      const lbl       = f.label || f.field_name;
+      if (f.data_type === 'text') {
+        return `<div class="wdp-form-group"><label class="wdp-label">${lbl}</label><textarea class="wdp-textarea" name="${fieldName}">${valTok}</textarea></div>`;
+      }
+      return `<div class="wdp-form-group"><label class="wdp-label">${lbl}</label><input class="wdp-input" type="${inputTypeFor(f.data_type)}" name="${fieldName}" value="${valTok}"></div>`;
+    }).join('');
+
+    const createFormFields = allFields.map(f => {
+      const fieldName = f.field_name;
+      const lbl       = f.label || f.field_name;
+      if (f.data_type === 'text') {
+        return `<div class="wdp-form-group"><label class="wdp-label">${lbl}</label><textarea class="wdp-textarea" name="${fieldName}"></textarea></div>`;
+      }
+      return `<div class="wdp-form-group"><label class="wdp-label">${lbl}</label><input class="wdp-input" type="${inputTypeFor(f.data_type)}" name="${fieldName}" value=""></div>`;
+    }).join('');
+
+    // Table layout: build <th> headers with $sort[] tokens
+    const tableHeaders = allFields.slice(0, 5).map(f =>
+      `<th>$sort[${f.table_name ?? baseTable.table_name}.${f.field_name},${f.label || f.field_name}]</th>`
+    ).join('');
+    const tableCells = allFields.slice(0, 5).map(f => {
+      const tbl = f.table_name ?? baseTable.table_name;
+      const val = currencyTypes.has(f.data_type)
+        ? `$currency[${tbl}.${f.field_name},2]`
+        : `\${${tbl}.${f.field_name}}`;
+      return `<td>${val}</td>`;
+    }).join('');
+
+    const styleTag = `<style>:root{${colorVars}}</style>`;
+    const tableName = baseTable.label || baseTable.table_name;
+
+    // ── Build concrete "starter" templates ──────────────────────────────────
+    let starterSearchForm: string;
+    let starterHeader: string;
+    let starterRow: string;
+    let starterFooter: string;
+
+    if (useTable) {
+      starterSearchForm = `${styleTag}<div class="wdp"><div class="wdp-sf"><input type="text" name="q" value="\${_q}" placeholder="Search…"><button type="submit">Search</button>$perpage[10,25,50,100]</div>`;
+      starterHeader = `<div class="wdp-hdr"><span class="wdp-hdr-title">${tableName}</span><span class="wdp-hdr-meta">\${_total} results</span></div><table class="wdp-table"><thead><tr>${tableHeaders}</tr></thead><tbody>`;
+      starterRow = `<tr data-wdp-action="detail" data-wdp-id="\${_pk}">${tableCells}</tr>`;
+      starterFooter = `</tbody></table><div class="wdp-footer">\${_pagination}</div></div>`;
+    } else {
+      starterSearchForm = `${styleTag}<div class="wdp"><div class="wdp-sf"><input type="text" name="q" value="\${_q}" placeholder="Search…"><button type="submit">Search</button></div>`;
+      starterHeader = `<div class="wdp-hdr"><span class="wdp-hdr-title">${tableName}</span><span class="wdp-hdr-meta">\${_total} results</span></div>`;
+      const rowMeta = metaTok ? ` &bull; ${metaTok}` : '';
+      starterRow = `<div class="wdp-row" data-wdp-action="detail" data-wdp-id="\${_pk}"><div class="wdp-row-body"><div class="wdp-row-title">${titleTok}</div><div class="wdp-row-sub">${subTok}</div><div class="wdp-row-meta">${rowMeta}</div></div><span class="wdp-arr">&#8250;</span></div>`;
+      starterFooter = `<div class="wdp-footer">\${_pagination}</div></div>`;
+    }
+
+    const starterDetail = `${styleTag}<div class="wdp"><div class="wdp-detail"><button class="wdp-back" data-wdp-action="back">&#8249; Back</button><h2 class="wdp-detail-title">${titleTok}</h2><div class="wdp-detail-sub">${subTok}</div><div class="wdp-detail-body">${detailFields}</div></div></div>`;
+    const starterEditForm = `${styleTag}<div class="wdp"><div class="wdp-detail"><button class="wdp-back" data-wdp-action="back">&#8249; Cancel</button><h2 class="wdp-detail-title">Edit ${tableName}</h2><form data-wdp-form="edit" data-wdp-id="\${_pk}" style="margin-top:16px">${formFields}<button type="submit" class="wdp-btn">Save Changes</button></form></div></div>`;
+    const starterCreateForm = `${styleTag}<div class="wdp"><div class="wdp-detail"><button class="wdp-back" data-wdp-action="back">&#8249; Cancel</button><h2 class="wdp-detail-title">New ${tableName}</h2><form data-wdp-form="create" style="margin-top:16px">${createFormFields}<button type="submit" class="wdp-btn">Create ${tableName}</button></form></div></div>`;
+
+    // ── Assemble prompts ─────────────────────────────────────────────────────
+    const systemPrompt = `You write HTML templates for Webdata Pro data widgets. Use \${token} syntax for data values. Output each template between ===MARKER=== delimiters exactly as shown. No JSON, no markdown, no explanation — just the delimited HTML blocks.
+
+${CSS_CLASS_REFERENCE}`;
+
+    const styleHintLine = styleHint ? `Style: ${styleHint}` : 'Style: clean, professional.';
+    const layoutLine = useTable
+      ? 'Layout: TABLE (header opens <table class="wdp-table">, each row is a <tr>, footer closes </tbody></table>)'
+      : 'Layout: CARD LIST (each row is a .wdp-row card)';
+
+    const userPrompt = `Write templates for a "${baseTable.table_name}" widget.
+${styleHintLine}
+${layoutLine}
+
+Available tokens (copy exactly including \${ and }):
 ${tokenLines.join('\n')}
-\${_pk}          — primary key (put on every clickable row element)
+\${_pk}          — primary key
 \${_total}       — total record count
-\${_q}           — current search term
-\${_pagination}  — pagination buttons HTML (ready-made, just place it)
+\${_q}           — search query string
+\${_pagination}  — pagination HTML (place in footer)
 \${_group_value} — group label (group_header only)
 
-SAMPLE DATA:
+Sample data:
 ${sampleText}
 
-COLOR THEME — copy this style tag verbatim into search_form, detail, and edit_form:
-<style>:root{${colorVars}}</style>
+I have pre-built starter templates below. Your job is to REFINE them with the requested style — improve the layout, adjust content, apply the color theme. Do NOT change the structural HTML class names or action attributes. Replace the ${styleTag} color tag if you want different colors.
 
-OUTPUT FORMAT — output each template between its markers, exactly like this:
 ===SEARCH_FORM===
-(html here)
+${starterSearchForm}
 ===END===
 ===HEADER===
-(html here)
+${starterHeader}
 ===END===
-...and so on for GROUP_HEADER, ROW, GROUP_FOOTER, FOOTER, DETAIL, EDIT_FORM.
+===GROUP_HEADER===
+<div class="wdp-grp"><span class="wdp-grp-label">\${_group_value}</span><div class="wdp-grp-bar"></div></div>
+===END===
+===ROW===
+${starterRow}
+===END===
+===GROUP_FOOTER===
 
-TEMPLATE INSTRUCTIONS:
+===END===
+===FOOTER===
+${starterFooter}
+===END===
+===DETAIL===
+${starterDetail}
+===END===
+===EDIT_FORM===
+${starterEditForm}
+===END===
 
-SEARCH_FORM — begin with the style tag, open the outer wrapper:
-<style>:root{${colorVars}}</style><div class='wdp'><div class='wdp-sf'><form data-wdp-form='search'><input type='text' name='q' value='\${_q}' placeholder='Search...'><button type='submit'>Search</button></form><a data-wdp-action='clear' class='wdp-sf-clear'>Clear</a></div>
-
-HEADER — title on left, record count on right:
-<div class='wdp-hdr'><span class='wdp-hdr-title'>CHOOSE A TITLE</span><span class='wdp-hdr-meta'>\${_total} records</span></div>
-
-GROUP_HEADER:
-<div class='wdp-grp'><span class='wdp-grp-label'>\${_group_value}</span><div class='wdp-grp-bar'></div></div>
-
-ROW — use the most important tokens; data-wdp-id must be \${_pk}:
-<div class='wdp-row' data-wdp-action='detail' data-wdp-id='\${_pk}'><div class='wdp-row-body'><div class='wdp-row-title'>${nameToken}</div><div class='wdp-row-sub'>${subToken || nameToken}</div></div><div class='wdp-arr'>›</div></div>
-
-GROUP_FOOTER — leave empty.
-
-FOOTER — close the outer wrapper div:
-<div class='wdp-footer'>\${_pagination}</div></div>
-
-DETAIL — include style tag, back button, all field tokens, and an Edit button that triggers edit mode:
-<style>:root{${colorVars}}</style><div class='wdp'><div class='wdp-detail'><button data-wdp-action='back' class='wdp-back'>‹ Back</button><button data-wdp-action='edit' data-wdp-id='\${_pk}' class='wdp-btn' style='float:right'>Edit</button><div class='wdp-detail-title'>${nameToken}</div><div class='wdp-detail-sub'>${subToken || nameToken}</div><div class='wdp-detail-body'>${tokenLines.map(t => {
-      const tok = t.split(' — ')[0];
-      const lbl = (t.split(' — ')[1] ?? tok).split(' (')[0];
-      return `<div class='wdp-field'><div class='wdp-field-label'>${lbl}</div><div class='wdp-field-value'>${tok}</div></div>`;
-    }).join('')}</div></div></div>
-
-EDIT_FORM — include style tag, back button, a form with data-wdp-form='edit' data-wdp-id='\${_pk}', one labeled input per field (name= field name without table prefix, value= the token):
-<style>:root{${colorVars}}</style><div class='wdp'><div class='wdp-detail'><button data-wdp-action='back' class='wdp-back'>‹ Back</button><form data-wdp-form='edit' data-wdp-id='\${_pk}' class='wdp-edit-form'>${editFieldsHtml}<div class='wdp-edit-actions'><button type='submit' class='wdp-btn'>Save</button><button type='button' data-wdp-action='back' class='wdp-btn-link'>Cancel</button></div></form></div></div>
-
-Use actual \${token} values from the list — never use placeholder text like "Name" or "Value".`;
+Now rewrite all 8 templates above, improving the style to match: ${styleHintLine}
+Keep the same HTML structure and CSS classes. Adapt only visual details (colors via the :root style tag, spacing, extra elements). Output each template between its ===MARKER=== delimiters.`;
 
     // ── Call AI ──────────────────────────────────────────────────────────────
     const aiSettings = await aiService.getAiSettings();
-    const raw        = await aiService.callAi(aiSettings, systemPrompt, userPrompt);
+    const raw        = await aiService.callAi(aiSettings, systemPrompt, userPrompt, 8192);
     const blocks     = aiService.extractTemplateBlocks(raw, viewsService.TEMPLATE_TYPES);
 
-    // Fall back to empty string for any missing template
-    const templates: Partial<viewsService.ViewTemplates> = blocks;
-    if (Object.keys(templates).length === 0) {
-      return res.json({ error: 'AI did not return any templates. Raw response:\n\n' + raw.slice(0, 800) });
-    }
+    // If AI produced nothing useful, return the starters directly
+    const templates: Partial<viewsService.ViewTemplates> = Object.keys(blocks).length > 0 ? blocks : {
+      search_form:  starterSearchForm,
+      header:       starterHeader,
+      group_header: `<div class="wdp-grp"><span class="wdp-grp-label">\${_group_value}</span><div class="wdp-grp-bar"></div></div>`,
+      row:          starterRow,
+      group_footer: '',
+      footer:       starterFooter,
+      detail:       starterDetail,
+      edit_form:    starterEditForm,
+      create_form:  starterCreateForm,
+    };
 
-    // Validate all 7 keys are present
+    // Fill any missing slots (AI may have skipped create_form)
+    const starters: viewsService.ViewTemplates = {
+      search_form:  starterSearchForm,
+      header:       starterHeader,
+      group_header: `<div class="wdp-grp"><span class="wdp-grp-label">\${_group_value}</span><div class="wdp-grp-bar"></div></div>`,
+      row:          starterRow,
+      group_footer: '',
+      footer:       starterFooter,
+      detail:       starterDetail,
+      edit_form:    starterEditForm,
+      create_form:  starterCreateForm,
+    };
     for (const key of viewsService.TEMPLATE_TYPES) {
-      if (!(key in templates)) templates[key] = '';
+      if (!(key in templates) || !(templates as Record<string, string>)[key]) {
+        (templates as Record<string, string>)[key] = starters[key];
+      }
     }
 
     res.json({ templates });

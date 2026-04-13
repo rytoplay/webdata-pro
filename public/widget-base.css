@@ -132,6 +132,20 @@
 .wdp-field-label  { font-size: 0.72rem; font-weight: bold; letter-spacing: 0.05em; text-transform: uppercase; color: var(--wdp-primary); margin-bottom: 2px; }
 .wdp-field-value  { color: var(--wdp-text); font-size: 0.9rem; }
 
+/* ── Form elements ──────────────────────────────────────────────────────── */
+.wdp-form-group    { margin-bottom: 14px; }
+.wdp-label         { display: block; font-size: 0.72rem; font-weight: bold; letter-spacing: 0.05em; text-transform: uppercase; color: var(--wdp-primary); margin-bottom: 4px; }
+.wdp-input         { display: block; width: 100%; padding: 7px 11px; border: 1.5px solid var(--wdp-border); border-radius: 4px; font-size: 0.875rem; background: var(--wdp-surface); color: var(--wdp-text); outline: none; }
+.wdp-input:focus   { border-color: var(--wdp-accent); }
+.wdp-select        { display: block; width: 100%; padding: 7px 11px; border: 1.5px solid var(--wdp-border); border-radius: 4px; font-size: 0.875rem; background: var(--wdp-surface); color: var(--wdp-text); outline: none; }
+.wdp-select:focus  { border-color: var(--wdp-accent); }
+.wdp-textarea      { display: block; width: 100%; padding: 7px 11px; border: 1.5px solid var(--wdp-border); border-radius: 4px; font-size: 0.875rem; background: var(--wdp-surface); color: var(--wdp-text); outline: none; resize: vertical; min-height: 80px; }
+.wdp-textarea:focus { border-color: var(--wdp-accent); }
+.wdp-btn           { display: inline-block; padding: 8px 18px; background: var(--wdp-primary); color: var(--wdp-on-primary); border: none; border-radius: 4px; font-size: 0.875rem; font-weight: bold; cursor: pointer; }
+.wdp-btn:hover     { opacity: 0.88; }
+.wdp-btn-secondary { display: inline-block; padding: 8px 18px; background: var(--wdp-surface); color: var(--wdp-primary); border: 1.5px solid var(--wdp-border); border-radius: 4px; font-size: 0.875rem; cursor: pointer; }
+.wdp-btn-link      { background: none; border: none; color: var(--wdp-accent); cursor: pointer; font-size: 0.875rem; padding: 0; text-decoration: none; display: inline-block; }
+
 /* ── Utility ────────────────────────────────────────────────────────────── */
 .wdp-error        { color: #991b1b; padding: 12px; }
 .wdp-loading      { opacity: 0.6; pointer-events: none; }
