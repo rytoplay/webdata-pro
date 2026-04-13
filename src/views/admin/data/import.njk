@@ -1,0 +1,125 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Import CSV — {{ table.label }}</h1>
+  <a href="/admin/data/{{ table.table_name }}" class="btn btn-sm btn-outline-secondary">&larr; Back</a>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show mb-4">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if not preview %}
+
+{# ── Step 1: Upload the file ── #}
+<div class="card shadow-sm" style="max-width:560px;">
+  <div class="card-body p-4">
+    <p class="text-muted small mb-3">
+      Upload a CSV file. The first row must be a header row. Column names don't need to match exactly —
+      you'll map them in the next step.
+    </p>
+    <form method="POST" action="/admin/data/{{ table.table_name }}/import" enctype="multipart/form-data">
+      <div class="mb-4">
+        <label class="form-label">CSV file</label>
+        <input type="file" class="form-control" name="csvfile" accept=".csv,text/csv" required>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-upload me-1"></i>Upload and preview
+      </button>
+    </form>
+  </div>
+</div>
+
+{% else %}
+
+{# ── Step 2: Map columns and confirm ── #}
+<form method="POST" action="/admin/data/{{ table.table_name }}/import/confirm">
+  <input type="hidden" name="rows_payload" value="{{ rowsPayload }}">
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+      <strong><i class="bi bi-arrow-left-right me-2"></i>Map columns</strong>
+      <span class="text-muted small">{{ totalRows }} rows to import</span>
+    </div>
+    <div class="card-body p-0">
+      <table class="table mb-0" style="font-size:0.875rem;">
+        <thead class="table-light">
+          <tr>
+            <th style="width:45%;">CSV column</th>
+            <th>Map to field</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for col in csvColumns %}
+          <tr>
+            <td class="align-middle">
+              <code>{{ col }}</code>
+            </td>
+            <td>
+              <select name="map_{{ col }}" class="form-select form-select-sm">
+                <option value="">— skip —</option>
+                {% for field in fields %}
+                  {% if not field.is_auto_increment %}
+                  <option value="{{ field.field_name }}"
+                    {% if autoMap[col] == field.field_name %}selected{% endif %}>
+                    {{ field.label }} ({{ field.field_name }})
+                  </option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header py-2">
+      <strong><i class="bi bi-eye me-2"></i>Preview — first {{ preview | length }} rows</strong>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0" style="font-size:0.8rem;">
+        <thead class="table-light">
+          <tr>
+            {% for col in csvColumns %}
+            <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in preview %}
+          <tr>
+            {% for col in csvColumns %}
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              {{ row[col] if row[col] else '' }}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if totalRows > 5 %}
+    <div class="card-footer text-muted" style="font-size:0.78rem;">
+      Showing 5 of {{ totalRows }} rows.
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check2-circle me-1"></i>Import {{ totalRows }} rows
+    </button>
+    <a href="/admin/data/{{ table.table_name }}/import" class="btn btn-outline-secondary">Start over</a>
+  </div>
+</form>
+
+{% endif %}
+
+{% endblock %}

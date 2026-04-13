@@ -1,8 +1,12 @@
 import { Router } from 'express';
+import multer from 'multer';
+import { parse as csvParse } from 'csv-parse/sync';
 import type { App, AppField } from '../../domain/types';
 import { db as controlDb } from '../../db/knex';
 import { getAppDb } from '../../db/adapters/appDb';
 import { memoryUpload, saveUpload, deleteUpload } from '../../services/uploads';
+
+const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }).single('csvfile');
 
 export const dataRouter = Router();
 
@@ -177,6 +181,156 @@ dataRouter.get('/:tableName/new', async (req, res, next) => {
   }
 });
 
+// ── GET /data/:tableName/import ────────────────────────────────────────────
+// Must be before /:tableName/:id routes so "import" isn't captured as an id
+
+dataRouter.get('/:tableName/import', async (req, res, next) => {
+  try {
+    const app = res.locals.currentApp as App;
+    const { tableName } = req.params;
+    const table = await loadTable(app, tableName);
+    if (!table) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Table not found' });
+    const fields = await loadFields(table.id);
+    const flash = req.session.flash; delete req.session.flash;
+    res.render('admin/data/import', { title: `Import — ${table.label}`, table, fields, flash, preview: null });
+  } catch (err) { next(err); }
+});
+
+dataRouter.post('/:tableName/import', csvUpload, async (req, res, next) => {
+  try {
+    const app = res.locals.currentApp as App;
+    const { tableName } = req.params;
+    const table = await loadTable(app, tableName);
+    if (!table) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Table not found' });
+    const fields = await loadFields(table.id);
+
+    if (!req.file) {
+      req.session.flash = { type: 'danger', message: 'No file uploaded.' };
+      return res.redirect(`/admin/data/${tableName}/import`);
+    }
+
+    let rows: Record<string, string>[];
+    try {
+      rows = csvParse(req.file.buffer, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        bom: true,
+      }) as Record<string, string>[];
+    } catch (e: unknown) {
+      req.session.flash = { type: 'danger', message: `CSV parse error: ${e instanceof Error ? e.message : String(e)}` };
+      return res.redirect(`/admin/data/${tableName}/import`);
+    }
+
+    if (rows.length === 0) {
+      req.session.flash = { type: 'warning', message: 'The CSV file has no data rows.' };
+      return res.redirect(`/admin/data/${tableName}/import`);
+    }
+
+    const csvColumns = Object.keys(rows[0]);
+    const preview    = rows.slice(0, 5);
+
+    const autoMap: Record<string, string> = {};
+    for (const col of csvColumns) {
+      const match = fields.find(
+        f => f.field_name.toLowerCase() === col.toLowerCase() ||
+             f.label.toLowerCase() === col.toLowerCase()
+      );
+      if (match && !match.is_primary_key && !match.is_auto_increment) {
+        autoMap[col] = match.field_name;
+      }
+    }
+
+    res.render('admin/data/import', {
+      title:       `Import — ${table.label}`,
+      table,
+      fields:      fields.filter(f => !f.is_auto_increment),
+      flash:       null,
+      preview,
+      csvColumns,
+      autoMap,
+      totalRows:   rows.length,
+      rowsPayload: Buffer.from(JSON.stringify(rows)).toString('base64'),
+    });
+  } catch (err) { next(err); }
+});
+
+dataRouter.post('/:tableName/import/confirm', async (req, res, next) => {
+  try {
+    const app = res.locals.currentApp as App;
+    const { tableName } = req.params;
+    const table = await loadTable(app, tableName);
+    if (!table) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Table not found' });
+
+    const fields  = await loadFields(table.id);
+    const pkField = fields.find(f => f.is_primary_key);
+
+    let allRows: Record<string, string>[];
+    try {
+      allRows = JSON.parse(Buffer.from(req.body.rows_payload as string, 'base64').toString('utf8'));
+    } catch {
+      req.session.flash = { type: 'danger', message: 'Import data was corrupted. Please upload the CSV again.' };
+      return res.redirect(`/admin/data/${tableName}/import`);
+    }
+
+    const mapping: Record<string, string> = {};
+    for (const [key, val] of Object.entries(req.body as Record<string, string>)) {
+      if (key.startsWith('map_') && val) mapping[key.slice(4)] = val;
+    }
+
+    if (Object.keys(mapping).length === 0) {
+      req.session.flash = { type: 'warning', message: 'No columns were mapped. Nothing imported.' };
+      return res.redirect(`/admin/data/${tableName}/import`);
+    }
+
+    const appDb = getAppDb(app);
+    let imported = 0;
+    let skipped  = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < allRows.length; i++) {
+      const row    = allRows[i];
+      const record: Record<string, unknown> = {};
+
+      for (const [csvCol, fieldName] of Object.entries(mapping)) {
+        const field = fields.find(f => f.field_name === fieldName);
+        if (!field || (field.is_primary_key && field.is_auto_increment)) continue;
+        const raw = row[csvCol];
+        if (field.data_type === 'boolean' || field.ui_widget === 'checkbox') {
+          record[fieldName] = ['1', 'true', 'yes', 'y'].includes((raw ?? '').toLowerCase()) ? 1 : 0;
+        } else if (raw === '' || raw === undefined || raw === null) {
+          record[fieldName] = null;
+        } else {
+          record[fieldName] = raw;
+        }
+      }
+
+      const nonPkKeys = Object.keys(record).filter(k => k !== pkField?.field_name);
+      if (nonPkKeys.length === 0 || nonPkKeys.every(k => record[k] === null || record[k] === '')) {
+        skipped++; continue;
+      }
+
+      try {
+        await appDb(tableName).insert(record);
+        imported++;
+      } catch (e: unknown) {
+        errors.push(`Row ${i + 2}: ${e instanceof Error ? e.message : String(e)}`);
+        if (errors.length >= 10) break;
+      }
+    }
+
+    const parts = [`${imported} record${imported !== 1 ? 's' : ''} imported`];
+    if (skipped  > 0) parts.push(`${skipped} skipped (empty)`);
+    if (errors.length > 0) parts.push(`${errors.length} error(s): ${errors[0]}`);
+
+    req.session.flash = {
+      type:    errors.length > 0 && imported === 0 ? 'danger' : 'success',
+      message: parts.join('. ') + '.',
+    };
+    res.redirect(`/admin/data/${tableName}`);
+  } catch (err) { next(err); }
+});
+
 // ── POST /data/:tableName — create record ──────────────────────────────────
 
 dataRouter.post('/:tableName', memoryUpload, async (req, res, next) => {
@@ -297,3 +451,4 @@ dataRouter.post('/:tableName/:id', memoryUpload, async (req, res, next) => {
     next(err);
   }
 });
+
