@@ -45,7 +45,10 @@ export async function createTable(input: CreateTableInput): Promise<AppTable> {
     const app = await getApp(input.app_id);
     if (app) {
       const appDb = getAppDb(app);
-      await appDb.raw(`CREATE TABLE "${input.table_name}" ("id" INTEGER PRIMARY KEY AUTOINCREMENT)`);
+      const idColDef = app.database_mode === 'mysql'
+        ? `"id" INT NOT NULL AUTO_INCREMENT PRIMARY KEY`
+        : `"id" INTEGER PRIMARY KEY AUTOINCREMENT`;
+      await appDb.raw(`CREATE TABLE "${input.table_name}" (${idColDef})`);
     }
   } catch (ddlErr) {
     // Roll back the metadata if DDL fails

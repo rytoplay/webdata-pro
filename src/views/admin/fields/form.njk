@@ -195,13 +195,16 @@ const DATA_TYPES = [
   { value: 'datetime',   label: 'Date & Time' },
   { value: 'time',       label: 'Time' },
   { value: 'json',       label: 'JSON' },
-  { value: 'uuid',       label: 'UUID' }
+  { value: 'uuid',       label: 'UUID' },
+  { value: 'image',      label: 'Image (photo)' },
+  { value: 'upload',     label: 'File upload' }
 ];
 
 const WIDGET_DEFAULTS = {
   string: 'text', text: 'textarea', integer: 'text', bigInteger: 'text',
   decimal: 'text', float: 'text', boolean: 'checkbox',
-  date: 'text', datetime: 'text', time: 'text', json: 'textarea', uuid: 'text'
+  date: 'text', datetime: 'text', time: 'text', json: 'textarea', uuid: 'text',
+  image: 'image', upload: 'upload'
 };
 
 let rowCount = 0;

@@ -20,9 +20,12 @@ const TYPE_MAP: Record<FieldDataType, string> = {
   upload:     'TEXT',
 };
 
-function buildColumnDef(field: AppField): string {
-  // INTEGER PRIMARY KEY AUTOINCREMENT is the standard SQLite rowid alias
+function buildColumnDef(field: AppField, dbMode: 'sqlite' | 'mysql' = 'sqlite'): string {
   if (field.is_primary_key && field.is_auto_increment) {
+    if (dbMode === 'mysql') {
+      return `"${field.field_name}" INT NOT NULL AUTO_INCREMENT PRIMARY KEY`;
+    }
+    // INTEGER PRIMARY KEY AUTOINCREMENT is the standard SQLite rowid alias
     return `"${field.field_name}" INTEGER PRIMARY KEY AUTOINCREMENT`;
   }
 
@@ -54,6 +57,7 @@ export interface SchemaApplyResult {
 }
 
 export async function applySchema(app: App): Promise<SchemaApplyResult> {
+  const dbMode = app.database_mode === 'mysql' ? 'mysql' : 'sqlite';
   const appDb = getAppDb(app);
 
   const tables: AppTable[] = await controlDb('app_tables')
@@ -95,7 +99,7 @@ export async function applySchema(app: App): Promise<SchemaApplyResult> {
           result.action = 'error';
           result.error = 'No fields defined — add fields before applying';
         } else {
-          const colDefs = fields.map(buildColumnDef).join(',\n  ');
+          const colDefs = fields.map(f => buildColumnDef(f, dbMode)).join(',\n  ');
           await appDb.raw(`CREATE TABLE "${table.table_name}" (\n  ${colDefs}\n)`);
           result.action = 'created';
         }
@@ -106,7 +110,7 @@ export async function applySchema(app: App): Promise<SchemaApplyResult> {
 
         for (const field of fields) {
           if (!existingNames.has(field.field_name)) {
-            await appDb.raw(`ALTER TABLE "${table.table_name}" ADD COLUMN ${buildColumnDef(field)}`);
+            await appDb.raw(`ALTER TABLE "${table.table_name}" ADD COLUMN ${buildColumnDef(field, dbMode)}`);
             result.columns_added.push(field.label || field.field_name);
           }
         }
