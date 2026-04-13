@@ -210,6 +210,14 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
         continue;
       }
 
+      // Validate sort fields: must be a real field name or a known metadata sort key
+      const META_SORTS = new Set(['_meta__created_at', '_meta__updated_at', '_meta__created_by']);
+      const tableFields = await fieldsService.listFields(tableId);
+      const validFieldNames = new Set([...tableFields.map(f => f.field_name), ...META_SORTS]);
+
+      const sanitiseSort = (f: string | null | undefined) =>
+        f && validFieldNames.has(f) ? f : null;
+
       const view = await viewsService.createView({
         app_id:                  app.id,
         view_name:               bv.view_name,
@@ -218,9 +226,9 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
         is_public:               bv.is_public ?? false,
         pagination_enabled:      bv.pagination_enabled ?? true,
         page_size:               bv.page_size ?? 20,
-        primary_sort_field:      bv.primary_sort_field ?? null,
+        primary_sort_field:      sanitiseSort(bv.primary_sort_field),
         primary_sort_direction:  bv.primary_sort_direction ?? null,
-        secondary_sort_field:    bv.secondary_sort_field ?? null,
+        secondary_sort_field:    sanitiseSort(bv.secondary_sort_field),
         secondary_sort_direction: bv.secondary_sort_direction ?? null,
         grouping_field:          bv.grouping_field ?? null,
       });
