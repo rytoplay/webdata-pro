@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f2f5; }
+    .register-card { max-width: 440px; margin: 60px auto; }
+  </style>
+</head>
+<body>
+<div class="register-card">
+  <div class="text-center mb-4">
+    <div class="fs-4 fw-semibold">{{ app.name }}</div>
+    <div class="text-muted small">Create an account</div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+
+      {% if flash %}
+      <div class="alert alert-{{ flash.type }} py-2 mb-3">{{ flash.message }}</div>
+      {% endif %}
+
+      <form method="POST" action="/app/{{ app.slug }}/register">
+
+        <div class="row g-3 mb-3">
+          <div class="col">
+            <label class="form-label">First name</label>
+            <input type="text" name="first_name" class="form-control"
+              value="{{ formData.first_name if formData else '' }}" autocomplete="given-name">
+          </div>
+          <div class="col">
+            <label class="form-label">Last name</label>
+            <input type="text" name="last_name" class="form-control"
+              value="{{ formData.last_name if formData else '' }}" autocomplete="family-name">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Email <span class="text-danger">*</span></label>
+          <input type="email" name="email" class="form-control" required autofocus autocomplete="email"
+            value="{{ formData.email if formData else '' }}">
+          {% if errors and errors.email %}
+          <div class="text-danger small mt-1">{{ errors.email[0] }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Password <span class="text-danger">*</span></label>
+          <input type="password" name="password" class="form-control" required autocomplete="new-password">
+          {% if errors and errors.password %}
+          <div class="text-danger small mt-1">{{ errors.password[0] }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label">Confirm password <span class="text-danger">*</span></label>
+          <input type="password" name="password_confirm" class="form-control" required autocomplete="new-password">
+          {% if errors and errors.password_confirm %}
+          <div class="text-danger small mt-1">{{ errors.password_confirm[0] }}</div>
+          {% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">Create account</button>
+      </form>
+
+    </div>
+  </div>
+
+  <div class="text-center mt-3 text-muted small">
+    Already have an account? <a href="/app/{{ app.slug }}/login">Sign in</a>
+  </div>
+</div>
+</body>
+</html>

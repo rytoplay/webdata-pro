@@ -51,19 +51,40 @@
           <span class="badge bg-secondary">Members only</span>
           {% endif %}
         </td>
-        <td>
-          <code style="font-size:0.72rem;">WDP.mount('#el', {app:'{{ currentApp.slug }}', view:'{{ view.view_name }}'})</code>
+        <td style="max-width:320px;">
+          {% set snippet = '<div id="wdp-' + view.view_name + '"></div>\n<script src="' + baseUrl + '/static/embed.js"></script>\n<script>WDP.mount(\'#wdp-' + view.view_name + '\', {app:\'' + currentApp.slug + '\', view:\'' + view.view_name + '\', baseUrl:\'' + baseUrl + '\'});\n<\/script>' %}
+          <div class="d-flex align-items-center gap-1">
+            <code id="snip-{{ view.id }}" style="font-size:0.68rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:260px;" title="{{ snippet }}">{{ snippet }}</code>
+            <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0 py-0 px-1"
+              style="font-size:.7rem;"
+              onclick="navigator.clipboard.writeText(document.getElementById('snip-{{ view.id }}').title)"
+              data-bs-toggle="tooltip" title="Copy embed snippet">
+              <i class="bi bi-clipboard"></i>
+            </button>
+          </div>
         </td>
         <td class="text-end" style="white-space:nowrap;">
-          <a href="/admin/views/{{ view.id }}/templates" class="btn btn-sm btn-outline-primary me-1">
-            <i class="bi bi-code-slash"></i> Templates
+          <a href="/admin/views/{{ view.id }}/templates"
+            class="btn btn-sm btn-outline-primary me-1"
+            data-bs-toggle="tooltip" title="Edit templates">
+            <i class="bi bi-pencil"></i>
           </a>
-          <a href="/admin/views/{{ view.id }}/edit" class="btn btn-sm btn-outline-secondary me-1">
+          <a href="/admin/views/{{ view.id }}/preview"
+            class="btn btn-sm btn-outline-info me-1"
+            data-bs-toggle="tooltip" title="Preview">
+            <i class="bi bi-eye"></i>
+          </a>
+          <a href="/admin/views/{{ view.id }}/edit"
+            class="btn btn-sm btn-outline-secondary me-1"
+            data-bs-toggle="tooltip" title="Settings">
             <i class="bi bi-gear"></i>
           </a>
           <form method="POST" action="/admin/views/{{ view.id }}/delete" class="d-inline"
             onsubmit="return confirm('Delete view {{ view.label }}?')">
-            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            <button class="btn btn-sm btn-outline-danger"
+              data-bs-toggle="tooltip" title="Delete">
+              <i class="bi bi-trash"></i>
+            </button>
           </form>
         </td>
       </tr>
@@ -91,4 +112,9 @@
 &lt;/script&gt;</pre>
   </div>
 </div>
+<script>
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+  new bootstrap.Tooltip(el);
+});
+</script>
 {% endblock %}

@@ -16,6 +16,7 @@ export const TEMPLATE_TYPES = [
   'footer',
   'detail',
   'edit_form',
+  'create_form',
 ] as const;
 
 export type ViewTemplateType = typeof TEMPLATE_TYPES[number];
@@ -30,6 +31,7 @@ export const TEMPLATE_LABELS: Record<ViewTemplateType, string> = {
   footer:       'Footer',
   detail:       'Detail View',
   edit_form:    'Edit Form',
+  create_form:  'Create Form',
 };
 
 export const DEFAULT_TEMPLATES: ViewTemplates = {
@@ -59,6 +61,18 @@ export const DEFAULT_TEMPLATES: ViewTemplates = {
     <p class="wdp-muted" style="font-size:0.85rem;color:#6b7280;">
       Design your edit form here.<br>
       Example: <code>&lt;input name="title" value="\${table.title}" class="wdp-input"&gt;</code>
+    </p>
+    <div style="margin-top:1rem;">
+      <button type="submit" class="wdp-btn">Save</button>
+      <button type="button" data-wdp-action="back" class="wdp-btn-link" style="margin-left:0.5rem;">Cancel</button>
+    </div>
+  </form>
+</div>`,
+  create_form: `<div class="wdp-detail">
+  <button data-wdp-action="back" class="wdp-btn-link">&lsaquo; Back</button>
+  <form data-wdp-form="create" style="margin-top:1rem;">
+    <p class="wdp-muted" style="font-size:0.85rem;color:#6b7280;">
+      Add your form fields here. Use the Field Tokens panel on the right to insert inputs.
     </p>
     <div style="margin-top:1rem;">
       <button type="submit" class="wdp-btn">Save</button>
@@ -238,7 +252,54 @@ export function parseViewTokens(templates: Partial<ViewTemplates>) {
   let combined = Object.values(templates).filter(Boolean).join('\n');
   // Strip group-tag content so those tokens don't end up in the plain SELECT
   combined = combined.replace(new RegExp(GROUP_TAG_RE.source, 'gi'), '');
-  return parseColumnRefs(combined).filter(r => !r.table.startsWith('_'));
+
+  // Only extract table.field refs from INSIDE actual token delimiters:
+  //   ${table.field}  and  $update[table.field] / $search[table.field]
+  // This prevents plain-text mentions of "table.field" in comments or
+  // instructional placeholder text from being treated as real column refs.
+  const tokenContents: string[] = [];
+  let m: RegExpExecArray | null;
+  const curlyRe  = /\$\{([^}]+)\}/g;
+  const bracketRe = /\$(?:update|search)\[([^\]]+)\]/g;
+  while ((m = curlyRe.exec(combined))   !== null) tokenContents.push(m[1]);
+  while ((m = bracketRe.exec(combined)) !== null) tokenContents.push(m[1]);
+
+  return parseColumnRefs(tokenContents.join('\n')).filter(r => !r.table.startsWith('_'));
+}
+
+const TEMPLATE_DISPLAY_NAMES: Record<string, string> = {
+  search_form:  'Search Form',
+  header:       'Header',
+  group_header: 'Group Header',
+  row:          'Row',
+  group_footer: 'Group Footer',
+  footer:       'Footer',
+  detail:       'Detail View',
+  edit_form:    'Edit Form',
+  create_form:  'Create Form',
+};
+
+/** Build a map of table name → { templateName, lineNumber } for error reporting */
+function buildTokenSourceMap(templates: Partial<ViewTemplates>): Map<string, { templateName: string; lineNumber: number }> {
+  const sourceMap = new Map<string, { templateName: string; lineNumber: number }>();
+  const tokenRe = /\$\{([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\}/gi;
+
+  for (const [key, content] of Object.entries(templates)) {
+    if (!content) continue;
+    const displayName = TEMPLATE_DISPLAY_NAMES[key] ?? key;
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      let m: RegExpExecArray | null;
+      tokenRe.lastIndex = 0;
+      while ((m = tokenRe.exec(lines[i])) !== null) {
+        const tableName = m[1];
+        if (!tableName.startsWith('_') && !sourceMap.has(tableName)) {
+          sourceMap.set(tableName, { templateName: displayName, lineNumber: i + 1 });
+        }
+      }
+    }
+  }
+  return sourceMap;
 }
 
 export async function generateViewSql(
@@ -283,11 +344,29 @@ export async function generateViewSql(
     expr:  buildGroupConcatExpr(tag.refs, tag.separators, tag.delimiter),
   }));
 
-  const result = await buildJoinQuery(
-    appId, baseTableName, allTokens,
-    groupConcatSpecs.length ? groupConcatSpecs : undefined
-  );
-  return result.sql;
+  // Build source map for error enrichment
+  const sourceMap = buildTokenSourceMap(templates);
+
+  try {
+    const result = await buildJoinQuery(
+      appId, baseTableName, allTokens,
+      groupConcatSpecs.length ? groupConcatSpecs : undefined
+    );
+    return result.sql;
+  } catch (err: any) {
+    // Enrich "No join path" errors with the template name and line number
+    const match = err.message?.match(/No join path found from "[^"]+" to "([^"]+)"/);
+    if (match) {
+      const badTable = match[1];
+      const source = sourceMap.get(badTable);
+      if (source) {
+        throw new Error(
+          `${err.message}\n(Token \${${badTable}.*} found in "${source.templateName}" template, line ${source.lineNumber})`
+        );
+      }
+    }
+    throw err;
+  }
 }
 
 // ── Token rendering ─────────────────────────────────────────────────────────
@@ -442,6 +521,7 @@ export interface RenderParams {
   dir?: 'asc' | 'desc';
   searchOnly?: boolean;
   fieldFilters?: Record<string, string>;  // "table__field" → value
+  ownerId?: number;                        // set to filter results to records owned by this member
 }
 
 export async function renderViewList(
@@ -548,6 +628,15 @@ export async function renderViewList(
     bindings.push(`%${val.trim()}%`);
   }
 
+  // Ownership filter: when ownerId is set, restrict to records owned by that member
+  if (params.ownerId) {
+    const pkAlias = isAuto ? `${baseTableName}__${pkName}` : pkName;
+    whereParts.push(
+      `EXISTS (SELECT 1 FROM _wdpro_metadata WHERE _wdpro_metadata.record_id = CAST("_v"."${pkAlias}" AS TEXT) AND _wdpro_metadata.table_name = ? AND _wdpro_metadata.created_by_id = ?)`
+    );
+    bindings.push(baseTableName, String(params.ownerId));
+  }
+
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
   const outerSql = `SELECT * FROM (${baseSql}) AS _v ${whereSql}`;
 
@@ -592,6 +681,8 @@ export async function renderViewList(
   parts.push(renderTokens(searchFormTpl, sys));
   parts.push(renderTokens(tpl.header, sys));
 
+  const hasDetail = !!tpl.detail?.trim();
+
   let lastGroup: unknown = Symbol('none');
   for (let i = 0; i < rows.length; i++) {
     const row    = rows[i];
@@ -609,7 +700,13 @@ export async function renderViewList(
       }
     }
 
-    parts.push(renderTokens(tpl.row, rowData));
+    let rendered = renderTokens(tpl.row, rowData);
+    if (!hasDetail) {
+      rendered = rendered
+        .replace(/\s+data-wdp-action="detail"/gi, '')
+        .replace(/cursor\s*:\s*pointer\s*;?/gi, 'cursor:default;');
+    }
+    parts.push(rendered);
   }
 
   if (groupField && lastGroup !== Symbol('none') && tpl.group_footer)
@@ -699,6 +796,20 @@ export async function renderViewEditForm(
   const editTpl   = editTags.length ? applyGroupTags(templates.edit_form, editTags) : templates.edit_form;
   const processed = await renderWidgetTokens(editTpl, app.id, rowData, 'update');
   return renderTokens(autoNameEditInputs(processed), rowData);
+}
+
+// ── Create form ──────────────────────────────────────────────────────────────
+
+export async function renderViewCreateForm(
+  app: App,
+  view: View,
+  baseTableName: string,
+  templates: ViewTemplates
+): Promise<string> {
+  // No existing record — render $update[...] widgets with empty values
+  const createTpl  = templates.create_form || DEFAULT_TEMPLATES.create_form;
+  const processed  = await renderWidgetTokens(createTpl, app.id, {}, 'update');
+  return renderTokens(autoNameEditInputs(processed), { _pk: '' });
 }
 
 // ── Edit-form helpers ────────────────────────────────────────────────────────

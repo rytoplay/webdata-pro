@@ -79,7 +79,7 @@
 /* ── Card rows ──────────────────────────────────────────────────────────── */
 .wdp-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 10px 14px;
   background: var(--wdp-surface);

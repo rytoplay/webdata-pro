@@ -80,7 +80,8 @@ viewsRouter.get('/', async (req, res, next) => {
     const tableById = new Map(tables.map(t => [t.id, t]));
     const flash  = req.session.flash;
     delete req.session.flash;
-    res.render('admin/views/list', { title: 'Views', views, tableById, flash });
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    res.render('admin/views/list', { title: 'Views', views, tableById, flash, baseUrl });
   } catch (err) { next(err); }
 });
 

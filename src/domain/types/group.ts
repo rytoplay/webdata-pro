@@ -6,6 +6,7 @@ export interface Group {
   self_register_enabled: boolean;
   default_home_view_id: number | null;
   tfa_required: boolean;
+  home_template: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +26,7 @@ export interface UpdateGroupInput {
   self_register_enabled?: boolean;
   default_home_view_id?: number | null;
   tfa_required?: boolean;
+  home_template?: string | null;
 }
 
 export interface GroupTablePermission {
@@ -34,11 +36,13 @@ export interface GroupTablePermission {
   can_add: boolean;
   can_edit: boolean;
   can_delete: boolean;
-  can_view: boolean;
-  can_edit_all_records: boolean;
-  can_edit_own_records_only: boolean;
-  can_view_all_records: boolean;
-  can_view_own_records_only: boolean;
+  manage_all: boolean;
+  // legacy columns kept in DB for migration safety
+  can_view?: boolean;
+  can_edit_all_records?: boolean;
+  can_edit_own_records_only?: boolean;
+  can_view_all_records?: boolean;
+  can_view_own_records_only?: boolean;
 }
 
 export interface UpsertGroupTablePermissionInput {
@@ -47,9 +51,5 @@ export interface UpsertGroupTablePermissionInput {
   can_add?: boolean;
   can_edit?: boolean;
   can_delete?: boolean;
-  can_view?: boolean;
-  can_edit_all_records?: boolean;
-  can_edit_own_records_only?: boolean;
-  can_view_all_records?: boolean;
-  can_view_own_records_only?: boolean;
+  manage_all?: boolean;
 }

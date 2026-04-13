@@ -130,6 +130,18 @@
     return `/api/v/${cfg.app}/${cfg.view}/${encodeURIComponent(id)}`;
   }
 
+  function createFormPath(cfg) {
+    return `/api/v/${cfg.app}/${cfg.view}/new`;
+  }
+
+  function postPath(cfg) {
+    return `/api/v/${cfg.app}/${cfg.view}`;
+  }
+
+  function deletePath(cfg, id) {
+    return `/api/v/${cfg.app}/${cfg.view}/${encodeURIComponent(id)}/delete`;
+  }
+
   // ── Render into container ────────────────────────────────────────────────────
 
   async function render(instance) {
@@ -145,6 +157,8 @@
         html = await fetchFragment(cfg, detailPath(cfg, state.get('id') || ''));
       } else if (mode === 'edit') {
         html = await fetchFragment(cfg, editPath(cfg, state.get('id') || ''));
+      } else if (mode === 'create') {
+        html = await fetchFragment(cfg, createFormPath(cfg));
       } else {
         html = await fetchFragment(cfg, listPath(cfg, state));
       }
@@ -215,6 +229,42 @@
             errEl.textContent = 'Save failed: ' + String(err);
             form.prepend(errEl);
           });
+
+      } else if (formType === 'create') {
+        const base    = (instance.cfg.baseUrl || '').replace(/\/$/, '');
+        const url     = base + postPath(instance.cfg);
+        const body    = new URLSearchParams(new FormData(form)).toString();
+        const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        const access  = getAccess(instance.cfg);
+        if (access) headers['Authorization'] = 'Bearer ' + access;
+
+        fetch(url, { method: 'POST', headers, credentials: 'include', body })
+          .then(function (res) {
+            if (res.ok) {
+              return res.json().then(function (data) {
+                if (data.id) {
+                  const state = new URLSearchParams({ mode: 'record', id: String(data.id) });
+                  pushHash(instanceId, state);
+                } else {
+                  writeHash(instanceId, instance._lastListState || new URLSearchParams({ mode: 'list' }));
+                }
+                render(instance);
+              });
+            } else {
+              res.json().then(function (data) {
+                const errEl = document.createElement('p');
+                errEl.className = 'wdp-error';
+                errEl.textContent = data.error || 'Create failed.';
+                form.prepend(errEl);
+              });
+            }
+          })
+          .catch(function (err) {
+            const errEl = document.createElement('p');
+            errEl.className = 'wdp-error';
+            errEl.textContent = 'Create failed: ' + String(err);
+            form.prepend(errEl);
+          });
       }
     });
   }
@@ -271,6 +321,33 @@
       state.set('page', '1');
       writeHash(instanceId, state);
       instance.render();
+
+    } else if (action === 'create') {
+      instance._lastListState = new URLSearchParams(current);
+      pushHash(instanceId, new URLSearchParams({ mode: 'create' }));
+      instance.render();
+
+    } else if (action === 'delete') {
+      const id = el.dataset.wdpId || current.get('id') || '';
+      if (!id) return;
+      if (!window.confirm('Delete this record?')) return;
+      const base    = (instance.cfg.baseUrl || '').replace(/\/$/, '');
+      const url     = base + deletePath(instance.cfg, id);
+      const headers = {};
+      const access  = getAccess(instance.cfg);
+      if (access) headers['Authorization'] = 'Bearer ' + access;
+      fetch(url, { method: 'POST', headers, credentials: 'include' })
+        .then(function (res) {
+          if (res.ok) {
+            writeHash(instanceId, instance._lastListState || new URLSearchParams({ mode: 'list' }));
+            instance.render();
+          } else {
+            res.json().then(function (data) {
+              alert(data.error || 'Delete failed.');
+            });
+          }
+        })
+        .catch(function (err) { alert('Delete failed: ' + String(err)); });
 
     } else if (action === 'clear') {
       const state = new URLSearchParams({ mode: 'list', page: '1' });

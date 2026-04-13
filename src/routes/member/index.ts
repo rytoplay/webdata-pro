@@ -1,12 +1,36 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import nunjucks from 'nunjucks';
 import { db } from '../../db/knex';
 import * as membersService from '../../services/members';
 import type { App } from '../../domain/types';
 
+const RegisterSchema = z.object({
+  first_name:       z.string().optional(),
+  last_name:        z.string().optional(),
+  email:            z.string().email('Enter a valid email address'),
+  password:         z.string().min(8, 'Password must be at least 8 characters'),
+  password_confirm: z.string(),
+}).refine(d => d.password === d.password_confirm, {
+  message: 'Passwords do not match',
+  path: ['password_confirm'],
+});
+
 function renderHomeTemplate(template: string, app: App, member: object, views: object[]): string {
   try {
-    return nunjucks.renderString(template, { app, member, views });
+    let _widgetCount = 0;
+
+    // embedView('viewname') — renders a full WDP view widget inline
+    const embedView = (viewName: string) => {
+      const id = `wdp-view-${++_widgetCount}`;
+      return `<div id="${id}" class="wdp-widget mb-4"></div>` +
+        `<script>WDP.mount('#${id}', {app:'${app.slug}', view:'${viewName}'});<\/script>`;
+    };
+
+    // viewUrl('viewname') — returns the member view page URL
+    const viewUrl = (viewName: string) => `/app/${app.slug}/view/${viewName}`;
+
+    return nunjucks.renderString(template, { app, member, views, embedView, viewUrl });
   } catch (err: any) {
     return `<p style="color:red"><strong>Template error:</strong> ${err.message}</p>`;
   }
@@ -59,11 +83,22 @@ memberRouter.get('/', async (req, res, next) => {
       views = rows.map((v: any) => ({ ...v, url: `/app/${app.slug}/view/${v.view_name}` }));
     }
 
-    // Use custom home template if set, otherwise generic list
     const freshApp = await db('apps').where({ id: app.id }).first();
-    if (freshApp.home_template) {
+
+    // Use home_template from first matching group that has one
+    let groupTemplate: string | null = null;
+    if (member.groupIds.length > 0) {
+      const groupWithTemplate = await db('groups')
+        .whereIn('id', member.groupIds)
+        .whereNotNull('home_template')
+        .first();
+      groupTemplate = groupWithTemplate?.home_template ?? null;
+    }
+
+    const template = groupTemplate ?? freshApp.home_template ?? null;
+    if (template) {
       const memberData = await membersService.getMember(member.memberId);
-      const html = renderHomeTemplate(freshApp.home_template, freshApp, memberData || member, views);
+      const html = renderHomeTemplate(template, freshApp, memberData || member, views);
       return res.render('member/home', { title: app.name, app: freshApp, renderedHtml: html });
     }
 
@@ -88,20 +123,100 @@ memberRouter.get('/view/:viewName', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /app/:appSlug/register ───────────────────────────────────────────────
+
+memberRouter.get('/register', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const selfRegGroups = await db('groups')
+      .where({ app_id: app.id, self_register_enabled: true });
+    if (selfRegGroups.length === 0) {
+      return res.status(403).send('Self-registration is not enabled for this app.');
+    }
+    if (req.session.member?.appId === app.id) {
+      return res.redirect(`/app/${app.slug}/`);
+    }
+    const flash = req.session.flash; delete req.session.flash;
+    res.render('member/register', { title: `Create account — ${app.name}`, app, flash, formData: null, errors: null });
+  } catch (err) { next(err); }
+});
+
+// ── POST /app/:appSlug/register ──────────────────────────────────────────────
+
+memberRouter.post('/register', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+
+    const selfRegGroups = await db('groups')
+      .where({ app_id: app.id, self_register_enabled: true });
+    if (selfRegGroups.length === 0) {
+      return res.status(403).send('Self-registration is not enabled for this app.');
+    }
+
+    const parsed = RegisterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.render('member/register', {
+        title: `Create account — ${app.name}`,
+        app,
+        flash: null,
+        formData: req.body,
+        errors: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const { email, password, first_name, last_name } = parsed.data;
+
+    // Check for duplicate email
+    const existing = await membersService.getMemberByEmail(app.id, email);
+    if (existing) {
+      return res.render('member/register', {
+        title: `Create account — ${app.name}`,
+        app,
+        flash: null,
+        formData: req.body,
+        errors: { email: ['An account with this email already exists.'] },
+      });
+    }
+
+    const member = await membersService.createMember({
+      app_id: app.id,
+      email,
+      password,
+      first_name: first_name || null,
+      last_name:  last_name  || null,
+    });
+
+    // Assign to all self-register-enabled groups
+    for (const group of selfRegGroups) {
+      await membersService.assignMemberToGroup(member.id, group.id);
+    }
+
+    const groupIds = selfRegGroups.map((g: { id: number }) => g.id);
+    req.session.member = { memberId: member.id, appId: app.id, groupIds };
+
+    res.redirect(`/app/${app.slug}/`);
+  } catch (err) { next(err); }
+});
+
 // ── GET /app/:appSlug/login ──────────────────────────────────────────────────
 
-memberRouter.get('/login', (req, res) => {
-  const app = res.locals.memberApp as App;
-  if (req.session.member?.appId === app.id) {
-    return res.redirect(req.query.returnTo as string || '/');
-  }
-  const flash = req.session.flash; delete req.session.flash;
-  res.render('member/login', {
-    title: `Sign in — ${app.name}`,
-    app,
-    returnTo: req.query.returnTo || '',
-    flash,
-  });
+memberRouter.get('/login', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    if (req.session.member?.appId === app.id) {
+      return res.redirect(req.query.returnTo as string || `/app/${app.slug}/`);
+    }
+    const flash = req.session.flash; delete req.session.flash;
+    const selfRegCount = await db('groups')
+      .where({ app_id: app.id, self_register_enabled: true }).count('id as n').first();
+    res.render('member/login', {
+      title: `Sign in — ${app.name}`,
+      app,
+      returnTo:      req.query.returnTo || '',
+      flash,
+      allowRegister: Number(selfRegCount?.n ?? 0) > 0,
+    });
+  } catch (err) { next(err); }
 });
 
 // ── POST /app/:appSlug/login ─────────────────────────────────────────────────

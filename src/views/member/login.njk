@@ -40,6 +40,12 @@
 
     </div>
   </div>
+
+  {% if allowRegister %}
+  <div class="text-center mt-3 text-muted small">
+    Don't have an account? <a href="/app/{{ app.slug }}/register">Sign up</a>
+  </div>
+  {% endif %}
 </div>
 </body>
 </html>
