@@ -56,18 +56,19 @@ export async function listOllamaModels(baseUrl: string): Promise<string[]> {
 export async function callAi(
   settings: AiSettings,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  maxTokens?: number
 ): Promise<string> {
   switch (settings.provider) {
-    case 'ollama':     return callOllama(settings, systemPrompt, userPrompt);
-    case 'anthropic':  return callAnthropic(settings, systemPrompt, userPrompt);
-    case 'openai':     return callOpenAI(settings, systemPrompt, userPrompt);
+    case 'ollama':     return callOllama(settings, systemPrompt, userPrompt, maxTokens);
+    case 'anthropic':  return callAnthropic(settings, systemPrompt, userPrompt, maxTokens);
+    case 'openai':     return callOpenAI(settings, systemPrompt, userPrompt, maxTokens);
   }
 }
 
 // ── Providers ────────────────────────────────────────────────────────────────
 
-async function callOllama(s: AiSettings, system: string, user: string): Promise<string> {
+async function callOllama(s: AiSettings, system: string, user: string, maxTokens?: number): Promise<string> {
   // Some Qwen3 models support /no_think to skip the reasoning step — faster output.
   const userMsg = s.model.toLowerCase().startsWith('qwen') ? `/no_think\n\n${user}` : user;
 
@@ -81,7 +82,7 @@ async function callOllama(s: AiSettings, system: string, user: string): Promise<
         { role: 'system',  content: system },
         { role: 'user',    content: userMsg },
       ],
-      options: { temperature: 0.7, num_predict: 4096 },
+      options: { temperature: 0.7, num_predict: maxTokens ?? 4096 },
     }),
     signal: AbortSignal.timeout(600_000),   // 10 min — large local models are slow without a GPU
   });
@@ -90,7 +91,7 @@ async function callOllama(s: AiSettings, system: string, user: string): Promise<
   return stripThink(data.message?.content ?? '');
 }
 
-async function callAnthropic(s: AiSettings, system: string, user: string): Promise<string> {
+async function callAnthropic(s: AiSettings, system: string, user: string, maxTokens?: number): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method:  'POST',
     headers: {
@@ -100,7 +101,7 @@ async function callAnthropic(s: AiSettings, system: string, user: string): Promi
     },
     body: JSON.stringify({
       model:      s.model || 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
+      max_tokens: maxTokens ?? 4096,
       system,
       messages: [{ role: 'user', content: user }],
     }),
@@ -111,7 +112,7 @@ async function callAnthropic(s: AiSettings, system: string, user: string): Promi
   return data.content?.[0]?.text ?? '';
 }
 
-async function callOpenAI(s: AiSettings, system: string, user: string): Promise<string> {
+async function callOpenAI(s: AiSettings, system: string, user: string, maxTokens?: number): Promise<string> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method:  'POST',
     headers: {
@@ -119,7 +120,8 @@ async function callOpenAI(s: AiSettings, system: string, user: string): Promise<
       'Authorization': `Bearer ${s.apiKey}`,
     },
     body: JSON.stringify({
-      model:    s.model || 'gpt-4o-mini',
+      model:      s.model || 'gpt-4o-mini',
+      max_tokens: maxTokens,
       messages: [
         { role: 'system', content: system },
         { role: 'user',   content: user   },

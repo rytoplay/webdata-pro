@@ -49,7 +49,7 @@ blueprintRouter.post('/generate', async (req, res, next) => {
 
     let raw: string;
     try {
-      raw = await aiService.callAi(aiSettings, BLUEPRINT_SYSTEM_PROMPT, userPrompt);
+      raw = await aiService.callAi(aiSettings, BLUEPRINT_SYSTEM_PROMPT, userPrompt, 8192);
     } catch (err) {
       return res.status(502).json({ error: `AI call failed: ${err instanceof Error ? err.message : String(err)}` });
     }
