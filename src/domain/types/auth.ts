@@ -50,10 +50,27 @@ export interface MemberSession {
   groupIds: number[];
 }
 
+export interface PendingMemberSession {
+  memberId: number;
+  appId: number;
+  groupIds: number[];
+  returnTo: string;
+}
+
+export interface PendingTotpSetup {
+  memberId: number;
+  appId: number;
+  groupIds: number[];
+  secret: string;
+  returnTo: string;
+}
+
 declare module 'express-session' {
   interface SessionData {
     admin?: AdminSession;
     member?: MemberSession;
+    pendingMember?: PendingMemberSession;
+    pendingTotpSetup?: PendingTotpSetup;
     flash?: { type: string; message: string };
     currentAppId?: number;
   }

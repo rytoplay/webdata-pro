@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import nunjucks from 'nunjucks';
+import { generateSecret as otpGenerateSecret, generate as otpGenerate, verify as otpVerify, generateURI as otpGenerateURI } from 'otplib';
+import qrcode from 'qrcode';
 import { db } from '../../db/knex';
 import * as membersService from '../../services/members';
+import * as emailService from '../../services/email';
 import type { App } from '../../domain/types';
 
 const RegisterSchema = z.object({
@@ -34,6 +37,21 @@ function renderHomeTemplate(template: string, app: App, member: object, views: o
   } catch (err: any) {
     return `<p style="color:red"><strong>Template error:</strong> ${err.message}</p>`;
   }
+}
+
+// Helper: does this member need TOTP? Returns 'verify'|'setup'|'none'
+async function totpStatus(
+  memberId: number,
+  groupIds: number[],
+): Promise<'verify' | 'setup' | 'none'> {
+  if (groupIds.length === 0) return 'none';
+  const requiresGroup = await db('groups')
+    .whereIn('id', groupIds)
+    .where({ tfa_required: true })
+    .first();
+  if (!requiresGroup) return 'none';
+  const secret = await membersService.getTfaSecret(memberId);
+  return secret ? 'verify' : 'setup';
 }
 
 export const memberRouter = Router({ mergeParams: true });
@@ -192,9 +210,18 @@ memberRouter.post('/register', async (req, res, next) => {
     }
 
     const groupIds = selfRegGroups.map((g: { id: number }) => g.id);
-    req.session.member = { memberId: member.id, appId: app.id, groupIds };
+    const returnTo = `/app/${app.slug}/`;
 
-    res.redirect(`/app/${app.slug}/`);
+    // Check if TOTP setup is required
+    const tfaStatus = await totpStatus(member.id, groupIds);
+    if (tfaStatus === 'setup') {
+      const secret = await otpGenerateSecret();
+      req.session.pendingTotpSetup = { memberId: member.id, appId: app.id, groupIds, secret, returnTo };
+      return res.redirect(`/app/${app.slug}/totp-setup`);
+    }
+
+    req.session.member = { memberId: member.id, appId: app.id, groupIds };
+    res.redirect(returnTo);
   } catch (err) { next(err); }
 });
 
@@ -233,6 +260,7 @@ memberRouter.post('/login', async (req, res, next) => {
       app,
       returnTo: returnTo || '',
       flash: { type: 'danger', message: 'Invalid email or password.' },
+      allowRegister: false,
     });
 
     if (!member || !member.is_active) return invalid();
@@ -241,10 +269,271 @@ memberRouter.post('/login', async (req, res, next) => {
     if (!ok) return invalid();
 
     const groupIds = await membersService.getMemberGroups(member.id);
-    req.session.member = { memberId: member.id, appId: app.id, groupIds };
-
     const dest = (returnTo && returnTo.startsWith('/')) ? returnTo : `/app/${app.slug}/`;
+
+    // Check if TOTP is needed
+    const tfaStatus = await totpStatus(member.id, groupIds);
+
+    if (tfaStatus === 'verify') {
+      req.session.pendingMember = { memberId: member.id, appId: app.id, groupIds, returnTo: dest };
+      return res.redirect(`/app/${app.slug}/totp-verify`);
+    }
+
+    if (tfaStatus === 'setup') {
+      const secret = await otpGenerateSecret();
+      req.session.pendingTotpSetup = { memberId: member.id, appId: app.id, groupIds, secret, returnTo: dest };
+      return res.redirect(`/app/${app.slug}/totp-setup`);
+    }
+
+    req.session.member = { memberId: member.id, appId: app.id, groupIds };
     res.redirect(dest);
+  } catch (err) { next(err); }
+});
+
+// ── GET /app/:appSlug/totp-verify ────────────────────────────────────────────
+
+memberRouter.get('/totp-verify', (req, res) => {
+  const app = res.locals.memberApp as App;
+  if (!req.session.pendingMember || req.session.pendingMember.appId !== app.id) {
+    return res.redirect(`/app/${app.slug}/login`);
+  }
+  const flash = req.session.flash; delete req.session.flash;
+  res.render('member/totp-verify', { title: `Verify identity — ${app.name}`, app, flash });
+});
+
+// ── POST /app/:appSlug/totp-verify ───────────────────────────────────────────
+
+memberRouter.post('/totp-verify', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const pending = req.session.pendingMember;
+    if (!pending || pending.appId !== app.id) {
+      return res.redirect(`/app/${app.slug}/login`);
+    }
+
+    const { code } = req.body as { code: string };
+    const secret = await membersService.getTfaSecret(pending.memberId);
+
+    const result = secret ? await otpVerify({ token: code?.trim() || '', secret }) : null;
+    if (!result || !result.valid) {
+      req.session.flash = { type: 'danger', message: 'Invalid code. Please try again.' };
+      return res.redirect(`/app/${app.slug}/totp-verify`);
+    }
+
+    // Promote to full session
+    delete req.session.pendingMember;
+    req.session.member = { memberId: pending.memberId, appId: pending.appId, groupIds: pending.groupIds };
+    res.redirect(pending.returnTo || `/app/${app.slug}/`);
+  } catch (err) { next(err); }
+});
+
+// ── GET /app/:appSlug/totp-setup ─────────────────────────────────────────────
+
+memberRouter.get('/totp-setup', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const pending = req.session.pendingTotpSetup;
+    if (!pending || pending.appId !== app.id) {
+      return res.redirect(`/app/${app.slug}/login`);
+    }
+
+    const flash = req.session.flash; delete req.session.flash;
+
+    // Get member email for the QR label
+    const member = await db('members').where({ id: pending.memberId }).select('email').first();
+    const otpAuthUrl = await otpGenerateURI({
+      label: member?.email || 'user',
+      issuer: app.name,
+      secret: pending.secret,
+    });
+    const qrDataUrl = await qrcode.toDataURL(otpAuthUrl);
+
+    res.render('member/totp-setup', {
+      title: `Set up two-factor authentication — ${app.name}`,
+      app,
+      flash,
+      secret: pending.secret,
+      qrDataUrl,
+    });
+  } catch (err) { next(err); }
+});
+
+// ── POST /app/:appSlug/totp-setup ────────────────────────────────────────────
+
+memberRouter.post('/totp-setup', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const pending = req.session.pendingTotpSetup;
+    if (!pending || pending.appId !== app.id) {
+      return res.redirect(`/app/${app.slug}/login`);
+    }
+
+    const { code } = req.body as { code: string };
+
+    const setupResult = await otpVerify({ token: code?.trim() || '', secret: pending.secret });
+    if (!setupResult.valid) {
+      req.session.flash = { type: 'danger', message: 'That code is incorrect. Please scan the QR code again and enter the 6-digit code from your app.' };
+      return res.redirect(`/app/${app.slug}/totp-setup`);
+    }
+
+    // Save the verified secret
+    await membersService.setTfaSecret(pending.memberId, pending.secret);
+
+    // Promote to full session
+    delete req.session.pendingTotpSetup;
+    req.session.member = { memberId: pending.memberId, appId: pending.appId, groupIds: pending.groupIds };
+    req.session.flash = { type: 'success', message: 'Two-factor authentication is now enabled on your account.' };
+    res.redirect(pending.returnTo || `/app/${app.slug}/`);
+  } catch (err) { next(err); }
+});
+
+// ── GET /app/:appSlug/forgot ─────────────────────────────────────────────────
+
+memberRouter.get('/forgot', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const flash = req.session.flash; delete req.session.flash;
+    res.render('member/forgot', { title: `Forgot password — ${app.name}`, app, flash, sent: false });
+  } catch (err) { next(err); }
+});
+
+// ── POST /app/:appSlug/forgot ────────────────────────────────────────────────
+
+memberRouter.post('/forgot', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const { email } = req.body as { email: string };
+
+    // Always show the same "check your email" message to avoid enumeration
+    const showSent = () =>
+      res.render('member/forgot', {
+        title: `Forgot password — ${app.name}`,
+        app,
+        flash: null,
+        sent: true,
+      });
+
+    if (!email) return showSent();
+
+    const member = await membersService.getMemberByEmail(app.id, email.trim().toLowerCase());
+    if (!member || !member.is_active) return showSent();
+
+    let emailConfigured = false;
+    try { emailConfigured = await emailService.isEmailConfigured(); } catch {}
+
+    if (!emailConfigured) {
+      return res.render('member/forgot', {
+        title: `Forgot password — ${app.name}`,
+        app,
+        flash: { type: 'warning', message: 'Email is not configured for this app. Please contact your administrator to reset your password.' },
+        sent: false,
+      });
+    }
+
+    const token = await membersService.createResetToken(member.id);
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host     = req.headers['x-forwarded-host']  || req.headers.host;
+    const resetUrl = `${protocol}://${host}/app/${app.slug}/reset?token=${token}`;
+
+    try {
+      await emailService.sendPasswordResetEmail(email.trim(), resetUrl, app.name);
+    } catch (err: any) {
+      return res.render('member/forgot', {
+        title: `Forgot password — ${app.name}`,
+        app,
+        flash: { type: 'danger', message: `Could not send email: ${err.message}` },
+        sent: false,
+      });
+    }
+
+    showSent();
+  } catch (err) { next(err); }
+});
+
+// ── GET /app/:appSlug/reset ──────────────────────────────────────────────────
+
+memberRouter.get('/reset', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const token = req.query.token as string;
+    const flash = req.session.flash; delete req.session.flash;
+
+    const memberId = token ? await membersService.peekResetToken(token) : null;
+    if (!memberId) {
+      return res.render('member/reset', {
+        title: `Reset password — ${app.name}`,
+        app,
+        flash: { type: 'danger', message: 'This reset link is invalid or has expired.' },
+        token: null,
+        valid: false,
+      });
+    }
+
+    res.render('member/reset', { title: `Reset password — ${app.name}`, app, flash, token, valid: true });
+  } catch (err) { next(err); }
+});
+
+// ── POST /app/:appSlug/reset ─────────────────────────────────────────────────
+
+memberRouter.post('/reset', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const { token, password, password_confirm } = req.body as {
+      token: string; password: string; password_confirm: string;
+    };
+
+    const memberId = token ? await membersService.peekResetToken(token) : null;
+    if (!memberId) {
+      return res.render('member/reset', {
+        title: `Reset password — ${app.name}`,
+        app,
+        flash: { type: 'danger', message: 'This reset link is invalid or has expired.' },
+        token: null,
+        valid: false,
+      });
+    }
+
+    if (!password || password.length < 8) {
+      return res.render('member/reset', {
+        title: `Reset password — ${app.name}`,
+        app,
+        flash: { type: 'danger', message: 'Password must be at least 8 characters.' },
+        token,
+        valid: true,
+      });
+    }
+
+    if (password !== password_confirm) {
+      return res.render('member/reset', {
+        title: `Reset password — ${app.name}`,
+        app,
+        flash: { type: 'danger', message: 'Passwords do not match.' },
+        token,
+        valid: true,
+      });
+    }
+
+    // Consume token and set new password
+    const confirmedId = await membersService.consumeResetToken(token);
+    if (!confirmedId) {
+      // Token was used between peek and consume — extremely unlikely but safe
+      return res.redirect(`/app/${app.slug}/forgot`);
+    }
+
+    await membersService.setPassword(confirmedId, password);
+
+    // Check if TOTP is needed for the new login
+    const groupIds = await membersService.getMemberGroups(confirmedId);
+    const tfaStatus = await totpStatus(confirmedId, groupIds);
+
+    req.session.flash = { type: 'success', message: 'Password updated. Please sign in.' };
+
+    if (tfaStatus === 'verify') {
+      req.session.pendingMember = { memberId: confirmedId, appId: app.id, groupIds, returnTo: `/app/${app.slug}/` };
+      return res.redirect(`/app/${app.slug}/totp-verify`);
+    }
+
+    res.redirect(`/app/${app.slug}/login`);
   } catch (err) { next(err); }
 });
 
@@ -253,5 +542,7 @@ memberRouter.post('/login', async (req, res, next) => {
 memberRouter.get('/logout', (req, res) => {
   const app = res.locals.memberApp as App;
   delete req.session.member;
+  delete req.session.pendingMember;
+  delete req.session.pendingTotpSetup;
   res.redirect(`/app/${app.slug}/login`);
 });

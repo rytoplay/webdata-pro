@@ -77,6 +77,63 @@
   </div>
 </div>
 
+<div class="card shadow-sm mt-4" id="email" style="max-width:600px;">
+  <div class="card-header py-2"><strong><i class="bi bi-envelope me-2"></i>Email / SMTP</strong></div>
+  <div class="card-body p-4">
+    <p class="text-muted small mb-3">Required for password-reset emails. Leave blank to disable password reset.</p>
+    <form method="POST" action="/admin/settings/smtp">
+
+      <div class="row g-3 mb-3">
+        <div class="col-8">
+          <label class="form-label">SMTP host</label>
+          <input type="text" name="smtp_host" class="form-control font-monospace"
+            value="{{ smtpSettings.host }}" placeholder="smtp.example.com">
+        </div>
+        <div class="col-4">
+          <label class="form-label">Port</label>
+          <input type="number" name="smtp_port" class="form-control font-monospace"
+            value="{{ smtpSettings.port }}" placeholder="587">
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="smtp_secure" value="1" id="smtp_secure"
+            {% if smtpSettings.secure %}checked{% endif %}>
+          <label class="form-check-label" for="smtp_secure">Use TLS (port 465)</label>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Username / login</label>
+        <input type="text" name="smtp_user" class="form-control font-monospace"
+          value="{{ smtpSettings.user }}" placeholder="user@example.com" autocomplete="off">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Password</label>
+        <input type="password" name="smtp_pass" class="form-control font-monospace"
+          placeholder="{% if smtpSettings.user %}(saved — leave blank to keep){% else %}password{% endif %}"
+          autocomplete="new-password">
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label">From address</label>
+        <input type="email" name="smtp_from" class="form-control font-monospace"
+          value="{{ smtpSettings.from }}" placeholder="noreply@example.com">
+        <div class="form-text">Displayed in the From: field of outbound emails.</div>
+      </div>
+
+      <div class="d-flex gap-2 align-items-center">
+        <button type="submit" class="btn btn-primary">Save Email Settings</button>
+        <button type="button" id="btn-test-smtp" class="btn btn-outline-secondary">Send test email</button>
+        <span id="smtp-test-result" class="small ms-2"></span>
+      </div>
+
+    </form>
+  </div>
+</div>
+
 <script>
 (function () {
   const providerSel  = document.getElementById('ai_provider');
@@ -98,6 +155,32 @@
       const data = await res.json();
       if (data.ok) {
         el.textContent = '✓ Connected — model replied: ' + data.reply;
+        el.style.color = '#166534';
+      } else {
+        el.textContent = '✗ ' + data.error;
+        el.style.color = '#991b1b';
+      }
+    } catch (e) {
+      el.textContent = '✗ Request failed';
+      el.style.color = '#991b1b';
+    }
+  });
+  // SMTP test
+  document.getElementById('btn-test-smtp').addEventListener('click', async () => {
+    const el  = document.getElementById('smtp-test-result');
+    const to  = prompt('Send test email to:');
+    if (!to) return;
+    el.textContent = 'Sending…';
+    el.style.color = '#6b7280';
+    try {
+      const res  = await fetch('/admin/settings/test-smtp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        el.textContent = '✓ Test email sent to ' + to;
         el.style.color = '#166534';
       } else {
         el.textContent = '✗ ' + data.error;

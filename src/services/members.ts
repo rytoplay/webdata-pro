@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { db } from '../db/knex';
 import type { Member, MemberPublic, CreateMemberInput, UpdateMemberInput } from '../domain/types';
@@ -72,4 +73,57 @@ export async function assignMemberToGroup(memberId: number, groupId: number): Pr
 
 export async function removeMemberFromGroup(memberId: number, groupId: number): Promise<void> {
   await db('member_group_assignments').where({ member_id: memberId, group_id: groupId }).delete();
+}
+
+export async function setTfaSecret(memberId: number, secret: string): Promise<void> {
+  await db('members').where({ id: memberId }).update({ tfa_secret: secret });
+}
+
+export async function getTfaSecret(memberId: number): Promise<string | null> {
+  const row = await db('members').where({ id: memberId }).select('tfa_secret').first();
+  return row?.tfa_secret ?? null;
+}
+
+export async function clearTfaSecret(memberId: number): Promise<void> {
+  await db('members').where({ id: memberId }).update({ tfa_secret: null });
+}
+
+// ── Password reset tokens ────────────────────────────────────────────────────
+
+const RESET_TOKEN_TTL_MINUTES = 60;
+
+export async function createResetToken(memberId: number): Promise<string> {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+  // Invalidate any existing unused tokens for this member
+  await db('password_reset_tokens')
+    .where({ member_id: memberId })
+    .whereNull('used_at')
+    .delete();
+  await db('password_reset_tokens').insert({
+    member_id: memberId,
+    token,
+    expires_at: expiresAt,
+  });
+  return token;
+}
+
+export async function consumeResetToken(token: string): Promise<number | null> {
+  const row = await db('password_reset_tokens')
+    .where({ token })
+    .whereNull('used_at')
+    .where('expires_at', '>', new Date())
+    .first();
+  if (!row) return null;
+  await db('password_reset_tokens').where({ id: row.id }).update({ used_at: new Date() });
+  return row.member_id as number;
+}
+
+export async function peekResetToken(token: string): Promise<number | null> {
+  const row = await db('password_reset_tokens')
+    .where({ token })
+    .whereNull('used_at')
+    .where('expires_at', '>', new Date())
+    .first();
+  return row ? (row.member_id as number) : null;
 }

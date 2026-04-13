@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f2f5; }
+    .auth-card { max-width: 460px; margin: 60px auto; }
+    .qr-img { display: block; margin: 0 auto 1rem; border-radius: 8px; border: 1px solid #dee2e6; }
+    .secret-code { font-family: monospace; font-size: 1rem; letter-spacing: 0.15em; background: #f8f9fa; padding: 8px 14px; border-radius: 6px; border: 1px solid #dee2e6; word-break: break-all; }
+    .totp-input { font-size: 1.6rem; letter-spacing: 0.4em; text-align: center; font-weight: 700; }
+    .step { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 1rem; }
+    .step-num { flex-shrink: 0; width: 26px; height: 26px; background: #2563eb; color: #fff; border-radius: 50%; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  </style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="text-center mb-4">
+    <div class="fs-4 fw-semibold">{{ app.name }}</div>
+    <div class="text-muted small">Set up two-factor authentication</div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+
+      {% if flash %}
+      <div class="alert alert-{{ flash.type }} py-2 mb-3">{{ flash.message }}</div>
+      {% endif %}
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>Install an authenticator app on your phone — <strong>Google Authenticator</strong>, <strong>Authy</strong>, or any TOTP-compatible app.</div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="w-100">
+          <div class="mb-2">Scan this QR code with your app:</div>
+          <img src="{{ qrDataUrl }}" alt="QR code" width="180" height="180" class="qr-img">
+          <div class="text-muted small mb-1">Can't scan? Enter this key manually:</div>
+          <div class="secret-code">{{ secret }}</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="w-100">
+          <div class="mb-2">Enter the 6-digit code shown in your app to confirm setup:</div>
+          <form method="POST" action="/app/{{ app.slug }}/totp-setup">
+            <input type="text" name="code" class="form-control totp-input mb-3"
+              inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+              required autofocus autocomplete="one-time-code"
+              placeholder="000000">
+            <button type="submit" class="btn btn-primary w-100">Confirm and activate</button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
