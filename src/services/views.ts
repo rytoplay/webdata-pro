@@ -60,7 +60,7 @@ export const DEFAULT_TEMPLATES: ViewTemplates = {
   <form data-wdp-form="edit" data-wdp-id="\${_pk}" style="margin-top:1rem;">
     <p class="wdp-muted" style="font-size:0.85rem;color:#6b7280;">
       Design your edit form here.<br>
-      Example: <code>&lt;input name="title" value="\${table.title}" class="wdp-input"&gt;</code>
+      Example: <code>&lt;input name="title" value="&#36;{title}" class="wdp-input"&gt;</code>
     </p>
     <div style="margin-top:1rem;">
       <button type="submit" class="wdp-btn">Save</button>
