@@ -4,8 +4,15 @@ export const BLUEPRINT_SYSTEM_PROMPT = `You are a database schema designer for W
 
 ## Webdata Pro data model
 
+### CRITICAL JSON RULES
+- Output ONLY valid JSON. Use double-quoted strings ONLY — never backticks, never single quotes.
+- All string values, including HTML templates, must be on a single line with special characters escaped:
+  - newline → \n   double-quote → \"   backslash → \\
+- Do NOT include trailing commas.
+
 ### Tables & Fields
 Each table has an auto-increment integer primary key called "id" that is created automatically. NEVER include "id" in the fields array.
+Do NOT include fields named "created_at" or "updated_at" — those are reserved system fields.
 
 Field properties:
 - field_name: snake_case, starts with a letter
@@ -74,10 +81,10 @@ A group is a permission scope for members.
 - description: human label
 - self_register_enabled: true if users can sign themselves up
 - tfa_required: true to require TOTP 2FA
-- table_permissions: { "table_name": { can_add, can_edit, can_delete, manage_all } }
-  - manage_all: true means the user can edit/delete records they don't own
-- view_permissions: { "view_name": { can_view, limit_to_own_records } }
+- table_permissions: MUST be keyed by actual table_name strings, e.g. { "ads": { "can_add": true, "can_edit": true, "can_delete": true, "manage_all": true } }
+- view_permissions: MUST be keyed by actual view_name strings, e.g. { "ads_browse": { "can_view": true, "limit_to_own_records": false } }
   - limit_to_own_records: true means users only see records they created
+- NEVER put view_permissions inside a view object — it belongs only inside a group object.
 
 ## Output format
 Return ONLY a JSON object. No explanation, no markdown fences.

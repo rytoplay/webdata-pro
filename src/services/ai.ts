@@ -145,12 +145,31 @@ function stripThink(text: string): string {
 export function extractJson(text: string): string {
   // Try to find a ```json ... ``` block first
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) return fence[1].trim();
-  // Otherwise find first { … } block
-  const start = text.indexOf('{');
-  const end   = text.lastIndexOf('}');
-  if (start !== -1 && end > start) return text.slice(start, end + 1);
-  return text;
+  const raw = fence ? fence[1].trim() : (() => {
+    const start = text.indexOf('{');
+    const end   = text.lastIndexOf('}');
+    return (start !== -1 && end > start) ? text.slice(start, end + 1) : text;
+  })();
+  return sanitizeJson(raw);
+}
+
+/**
+ * Fix common model mistakes that produce invalid JSON:
+ * - Backtick template literals → double-quoted strings
+ */
+export function sanitizeJson(text: string): string {
+  // Replace backtick strings (possibly multiline) with double-quoted JSON strings.
+  // Must handle: backslashes, double-quotes, newlines, tabs inside the backtick content.
+  return text.replace(/`([\s\S]*?)`/g, (_match, content: string) => {
+    const escaped = content
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\r\n/g, '\\n')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\n')
+      .replace(/\t/g, '\\t');
+    return `"${escaped}"`;
+  });
 }
 
 /**

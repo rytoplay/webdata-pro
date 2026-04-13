@@ -162,8 +162,8 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
       const existingNames  = new Set(existingFields.map(f => f.field_name));
 
       for (const bf of (bt.fields ?? [])) {
-        // Skip id — createTable already adds it automatically
-        if (bf.field_name === 'id') continue;
+        // Skip reserved field names
+        if (['id', 'created_at', 'updated_at'].includes(bf.field_name)) continue;
         // Skip fields that already exist
         if (existingNames.has(bf.field_name)) continue;
 
