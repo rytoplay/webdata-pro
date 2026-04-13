@@ -143,17 +143,30 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
   // ── Tables + Fields ───────────────────────────────────────────────────────
   for (const bt of bp.tables) {
     try {
-      const table = await tablesService.createTable({
-        app_id:     app.id,
-        table_name: bt.table_name,
-        label:      bt.label,
-      });
-      tableIdByName.set(bt.table_name, table.id);
-      result.tablesCreated.push(bt.label || bt.table_name);
+      // Idempotent: reuse existing table if it already exists
+      let table = await tablesService.getTableByName(app.id, bt.table_name);
+      if (table) {
+        tableIdByName.set(bt.table_name, table.id);
+      } else {
+        table = await tablesService.createTable({
+          app_id:     app.id,
+          table_name: bt.table_name,
+          label:      bt.label,
+        });
+        tableIdByName.set(bt.table_name, table.id);
+        result.tablesCreated.push(bt.label || bt.table_name);
+      }
+
+      // Get existing field names so we don't double-create
+      const existingFields = await fieldsService.listFields(table.id);
+      const existingNames  = new Set(existingFields.map(f => f.field_name));
 
       for (const bf of (bt.fields ?? [])) {
         // Skip id — createTable already adds it automatically
         if (bf.field_name === 'id') continue;
+        // Skip fields that already exist
+        if (existingNames.has(bf.field_name)) continue;
+
         try {
           const dataType = (VALID_DATA_TYPES.has(bf.data_type) ? bf.data_type : 'string') as FieldDataType;
           const widget   = (bf.ui_widget && VALID_WIDGETS.has(bf.ui_widget) ? bf.ui_widget : undefined) as UIWidget | undefined;
@@ -192,6 +205,13 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
         continue;
       }
 
+      // Idempotent: skip if view already exists
+      const existingView = await viewsService.getViewByName(app.id, bv.view_name);
+      if (existingView) {
+        viewIdByName.set(bv.view_name, existingView.id);
+        continue;
+      }
+
       const view = await viewsService.createView({
         app_id:                  app.id,
         view_name:               bv.view_name,
@@ -226,8 +246,14 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
   }
 
   // ── Groups + Permissions ──────────────────────────────────────────────────
+  const existingGroups = await groupsService.listGroups(app.id);
+  const existingGroupNames = new Set(existingGroups.map(g => g.group_name));
+
   for (const bg of (bp.groups ?? [])) {
     try {
+      // Idempotent: skip if group already exists
+      if (existingGroupNames.has(bg.group_name)) continue;
+
       const group = await groupsService.createGroup({
         app_id:                app.id,
         group_name:            bg.group_name,
