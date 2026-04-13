@@ -260,7 +260,7 @@ export function parseViewTokens(templates: Partial<ViewTemplates>) {
   const tokenContents: string[] = [];
   let m: RegExpExecArray | null;
   const curlyRe  = /\$\{([^}]+)\}/g;
-  const bracketRe = /\$(?:update|search|thumbnail|img)\[([^\]]+)\]/g;
+  const bracketRe = /\$(?:update|search|thumbnail|img|sort|currency|perpage)\[([^\]]+)\]/g;
   while ((m = curlyRe.exec(combined))   !== null) tokenContents.push(m[1]);
   while ((m = bracketRe.exec(combined)) !== null) tokenContents.push(m[1]);
 
@@ -507,6 +507,42 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
     return `<img src="/uploads/${val}" style="max-width:100%;" alt="">`;
   });
 
+  // $currency[table.field] or $currency[table.field,2] → comma-formatted number
+  result = result.replace(/\$currency\[([^\]]+)\]/g, (_, ref: string) => {
+    const parts      = ref.split(',').map((s: string) => s.trim());
+    const fieldRef   = parts[0];
+    const decimals   = parts[1] !== undefined ? parseInt(parts[1], 10) : undefined;
+    const alias      = fieldRef.replace('.', '__');
+    const raw        = data[alias] ?? data[fieldRef];
+    if (raw === null || raw === undefined || raw === '') return '';
+    const num = parseFloat(String(raw));
+    if (isNaN(num)) return String(raw);
+    return decimals !== undefined
+      ? num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+      : num.toLocaleString('en-US');
+  });
+
+  // $sort[table.field] or $sort[table.field,Label] → sortable column header button
+  result = result.replace(/\$sort\[([^\]]+)\]/g, (_, ref: string) => {
+    const parts    = ref.split(',').map((s: string) => s.trim());
+    const fieldRef = parts[0];
+    const label    = parts[1] ?? fieldRef.split('.').pop() ?? fieldRef;
+    const alias    = fieldRef.replace('.', '__');
+    const curSort  = String(data['_sort'] ?? '');
+    const curDir   = String(data['_dir']  ?? 'asc');
+    const isActive = curSort === alias || curSort === fieldRef;
+    const arrow    = isActive ? (curDir === 'asc' ? ' ↑' : ' ↓') : ' ↕';
+    return `<button data-wdp-action="sort" data-wdp-field="${alias}" class="wdp-sort-btn${isActive ? ' wdp-sort-active' : ''}" style="background:none;border:none;cursor:pointer;padding:0;font-weight:inherit;">${label}${arrow}</button>`;
+  });
+
+  // $perpage[10,20,50,100] → per-page selector (options list required)
+  result = result.replace(/\$perpage\[([^\]]+)\]/g, (_, ref: string) => {
+    const options  = ref.split(',').map((s: string) => parseInt(s.trim(), 10)).filter(n => n > 0);
+    const current  = Number(data['_per_page'] ?? data['_page_size'] ?? options[0]);
+    const opts     = options.map(n => `<option value="${n}"${n === current ? ' selected' : ''}>${n} per page</option>`).join('');
+    return `<select data-wdp-action="per-page" class="wdp-per-page-select">${opts}</select>`;
+  });
+
   const afterIf = processIfTags(result, data);
   return afterIf.replace(/\$\{([^}]+)\}/g, (_, token: string) => {
     if (token in data) return String(data[token] ?? '');
@@ -518,15 +554,49 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
   });
 }
 
-function buildPaginationHtml(page: number, totalPages: number): string {
-  if (totalPages <= 1) return '';
-  const prev = page > 1
-    ? `<button data-wdp-action="page" data-wdp-page="${page - 1}" class="wdp-page-btn">&lsaquo; Prev</button>`
-    : `<button class="wdp-page-btn" disabled>&lsaquo; Prev</button>`;
-  const next = page < totalPages
-    ? `<button data-wdp-action="page" data-wdp-page="${page + 1}" class="wdp-page-btn">Next &rsaquo;</button>`
-    : `<button class="wdp-page-btn" disabled>Next &rsaquo;</button>`;
-  return `<div class="wdp-pagination">${prev} <span class="wdp-page-info">Page ${page} of ${totalPages}</span> ${next}</div>`;
+function buildPageSet(current: number, total: number): (number | '...')[] {
+  if (total <= 1) return [];
+  const pages = new Set<number>();
+  pages.add(1);
+  pages.add(total);
+  // Sequential neighbourhood ±5
+  for (let i = Math.max(1, current - 5); i <= Math.min(total, current + 5); i++) pages.add(i);
+  // Expanding jumps forward and backward
+  for (const step of [5, 10, 15, 25, 50, 100, 200, 300, 500]) {
+    const fwd = current + step, bwd = current - step;
+    if (fwd <= total) pages.add(fwd);
+    if (bwd >= 1)     pages.add(bwd);
+  }
+  const sorted = Array.from(pages).sort((a, b) => a - b);
+  const result: (number | '...')[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('...');
+    result.push(sorted[i]);
+  }
+  return result;
+}
+
+function buildPaginationHtml(page: number, totalPages: number, perPage?: number, perPageOptions?: number[]): string {
+  if (totalPages <= 1 && !perPageOptions?.length) return '';
+  const pageNums = buildPageSet(page, totalPages);
+
+  const pageBtns = pageNums.map(p =>
+    p === '...'
+      ? `<span class="wdp-page-ellipsis">…</span>`
+      : p === page
+        ? `<button class="wdp-page-btn wdp-page-current" disabled>${p}</button>`
+        : `<button data-wdp-action="page" data-wdp-page="${p}" class="wdp-page-btn">${p}</button>`
+  ).join(' ');
+
+  let perPageHtml = '';
+  if (perPageOptions && perPageOptions.length > 0 && perPage) {
+    const opts = perPageOptions.map(n =>
+      `<option value="${n}"${n === perPage ? ' selected' : ''}>${n}</option>`
+    ).join('');
+    perPageHtml = `<select data-wdp-action="per-page" class="wdp-per-page-select">${opts}</select>`;
+  }
+
+  return `<div class="wdp-pagination">${pageBtns}${perPageHtml ? ' ' + perPageHtml : ''}</div>`;
 }
 
 // ── View rendering ──────────────────────────────────────────────────────────
@@ -534,6 +604,7 @@ function buildPaginationHtml(page: number, totalPages: number): string {
 export interface RenderParams {
   q?: string;
   page?: number;
+  perPage?: number;   // user-requested page size; falls back to view.page_size
   sort?: string;
   dir?: 'asc' | 'desc';
   searchOnly?: boolean;
@@ -548,9 +619,11 @@ export async function renderViewList(
   templates: ViewTemplates,
   params: RenderParams
 ): Promise<string> {
-  const appDb   = getAppDb(app);
+  const appDb    = getAppDb(app);
   const page     = Math.max(1, params.page ?? 1);
-  const pageSize = view.pagination_enabled ? (view.page_size ?? 25) : 10000;
+  const pageSize = view.pagination_enabled
+    ? Math.min(500, Math.max(1, params.perPage ?? view.page_size ?? 25))
+    : 10000;
   const offset   = (page - 1) * pageSize;
 
   // Load pk field for the base table
@@ -709,6 +782,8 @@ export async function renderViewList(
     _next_page:   Math.min(totalPages, page + 1),
     _sort:        sortField ?? '',
     _dir:         sortDir.toLowerCase(),
+    _per_page:    pageSize,
+    _page_size:   view.page_size ?? 25,
     _pagination:  buildPaginationHtml(page, totalPages),
   };
 

@@ -103,10 +103,11 @@
 
   function listPath(cfg, state) {
     const p = new URLSearchParams();
-    if (state.get('q'))    p.set('q',    state.get('q'));
-    if (state.get('page')) p.set('page', state.get('page'));
-    if (state.get('sort')) p.set('sort', state.get('sort'));
-    if (state.get('dir'))  p.set('dir',  state.get('dir'));
+    if (state.get('q'))        p.set('q',        state.get('q'));
+    if (state.get('page'))     p.set('page',     state.get('page'));
+    if (state.get('sort'))     p.set('sort',     state.get('sort'));
+    if (state.get('dir'))      p.set('dir',      state.get('dir'));
+    if (state.get('per_page')) p.set('per_page', state.get('per_page'));
     // Forward per-field filters (stored as f_* in hash state)
     var hasFieldFilters = false;
     for (var pair of state.entries()) {
@@ -318,6 +319,16 @@
       state.set('mode', 'list');
       state.set('sort', field);
       state.set('dir',  state.get('sort') === field && prevDir === 'asc' ? 'desc' : 'asc');
+      state.set('page', '1');
+      writeHash(instanceId, state);
+      instance.render();
+
+    } else if (action === 'per-page') {
+      const perPage = el.value || el.dataset.wdpPerPage;
+      if (!perPage) return;
+      const state = new URLSearchParams(current);
+      state.set('mode', 'list');
+      state.set('per_page', perPage);
       state.set('page', '1');
       writeHash(instanceId, state);
       instance.render();

@@ -79,7 +79,7 @@ apiViewsRouter.get('/:viewName', async (req, res, next) => {
     const app      = res.locals.apiApp as App;
     const { viewName } = req.params;
     const query = req.query as Record<string, string>;
-    const { q, page, sort, dir, searchOnly } = query;
+    const { q, page, sort, dir, searchOnly, per_page } = query;
 
     const fieldFilters: Record<string, string> = {};
     for (const [key, val] of Object.entries(query)) {
@@ -103,6 +103,7 @@ apiViewsRouter.get('/:viewName', async (req, res, next) => {
     const html = await viewsService.renderViewList(app, view, baseTable.table_name, templates, {
       q:            q ?? '',
       page:         page ? parseInt(page, 10) : 1,
+      perPage:      per_page ? parseInt(per_page, 10) : undefined,
       sort:         sort ?? undefined,
       dir:          (dir === 'desc' ? 'desc' : 'asc'),
       searchOnly:   searchOnly === '1' && !hasFieldFilters,
