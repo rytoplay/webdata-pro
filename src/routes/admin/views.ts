@@ -256,7 +256,8 @@ viewsRouter.get('/:id/preview', async (req, res, next) => {
     const view = await viewsService.getView(Number(req.params.id));
     if (!view || view.app_id !== app.id)
       return res.status(404).render('admin/error', { title: 'Not Found', message: 'View not found' });
-    res.render('admin/views/preview', { title: `Preview — ${view.label}`, view, currentApp: app });
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    res.render('admin/views/preview', { title: `Preview — ${view.label}`, view, currentApp: app, baseUrl });
   } catch (err) { next(err); }
 });
 

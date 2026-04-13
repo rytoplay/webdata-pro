@@ -2,17 +2,40 @@
 {% block content %}
 <div class="page-header">
   <h1>{{ view.label }} <span class="text-muted fw-normal fs-6">/ preview</span></h1>
-  <div class="d-flex gap-2">
-    <a href="/admin/views/{{ view.id }}/templates" class="btn btn-sm btn-outline-secondary">
-      &larr; Templates
-    </a>
+  <a href="/admin/views/{{ view.id }}/templates" class="btn btn-sm btn-outline-secondary">
+    &larr; Templates
+  </a>
+</div>
+
+{# ── Embed Instructions ── #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2 d-flex align-items-center justify-content-between">
+    <strong><i class="bi bi-code-slash me-2"></i>Embed Code</strong>
+    <button class="btn btn-sm btn-outline-secondary" id="copy-btn" type="button">
+      <i class="bi bi-clipboard me-1"></i>Copy
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <pre id="embed-code" class="mb-0 p-3" style="font-size:0.8rem;background:#f8f9fa;border-radius:0 0 0.375rem 0.375rem;overflow-x:auto;">&#x3C;!-- Load embed script (once per page) --&#x3E;
+&#x3C;script src="{{ baseUrl }}/static/embed.js"&#x3E;&#x3C;/script&#x3E;
+
+&#x3C;!-- Place this div wherever you want the view to appear --&#x3E;
+&#x3C;div id="wdp-{{ view.view_name }}"&#x3E;&#x3C;/div&#x3E;
+
+&#x3C;script&#x3E;
+  WDP.mount('#wdp-{{ view.view_name }}', {
+    app:     '{{ currentApp.slug }}',
+    view:    '{{ view.view_name }}',
+    baseUrl: '{{ baseUrl }}'
+  });
+&#x3C;/script&#x3E;</pre>
   </div>
 </div>
 
+{# ── Live Preview ── #}
 <div class="card shadow-sm">
-  <div class="card-header py-2 d-flex align-items-center gap-2">
-    <span class="text-muted small">Live preview — rendered by embed.js</span>
-    <code class="ms-auto small text-muted">WDP.mount('#wdp-preview', { app: '{{ currentApp.slug }}', view: '{{ view.view_name }}' })</code>
+  <div class="card-header py-2">
+    <span class="text-muted small"><i class="bi bi-eye me-1"></i>Live preview</span>
   </div>
   <div class="card-body p-3">
     <div id="wdp-preview"></div>
@@ -25,6 +48,17 @@
     app:     '{{ currentApp.slug }}',
     view:    '{{ view.view_name }}',
     baseUrl: ''
+  });
+
+  document.getElementById('copy-btn').addEventListener('click', function() {
+    const text = document.getElementById('embed-code').textContent;
+    navigator.clipboard.writeText(text).then(function() {
+      const btn = document.getElementById('copy-btn');
+      btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied!';
+      setTimeout(function() {
+        btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy';
+      }, 2000);
+    });
   });
 </script>
 {% endblock %}
