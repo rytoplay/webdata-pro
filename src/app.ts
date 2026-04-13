@@ -30,6 +30,7 @@ export function createApp(): express.Application {
   app.set('view engine', 'njk');
 
   app.use('/static', express.static(path.join(__dirname, '../public')));
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
   app.use('/admin', adminRouter);
   app.use('/api/v/:appSlug', apiViewsRouter);

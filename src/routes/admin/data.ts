@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { App, AppField } from '../../domain/types';
 import { db as controlDb } from '../../db/knex';
 import { getAppDb } from '../../db/adapters/appDb';
+import { memoryUpload, saveUpload, deleteUpload } from '../../services/uploads';
 
 export const dataRouter = Router();
 
@@ -26,6 +27,9 @@ function buildRecord(
     if (opts.skipPk && field.is_primary_key) continue;
     if (opts.skipAutoIncrementPk && field.is_primary_key && field.is_auto_increment) continue;
 
+    // File fields are handled separately via multer — skip here
+    if (field.data_type === 'image' || field.data_type === 'upload') continue;
+
     const raw = body[field.field_name];
     if (field.data_type === 'boolean' || field.ui_widget === 'checkbox') {
       record[field.field_name] = raw === 'on' || raw === '1' || raw === 'true' ? 1 : 0;
@@ -47,6 +51,31 @@ async function loadFields(tableId: number): Promise<EnrichedField[]> {
     .where({ table_id: tableId })
     .orderBy('sort_order');
   return enrichFields(fields);
+}
+
+/** Process multer files for image/upload fields, returns {fieldName → relativePath} */
+async function processUploads(
+  files: Express.Multer.File[],
+  fields: EnrichedField[],
+  app: App,
+  tableName: string,
+): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  for (const file of files) {
+    const field = fields.find(f => f.field_name === file.fieldname);
+    if (!field) continue;
+    if (field.data_type !== 'image' && field.data_type !== 'upload') continue;
+    const isImage = field.data_type === 'image';
+    result[file.fieldname] = await saveUpload(
+      file.buffer,
+      file.mimetype,
+      app.slug,
+      tableName,
+      file.fieldname,
+      isImage,
+    );
+  }
+  return result;
 }
 
 // ── GET /data — redirect to first table ────────────────────────────────────
@@ -150,7 +179,7 @@ dataRouter.get('/:tableName/new', async (req, res, next) => {
 
 // ── POST /data/:tableName — create record ──────────────────────────────────
 
-dataRouter.post('/:tableName', async (req, res, next) => {
+dataRouter.post('/:tableName', memoryUpload, async (req, res, next) => {
   try {
     const app = res.locals.currentApp as App;
     const { tableName } = req.params;
@@ -158,9 +187,13 @@ dataRouter.post('/:tableName', async (req, res, next) => {
     const table = await loadTable(app, tableName);
     if (!table) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Table not found' });
 
-    const fields = await loadFields(table.id);
-    const appDb  = getAppDb(app);
-    await appDb(tableName).insert(buildRecord(fields, req.body, { skipAutoIncrementPk: true }));
+    const fields     = await loadFields(table.id);
+    const record     = buildRecord(fields, req.body, { skipAutoIncrementPk: true });
+    const filePaths  = await processUploads((req.files as Express.Multer.File[]) || [], fields, app, tableName);
+    Object.assign(record, filePaths);
+
+    const appDb = getAppDb(app);
+    await appDb(tableName).insert(record);
 
     req.session.flash = { type: 'success', message: 'Record created.' };
     res.redirect(`/admin/data/${tableName}`);
@@ -226,7 +259,7 @@ dataRouter.post('/:tableName/:id/delete', async (req, res, next) => {
 
 // ── POST /data/:tableName/:id — update record ──────────────────────────────
 
-dataRouter.post('/:tableName/:id', async (req, res, next) => {
+dataRouter.post('/:tableName/:id', memoryUpload, async (req, res, next) => {
   try {
     const app = res.locals.currentApp as App;
     const { tableName, id } = req.params;
@@ -239,9 +272,24 @@ dataRouter.post('/:tableName/:id', async (req, res, next) => {
     if (!pkField) return res.status(400).render('admin/error', { title: 'Error', message: 'Table has no primary key' });
 
     const appDb = getAppDb(app);
-    await appDb(tableName)
-      .where({ [pkField.field_name]: id })
-      .update(buildRecord(fields, req.body, { skipPk: true }));
+
+    // Handle file uploads: delete old file if replaced
+    const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+    if (uploadedFiles.length > 0) {
+      const existing = await appDb(tableName).where({ [pkField.field_name]: id }).first();
+      for (const file of uploadedFiles) {
+        const field = fields.find(f => f.field_name === file.fieldname);
+        if (!field) continue;
+        const oldPath = existing?.[file.fieldname];
+        if (oldPath) deleteUpload(String(oldPath));
+      }
+    }
+
+    const record    = buildRecord(fields, req.body, { skipPk: true });
+    const filePaths = await processUploads(uploadedFiles, fields, app, tableName);
+    Object.assign(record, filePaths);
+
+    await appDb(tableName).where({ [pkField.field_name]: id }).update(record);
 
     req.session.flash = { type: 'success', message: 'Record updated.' };
     res.redirect(`/admin/data/${tableName}`);

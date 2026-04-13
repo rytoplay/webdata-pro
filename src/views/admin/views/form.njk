@@ -82,6 +82,11 @@
               {{ f.label or f.field_name }}
             </option>
             {% endfor %}
+            <optgroup label="— Metadata —">
+              <option value="_meta__created_at" {% if view and view.primary_sort_field == '_meta__created_at' %}selected{% endif %}>Date Created</option>
+              <option value="_meta__updated_at" {% if view and view.primary_sort_field == '_meta__updated_at' %}selected{% endif %}>Date Updated</option>
+              <option value="_meta__created_by" {% if view and view.primary_sort_field == '_meta__created_by' %}selected{% endif %}>Created By</option>
+            </optgroup>
           </select>
         </div>
         <div class="col-md-3">
@@ -113,6 +118,11 @@
               {{ f.label or f.field_name }}
             </option>
             {% endfor %}
+            <optgroup label="— Metadata —">
+              <option value="_meta__created_at" {% if view and view.secondary_sort_field == '_meta__created_at' %}selected{% endif %}>Date Created</option>
+              <option value="_meta__updated_at" {% if view and view.secondary_sort_field == '_meta__updated_at' %}selected{% endif %}>Date Updated</option>
+              <option value="_meta__created_by" {% if view and view.secondary_sort_field == '_meta__created_by' %}selected{% endif %}>Created By</option>
+            </optgroup>
           </select>
         </div>
         <div class="col-md-3">
@@ -153,12 +163,17 @@
   const baseTableSel = document.getElementById('base_table_select');
   const fieldSelects = document.querySelectorAll('.field-select');
 
-  function buildOptions(fields, currentVals) {
+  function buildOptions(fields) {
     let html = '<option value="">— none —</option>';
     for (const f of fields) {
       const label = f.label || f.field_name;
       html += `<option value="${f.field_name}">${label}</option>`;
     }
+    html += '<optgroup label="— Metadata —">';
+    html += '<option value="_meta__created_at">Date Created</option>';
+    html += '<option value="_meta__updated_at">Date Updated</option>';
+    html += '<option value="_meta__created_by">Created By</option>';
+    html += '</optgroup>';
     return html;
   }
 

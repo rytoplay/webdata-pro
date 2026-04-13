@@ -10,7 +10,8 @@ const RESERVED_NAMES = new Set(['created_at', 'updated_at']);
 const TYPE_MAP: Record<string, string> = {
   string: 'TEXT', text: 'TEXT', integer: 'INTEGER', bigInteger: 'INTEGER',
   decimal: 'REAL', float: 'REAL', boolean: 'INTEGER',
-  date: 'TEXT', datetime: 'TEXT', time: 'TEXT', json: 'TEXT', uuid: 'TEXT'
+  date: 'TEXT', datetime: 'TEXT', time: 'TEXT', json: 'TEXT', uuid: 'TEXT',
+  image: 'TEXT', upload: 'TEXT'
 };
 
 export function validateFieldName(name: string): string | null {

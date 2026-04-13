@@ -10,7 +10,9 @@ export type FieldDataType =
   | 'datetime'
   | 'time'
   | 'json'
-  | 'uuid';
+  | 'uuid'
+  | 'image'
+  | 'upload';
 
 export type UIWidget =
   | 'text'
@@ -24,7 +26,9 @@ export type UIWidget =
   | 'url'
   | 'password'
   | 'hidden'
-  | 'time';
+  | 'time'
+  | 'image'
+  | 'upload';
 
 export interface AppField {
   id: number;

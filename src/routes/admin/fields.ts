@@ -6,8 +6,8 @@ import type { FieldDataType, UIWidget } from '../../domain/types';
 
 export const fieldsRouter = Router();
 
-const DATA_TYPES = ['string', 'text', 'integer', 'bigInteger', 'decimal', 'float', 'boolean', 'date', 'datetime', 'time', 'json', 'uuid'] as const;
-const UI_WIDGETS = ['text', 'textarea', 'number', 'select', 'checkbox', 'date', 'datetime', 'email', 'url', 'password', 'hidden'] as const;
+const DATA_TYPES = ['string', 'text', 'integer', 'bigInteger', 'decimal', 'float', 'boolean', 'date', 'datetime', 'time', 'json', 'uuid', 'image', 'upload'] as const;
+const UI_WIDGETS = ['text', 'textarea', 'number', 'select', 'checkbox', 'date', 'datetime', 'email', 'url', 'password', 'hidden', 'image', 'upload'] as const;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ function resolveWidget(widget: string, dataType: string): UIWidget {
   if (dataType === 'date')     return 'date';
   if (dataType === 'datetime') return 'datetime';
   if (dataType === 'time')     return 'time';
+  if (dataType === 'image')    return 'image';
+  if (dataType === 'upload')   return 'upload';
   return 'text';
 }
 

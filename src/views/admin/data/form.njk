@@ -13,9 +13,9 @@
   <div class="card-body p-4">
 
     {% if isEdit and pkField %}
-    <form method="POST" action="/admin/data/{{ table.table_name }}/{{ record[pkField.field_name] }}">
+    <form method="POST" action="/admin/data/{{ table.table_name }}/{{ record[pkField.field_name] }}" enctype="multipart/form-data">
     {% else %}
-    <form method="POST" action="/admin/data/{{ table.table_name }}">
+    <form method="POST" action="/admin/data/{{ table.table_name }}" enctype="multipart/form-data">
     {% endif %}
 
       {% for field in fields %}
@@ -119,6 +119,31 @@
             <input type="password" class="form-control" autocomplete="new-password"
               name="{{ field.field_name }}" id="f-{{ field.field_name }}"
               {% if field.is_required %}required{% endif %}>
+
+            {# ── Image upload ── #}
+            {% elif field.ui_widget == 'image' %}
+            {% if fieldVal %}
+            <div class="mb-2">
+              <img src="/uploads/{{ fieldVal }}" style="max-height:120px;max-width:240px;border-radius:6px;border:1px solid var(--border);" alt="">
+              <div class="form-text">Current image — upload a new one to replace it.</div>
+            </div>
+            {% endif %}
+            <input type="file" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              {% if field.is_required and not fieldVal %}required{% endif %}>
+
+            {# ── File upload ── #}
+            {% elif field.ui_widget == 'upload' %}
+            {% if fieldVal %}
+            <div class="mb-2">
+              <a href="/uploads/{{ fieldVal }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-file-earmark me-1"></i>View current file
+              </a>
+              <span class="text-muted ms-2" style="font-size:0.8rem;">Upload a new file to replace it.</span>
+            </div>
+            {% endif %}
+            <input type="file" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+              {% if field.is_required and not fieldVal %}required{% endif %}>
 
             {# ── Text (default) — with optional max_length ── #}
             {% else %}

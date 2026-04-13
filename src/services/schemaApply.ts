@@ -15,7 +15,9 @@ const TYPE_MAP: Record<FieldDataType, string> = {
   datetime:   'TEXT',
   time:       'TEXT',
   json:       'TEXT',
-  uuid:       'TEXT'
+  uuid:       'TEXT',
+  image:      'TEXT',
+  upload:     'TEXT',
 };
 
 function buildColumnDef(field: AppField): string {

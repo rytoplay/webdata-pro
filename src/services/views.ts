@@ -1,5 +1,5 @@
 import { db } from '../db/knex';
-import { getAppDb } from '../db/adapters/appDb';
+import { getAppDb, castToText } from '../db/adapters/appDb';
 import { buildJoinQuery, parseColumnRefs } from './queryBuilder';
 import { getRecordMeta, metaToRowKeys } from './recordMeta';
 import type { GroupConcatSpec } from './queryBuilder';
@@ -260,7 +260,7 @@ export function parseViewTokens(templates: Partial<ViewTemplates>) {
   const tokenContents: string[] = [];
   let m: RegExpExecArray | null;
   const curlyRe  = /\$\{([^}]+)\}/g;
-  const bracketRe = /\$(?:update|search)\[([^\]]+)\]/g;
+  const bracketRe = /\$(?:update|search|thumbnail|img)\[([^\]]+)\]/g;
   while ((m = curlyRe.exec(combined))   !== null) tokenContents.push(m[1]);
   while ((m = bracketRe.exec(combined)) !== null) tokenContents.push(m[1]);
 
@@ -490,7 +490,24 @@ function processIfTags(template: string, data: Record<string, unknown>): string 
 }
 
 export function renderTokens(template: string, data: Record<string, unknown>): string {
-  const afterIf = processIfTags(template, data);
+  // $thumbnail[table.field] → <img src="/uploads/..." width="100"> (thumbnail)
+  let result = template.replace(/\$thumbnail\[([^\]]+)\]/g, (_, ref: string) => {
+    const alias = ref.replace('.', '__');
+    const val   = String(data[alias] ?? data[ref] ?? '');
+    if (!val) return '';
+    const thumb = val.replace(/(\.[^.]+)$/, '_thumb$1');
+    return `<img src="/uploads/${thumb}" width="100" style="border-radius:4px;" alt="">`;
+  });
+
+  // $img[table.field] → <img src="/uploads/..."> (full image)
+  result = result.replace(/\$img\[([^\]]+)\]/g, (_, ref: string) => {
+    const alias = ref.replace('.', '__');
+    const val   = String(data[alias] ?? data[ref] ?? '');
+    if (!val) return '';
+    return `<img src="/uploads/${val}" style="max-width:100%;" alt="">`;
+  });
+
+  const afterIf = processIfTags(result, data);
   return afterIf.replace(/\$\{([^}]+)\}/g, (_, token: string) => {
     if (token in data) return String(data[token] ?? '');
     if (token.includes('.')) {
@@ -572,12 +589,20 @@ export async function renderViewList(
 
   // Determine sort — for auto SQL the columns are aliased as table__field,
   // so we must prefix the sort/group field names with the base table name.
+  // Meta sort fields (_meta__created_at etc.) come from _wdpro_metadata and are never prefixed.
+  const META_SORT = new Set(['_meta__created_at', '_meta__updated_at', '_meta__created_by']);
   const isAuto = view.query_mode !== 'advanced_sql';
   const rawSort  = params.sort ?? view.primary_sort_field ?? null;
-  const sortField = rawSort ? (isAuto ? `${baseTableName}__${rawSort}` : rawSort) : null;
+  const isMetaSort = rawSort ? META_SORT.has(rawSort) : false;
+  const sortField = rawSort
+    ? (isMetaSort ? rawSort : (isAuto ? `${baseTableName}__${rawSort}` : rawSort))
+    : null;
   const sortDir   = (params.dir ?? view.primary_sort_direction ?? 'asc').toUpperCase();
   const rawSecondary = view.secondary_sort_field ?? null;
-  const secondarySort = rawSecondary ? (isAuto ? `${baseTableName}__${rawSecondary}` : rawSecondary) : null;
+  const isMetaSecondary = rawSecondary ? META_SORT.has(rawSecondary) : false;
+  const secondarySort = rawSecondary
+    ? (isMetaSecondary ? rawSecondary : (isAuto ? `${baseTableName}__${rawSecondary}` : rawSecondary))
+    : null;
   const rawGroup = view.grouping_field ?? null;
   const groupField = rawGroup ? (isAuto ? `${baseTableName}__${rawGroup}` : rawGroup) : null;
 
@@ -632,13 +657,25 @@ export async function renderViewList(
   if (params.ownerId) {
     const pkAlias = isAuto ? `${baseTableName}__${pkName}` : pkName;
     whereParts.push(
-      `EXISTS (SELECT 1 FROM _wdpro_metadata WHERE _wdpro_metadata.record_id = CAST("_v"."${pkAlias}" AS TEXT) AND _wdpro_metadata.table_name = ? AND _wdpro_metadata.created_by_id = ?)`
+      `EXISTS (SELECT 1 FROM _wdpro_metadata WHERE _wdpro_metadata.record_id = ${castToText(app, `"_v"."${pkAlias}"`)} AND _wdpro_metadata.table_name = ? AND _wdpro_metadata.created_by_id = ?)`
     );
     bindings.push(baseTableName, String(params.ownerId));
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
-  const outerSql = `SELECT * FROM (${baseSql}) AS _v ${whereSql}`;
+
+  // If sorting by a metadata field, LEFT JOIN _wdpro_metadata to get those columns
+  const needsMetaJoin = isMetaSort || isMetaSecondary;
+  let outerSql: string;
+  if (needsMetaJoin) {
+    const pkAlias = isAuto ? `${baseTableName}__${pkName}` : pkName;
+    outerSql = `SELECT _v.*, _m.created_at AS "_meta__created_at", _m.updated_at AS "_meta__updated_at", _m.created_by_name AS "_meta__created_by" ` +
+      `FROM (${baseSql}) AS _v ` +
+      `LEFT JOIN _wdpro_metadata _m ON ${castToText(app, `_v."${pkAlias}"`)} = _m.record_id AND _m.table_name = '${baseTableName}' ` +
+      whereSql;
+  } else {
+    outerSql = `SELECT * FROM (${baseSql}) AS _v ${whereSql}`;
+  }
 
   let sortSql = '';
   if (sortField) {
