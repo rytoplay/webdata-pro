@@ -275,15 +275,23 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
         });
       }
 
-      // View permissions
+      // View permissions — and pick first can_view view as home
+      let homeViewId: number | null = null;
       for (const [vName, vp] of Object.entries(bg.view_permissions ?? {})) {
         const viewId = viewIdByName.get(vName);
         if (!viewId) continue;
+        const canView = vp.can_view ?? true;
         await groupsService.saveViewPermGrid(group.id, [{
           view_id:              viewId,
-          can_view:             vp.can_view             ?? true,
+          can_view:             canView,
           limit_to_own_records: vp.limit_to_own_records ?? false,
         }]);
+        if (canView && homeViewId === null) homeViewId = viewId;
+      }
+
+      // Set default home view so members land directly on the main view after login
+      if (homeViewId !== null) {
+        await groupsService.updateGroup(group.id, { default_home_view_id: homeViewId });
       }
     } catch (err) {
       result.errors.push(`Group "${bg.group_name}": ${err instanceof Error ? err.message : String(err)}`);
