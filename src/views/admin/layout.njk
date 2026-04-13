@@ -227,6 +227,11 @@
     <ul class="nav flex-column px-1 mt-2 flex-grow-1">
       <div class="nav-section-label">{{ currentApp.name if currentApp else 'App' }}</div>
       <li class="nav-item">
+        <a class="nav-link {% if not currentApp %}dimmed{% endif %}" href="/admin/blueprint">
+          <i class="bi bi-stars"></i> AI Builder
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link {% if not currentApp %}dimmed{% endif %}" href="/admin/tables">
           <i class="bi bi-table"></i> Tables
         </a>

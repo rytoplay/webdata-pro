@@ -13,6 +13,7 @@ import { settingsRouter } from './settings';
 import { groupsRouter } from './groups';
 import { membersRouter } from './members';
 import { homeRouter } from './home';
+import { blueprintRouter } from './blueprint';
 
 export const adminRouter = Router();
 
@@ -73,4 +74,5 @@ adminRouter.get('/templates', requireApp, (_req, res) => res.render('admin/stub'
 adminRouter.use('/groups',    requireApp, groupsRouter);
 adminRouter.use('/members',    requireApp, membersRouter);
 adminRouter.use('/home',       requireApp, homeRouter);
+adminRouter.use('/blueprint',  requireApp, blueprintRouter);
 adminRouter.get('/auth',      requireApp, (_req, res) => res.render('admin/stub', { title: 'Auth / SSO' }));

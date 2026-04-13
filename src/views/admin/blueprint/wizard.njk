@@ -1,0 +1,318 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-stars me-2"></i>AI App Builder</h1>
+  <a href="/admin/tables" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-table me-1"></i>Tables
+  </a>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show mb-4">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if not aiSettings or (aiSettings.provider === 'ollama' and not aiSettings.baseUrl) %}
+<div class="alert alert-warning mb-4">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  No AI provider configured.
+  <a href="/admin/settings" class="alert-link">Configure AI settings</a> first.
+</div>
+{% endif %}
+
+<div class="row g-4">
+
+  {# ── Left: wizard form ── #}
+  <div class="col-lg-6">
+    <form id="wizard-form">
+
+      <div class="card shadow-sm mb-3">
+        <div class="card-header py-2"><strong>1. What are you building?</strong></div>
+        <div class="card-body">
+          <label class="form-label">Describe your database in plain English</label>
+          <textarea name="description" class="form-control" rows="3"
+            placeholder="e.g. A database of classic cars for sale, with photos, price, year, make, model and condition"
+            required></textarea>
+          <div class="form-text">Be specific — mention the subject, what you'll track, and any important details.</div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-3">
+        <div class="card-header py-2"><strong>2. Fields</strong></div>
+        <div class="card-body">
+          <div class="mb-3">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="known_fields" id="kf-yes" value="yes" checked>
+              <label class="form-check-label" for="kf-yes">I know my fields</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="known_fields" id="kf-no" value="no">
+              <label class="form-check-label" for="kf-no">Generate typical fields for me</label>
+            </div>
+          </div>
+          <div id="field-list-wrap">
+            <label class="form-label">List your fields <span class="text-muted">(one per line, e.g. <em>title, price, description, photo</em>)</span></label>
+            <textarea name="field_list" class="form-control" rows="5"
+              placeholder="title&#10;price&#10;description&#10;photo&#10;condition"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-3">
+        <div class="card-header py-2"><strong>3. Public access</strong></div>
+        <div class="card-body">
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="is_public" id="pub-yes" value="yes" checked>
+            <label class="form-check-label" for="pub-yes">Yes — public can browse without logging in</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="is_public" id="pub-no" value="no">
+            <label class="form-check-label" for="pub-no">No — login required</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-3">
+        <div class="card-header py-2"><strong>4. List layout</strong></div>
+        <div class="card-body">
+          <div class="row g-2 mb-2" id="layout-presets">
+            <div class="col-auto">
+              <button type="button" class="btn btn-sm btn-outline-secondary layout-preset active"
+                data-value="compact table with one row per record showing the most important fields">
+                <i class="bi bi-table me-1"></i>Compact table
+              </button>
+            </div>
+            <div class="col-auto">
+              <button type="button" class="btn btn-sm btn-outline-secondary layout-preset"
+                data-value="card grid layout with a card per record showing an image (if available), title, and key details">
+                <i class="bi bi-grid me-1"></i>Card grid
+              </button>
+            </div>
+            <div class="col-auto">
+              <button type="button" class="btn btn-sm btn-outline-secondary layout-preset"
+                data-value="vertical list with each record as a full-width row with title bold and secondary details below">
+                <i class="bi bi-list-ul me-1"></i>Vertical list
+              </button>
+            </div>
+          </div>
+          <input type="text" name="layout_style" id="layout-style-input" class="form-control form-control-sm"
+            value="compact table with one row per record showing the most important fields"
+            placeholder="Describe your preferred layout…">
+          <div class="form-text">Or type a custom description.</div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-4">
+        <div class="card-header py-2"><strong>5. Member accounts</strong></div>
+        <div class="card-body">
+          <div class="mb-2">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" name="has_admin_group" id="adm-yes" value="yes" checked>
+              <label class="form-check-label" for="adm-yes">
+                Create a <strong>managers</strong> group with full data access
+              </label>
+            </div>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="has_member_group" id="mem-yes" value="yes">
+            <label class="form-check-label" for="mem-yes">
+              Create a <strong>members</strong> group — can add records, edit only their own
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="generate-btn">
+        <i class="bi bi-stars me-1"></i>Generate Blueprint
+      </button>
+
+    </form>
+  </div>
+
+  {# ── Right: result panel ── #}
+  <div class="col-lg-6">
+
+    <div id="result-idle" class="card shadow-sm h-100 d-flex align-items-center justify-content-center" style="min-height:300px;">
+      <div class="text-center text-muted py-5">
+        <i class="bi bi-stars fs-1 d-block mb-2 opacity-25"></i>
+        <p class="mb-0">Fill in the form and click <strong>Generate Blueprint</strong></p>
+      </div>
+    </div>
+
+    <div id="result-loading" class="card shadow-sm d-none" style="min-height:300px;">
+      <div class="card-body d-flex align-items-center justify-content-center py-5">
+        <div class="text-center text-muted">
+          <div class="spinner-border mb-3" role="status"><span class="visually-hidden">Loading…</span></div>
+          <p class="mb-0">Generating blueprint…</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="result-error" class="d-none">
+      <div class="alert alert-danger">
+        <strong>Error:</strong> <span id="error-message"></span>
+      </div>
+      <div id="raw-output-wrap" class="d-none">
+        <p class="text-muted small mb-1">Raw AI output:</p>
+        <pre id="raw-output" class="bg-light p-3 rounded" style="font-size:0.78rem;max-height:200px;overflow:auto;"></pre>
+      </div>
+    </div>
+
+    <div id="result-preview" class="d-none">
+      <div class="card shadow-sm mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <strong><i class="bi bi-check2-circle text-success me-2"></i>Blueprint ready</strong>
+          <button class="btn btn-sm btn-outline-secondary" id="toggle-raw-btn" type="button">Show JSON</button>
+        </div>
+        <div class="card-body p-0">
+          <div id="blueprint-summary" class="p-3"></div>
+        </div>
+      </div>
+
+      <div id="raw-json-wrap" class="d-none mb-3">
+        <pre id="raw-json" class="bg-light p-3 rounded" style="font-size:0.75rem;max-height:300px;overflow:auto;"></pre>
+      </div>
+
+      <form method="POST" action="/admin/blueprint/apply" id="apply-form">
+        <input type="hidden" name="blueprint_json" id="blueprint-json-field">
+        <button type="submit" class="btn btn-success me-2" id="apply-btn">
+          <i class="bi bi-lightning-fill me-1"></i>Apply — Build My App
+        </button>
+        <button type="button" class="btn btn-outline-secondary" id="regenerate-btn">
+          <i class="bi bi-arrow-clockwise me-1"></i>Regenerate
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function() {
+
+  // Layout preset buttons
+  document.querySelectorAll('.layout-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.layout-preset').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('layout-style-input').value = btn.dataset.value;
+    });
+  });
+  document.getElementById('layout-style-input').addEventListener('input', () => {
+    document.querySelectorAll('.layout-preset').forEach(b => b.classList.remove('active'));
+  });
+
+  // Show/hide field list based on radio
+  document.querySelectorAll('input[name="known_fields"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('field-list-wrap').style.display =
+        document.querySelector('input[name="known_fields"]:checked').value === 'yes' ? '' : 'none';
+    });
+  });
+
+  // Toggle raw JSON
+  const toggleRawBtn = document.getElementById('toggle-raw-btn');
+  const rawJsonWrap  = document.getElementById('raw-json-wrap');
+  toggleRawBtn.addEventListener('click', () => {
+    const hidden = rawJsonWrap.classList.toggle('d-none');
+    toggleRawBtn.textContent = hidden ? 'Show JSON' : 'Hide JSON';
+  });
+
+  // Regenerate button — scroll back to form, re-enable submit
+  document.getElementById('regenerate-btn').addEventListener('click', () => {
+    showPanel('idle');
+    document.getElementById('wizard-form').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // ── Panels ──
+  function showPanel(name) {
+    ['idle','loading','error','preview'].forEach(n => {
+      const el = document.getElementById('result-' + n);
+      if (el) el.classList.toggle('d-none', n !== name);
+    });
+  }
+
+  // ── Generate ──
+  document.getElementById('wizard-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showPanel('loading');
+
+    const fd = new FormData(e.target);
+    const body = new URLSearchParams();
+    for (const [k, v] of fd.entries()) body.append(k, v);
+
+    // Checkboxes: include value "yes" only when checked
+    ['has_admin_group','has_member_group'].forEach(name => {
+      const cb = e.target.querySelector(`[name="${name}"]`);
+      if (!cb.checked) body.delete(name);
+    });
+
+    try {
+      const res = await fetch('/admin/blueprint/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        document.getElementById('error-message').textContent = data.error ?? 'Unknown error';
+        if (data.raw) {
+          document.getElementById('raw-output').textContent = data.raw;
+          document.getElementById('raw-output-wrap').classList.remove('d-none');
+        }
+        showPanel('error');
+        return;
+      }
+
+      // Populate preview
+      const bp = data.blueprint;
+      document.getElementById('blueprint-json-field').value = JSON.stringify(bp);
+      document.getElementById('raw-json').textContent = JSON.stringify(bp, null, 2);
+      document.getElementById('blueprint-summary').innerHTML = buildSummaryHtml(bp);
+      showPanel('preview');
+
+    } catch (err) {
+      document.getElementById('error-message').textContent = err.message;
+      document.getElementById('raw-output-wrap').classList.add('d-none');
+      showPanel('error');
+    }
+  });
+
+  function buildSummaryHtml(bp) {
+    let html = '';
+
+    (bp.tables ?? []).forEach(t => {
+      html += `<div class="mb-3">`;
+      html += `<div class="fw-semibold mb-1"><i class="bi bi-table me-1 text-primary"></i>${esc(t.label)} <code class="text-muted" style="font-size:0.8rem;">${esc(t.table_name)}</code></div>`;
+      html += `<ul class="mb-0 ps-3" style="font-size:0.875rem;">`;
+      (t.fields ?? []).forEach(f => {
+        html += `<li>${esc(f.label ?? f.field_name)} <span class="text-muted">(${esc(f.data_type)}${f.is_required ? ', required' : ''})</span></li>`;
+      });
+      html += `</ul></div>`;
+    });
+
+    (bp.views ?? []).forEach(v => {
+      html += `<div class="mb-2"><i class="bi bi-layout-text-window me-1 text-success"></i><strong>${esc(v.label)}</strong>`;
+      html += ` <span class="badge ${v.is_public ? 'bg-info' : 'bg-secondary'} ms-1">${v.is_public ? 'public' : 'login required'}</span></div>`;
+    });
+
+    (bp.groups ?? []).forEach(g => {
+      html += `<div class="mb-1"><i class="bi bi-people me-1 text-warning"></i><strong>${esc(g.group_name)}</strong>`;
+      if (g.description) html += ` <span class="text-muted" style="font-size:0.875rem;">${esc(g.description)}</span>`;
+      html += `</div>`;
+    });
+
+    return html;
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+})();
+</script>
+{% endblock %}
