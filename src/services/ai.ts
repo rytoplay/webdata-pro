@@ -156,11 +156,11 @@ export function extractJson(text: string): string {
 /**
  * Fix common model mistakes that produce invalid JSON:
  * - Backtick template literals → double-quoted strings
+ * - Invalid escape sequences like \$ \# \! → unescaped character
  */
 export function sanitizeJson(text: string): string {
-  // Replace backtick strings (possibly multiline) with double-quoted JSON strings.
-  // Must handle: backslashes, double-quotes, newlines, tabs inside the backtick content.
-  return text.replace(/`([\s\S]*?)`/g, (_match, content: string) => {
+  // 1. Replace backtick strings (possibly multiline) with double-quoted JSON strings.
+  let result = text.replace(/`([\s\S]*?)`/g, (_match, content: string) => {
     const escaped = content
       .replace(/\\/g, '\\\\')
       .replace(/"/g, '\\"')
@@ -170,6 +170,16 @@ export function sanitizeJson(text: string): string {
       .replace(/\t/g, '\\t');
     return `"${escaped}"`;
   });
+
+  // 2. Remove invalid JSON escape sequences inside double-quoted strings.
+  // Valid JSON escapes: \" \\ \/ \b \f \n \r \t \uXXXX
+  // Everything else (e.g. \$ \# \!) is invalid — strip the backslash.
+  result = result.replace(/"((?:[^"\\]|\\.)*)"/g, (_match, inner: string) => {
+    const fixed = inner.replace(/\\([^"\\\/bfnrtu])/g, '$1');
+    return `"${fixed}"`;
+  });
+
+  return result;
 }
 
 /**

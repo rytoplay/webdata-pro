@@ -107,9 +107,7 @@ export function validateBlueprint(bp: unknown): BlueprintError[] {
         if (!f.field_name || typeof f.field_name !== 'string') {
           errors.push({ path: `tables[${i}].fields[${j}].field_name`, message: 'Missing field_name' });
         }
-        if (f.data_type && !VALID_DATA_TYPES.has(f.data_type as string)) {
-          errors.push({ path: `tables[${i}].fields[${j}].data_type`, message: `Unknown data_type "${f.data_type}"` });
-        }
+        // Unknown data_types are silently mapped to 'string' at apply time — not a hard error.
         if (f.ui_widget && !VALID_WIDGETS.has(f.ui_widget as string)) {
           errors.push({ path: `tables[${i}].fields[${j}].ui_widget`, message: `Unknown ui_widget "${f.ui_widget}"` });
         }
