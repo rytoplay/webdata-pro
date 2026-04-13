@@ -5,7 +5,7 @@ export const BLUEPRINT_SYSTEM_PROMPT = `You are a database schema designer for W
 ## Webdata Pro data model
 
 ### Tables & Fields
-Each table has an auto-increment integer primary key called "id" (already created — do not include it in the fields array).
+Each table has an auto-increment integer primary key called "id" that is created automatically. NEVER include "id" in the fields array.
 
 Field properties:
 - field_name: snake_case, starts with a letter

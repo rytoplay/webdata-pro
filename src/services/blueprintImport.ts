@@ -152,6 +152,8 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
       result.tablesCreated.push(bt.label || bt.table_name);
 
       for (const bf of (bt.fields ?? [])) {
+        // Skip id — createTable already adds it automatically
+        if (bf.field_name === 'id') continue;
         try {
           const dataType = (VALID_DATA_TYPES.has(bf.data_type) ? bf.data_type : 'string') as FieldDataType;
           const widget   = (bf.ui_widget && VALID_WIDGETS.has(bf.ui_widget) ? bf.ui_widget : undefined) as UIWidget | undefined;
@@ -209,7 +211,14 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
       result.viewsCreated.push(bv.label || bv.view_name);
 
       if (bv.templates && Object.keys(bv.templates).length > 0) {
-        await viewsService.saveViewTemplates(app.id, view.id, bv.templates as Partial<import('./views').ViewTemplates>);
+        // Ensure all template values are strings (AI may return non-string values)
+        const safeTemplates: Partial<import('./views').ViewTemplates> = {};
+        for (const [k, v] of Object.entries(bv.templates)) {
+          if (v !== undefined && v !== null) {
+            (safeTemplates as Record<string, string>)[k] = typeof v === 'string' ? v : JSON.stringify(v);
+          }
+        }
+        await viewsService.saveViewTemplates(app.id, view.id, safeTemplates);
       }
     } catch (err) {
       result.errors.push(`View "${bv.view_name}": ${err instanceof Error ? err.message : String(err)}`);
