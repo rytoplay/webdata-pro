@@ -172,6 +172,20 @@ detail, edit_form, create_form: use PATTERN A above.
   e.g. { "listings_browse": { "can_view": true, "limit_to_own_records": false } }
   NEVER put view_permissions inside a view object.
 
+## Sample Data
+Include a "sample_data" key with 10–12 realistic records per table.
+- Each record is a plain object with field values only — do NOT include "id", "created_at", or "updated_at".
+- Use realistic, specific values that make the demo credible: real-sounding names/titles, plausible numbers, ISO date strings (YYYY-MM-DD) for date fields, true/false for boolean fields.
+- Omit image and upload fields — leave them out entirely.
+- Vary the values — don't repeat the same category or price for every record.
+
+"sample_data": {
+  "items": [
+    { "title": "Mountain Bike Pro 29", "price": 1299.99, "category": "Bikes", "city": "Denver", "description": "Full suspension trail bike" },
+    { "title": "Road Racer Carbon", "price": 2499.00, "category": "Bikes", "city": "Austin", "description": "Lightweight carbon frame" }
+  ]
+}
+
 ## Output format
 Return ONLY a JSON object with this structure. No explanation, no markdown fences.
 
@@ -220,7 +234,13 @@ Return ONLY a JSON object with this structure. No explanation, no markdown fence
         "items_browse": { "can_view": true, "limit_to_own_records": false }
       }
     }
-  ]
+  ],
+  "sample_data": {
+    "items": [
+      { "title": "Example Item One", "price": 49.99, "category": "Widget" },
+      { "title": "Example Item Two", "price": 129.00, "category": "Gadget" }
+    ]
+  }
 }`;
 
 // ── User prompt builder ───────────────────────────────────────────────────────
@@ -278,6 +298,12 @@ export function buildUserPrompt(a: WizardAnswers): string {
   lines.push('- edit_form and create_form: one .wdp-form-group / .wdp-label / .wdp-input (or .wdp-textarea / .wdp-select) per editable field.');
   lines.push('- Use $currency[fieldname,2] for price/monetary fields.');
   lines.push('- Use $sort[fieldname,Label] in header <th> cells for sortable columns.');
+  lines.push('');
+  lines.push('Sample data requirements:');
+  lines.push('- Include 10–12 realistic records in the "sample_data" key for each table.');
+  lines.push('- Use specific, varied, real-sounding values — not generic placeholders like "Sample Title 1".');
+  lines.push('- Do NOT include "id", "created_at", or "updated_at" in sample records.');
+  lines.push('- Omit image and upload fields from sample records.');
   lines.push('');
   lines.push('Return ONLY the JSON object. No prose, no markdown fences.');
 

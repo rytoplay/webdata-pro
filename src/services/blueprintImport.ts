@@ -2,6 +2,8 @@ import * as tablesService from './tables';
 import * as fieldsService from './fields';
 import * as viewsService from './views';
 import * as groupsService from './groups';
+import { touchRecordMeta } from './recordMeta';
+import { getAppDb } from '../db/adapters/appDb';
 import type { App } from '../domain/types';
 import type { FieldDataType, UIWidget } from '../domain/types';
 
@@ -63,6 +65,7 @@ export interface Blueprint {
   tables: BlueprintTable[];
   views?: BlueprintView[];
   groups?: BlueprintGroup[];
+  sample_data?: Record<string, Record<string, unknown>[]>;
 }
 
 // ── Validation ───────────────────────────────────────────────────────────────
@@ -124,6 +127,7 @@ export interface BlueprintApplyResult {
   fieldsCreated: number;
   viewsCreated: string[];
   groupsCreated: string[];
+  rowsInserted: number;
   errors: string[];
 }
 
@@ -131,7 +135,7 @@ export interface BlueprintApplyResult {
 
 export async function applyBlueprint(app: App, bp: Blueprint): Promise<BlueprintApplyResult> {
   const result: BlueprintApplyResult = {
-    tablesCreated: [], fieldsCreated: 0, viewsCreated: [], groupsCreated: [], errors: []
+    tablesCreated: [], fieldsCreated: 0, viewsCreated: [], groupsCreated: [], rowsInserted: 0, errors: []
   };
 
   // Track name → id mappings for cross-references
@@ -303,6 +307,62 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
       }
     } catch (err) {
       result.errors.push(`Group "${bg.group_name}": ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // ── Sample Data ───────────────────────────────────────────────────────────
+  if (bp.sample_data && Object.keys(bp.sample_data).length > 0) {
+    const appDb = getAppDb(app);
+    const SKIP_TYPES = new Set(['image', 'upload']);
+    const RESERVED   = new Set(['id', 'created_at', 'updated_at']);
+
+    // Spread insertion timestamps evenly over the past 30 days so the data
+    // looks like it accumulated naturally rather than all appearing at once.
+    const nowMs       = Date.now();
+    const thirtyDays  = 30 * 24 * 60 * 60 * 1000;
+
+    for (const [tableName, rows] of Object.entries(bp.sample_data)) {
+      if (!Array.isArray(rows) || rows.length === 0) continue;
+      const tableId = tableIdByName.get(tableName);
+      if (!tableId) continue;
+
+      const tableFields = await fieldsService.listFields(tableId);
+      const fieldMap    = new Map(tableFields.map(f => [f.field_name, f]));
+
+      for (let i = 0; i < rows.length; i++) {
+        const row    = rows[i] as Record<string, unknown>;
+        const record: Record<string, unknown> = {};
+
+        for (const [key, val] of Object.entries(row)) {
+          if (RESERVED.has(key)) continue;
+          const field = fieldMap.get(key);
+          if (!field || SKIP_TYPES.has(field.data_type)) continue;
+          if (field.data_type === 'boolean') {
+            record[key] = val ? 1 : 0;
+          } else if (val === null || val === undefined || val === '') {
+            record[key] = null;
+          } else {
+            record[key] = val;
+          }
+        }
+
+        if (Object.keys(record).length === 0) continue;
+
+        try {
+          const ids = await appDb(tableName).insert(record);
+          const insertedId = Array.isArray(ids) ? ids[0] : ids;
+
+          // Older records get timestamps further in the past
+          const fraction  = rows.length > 1 ? i / (rows.length - 1) : 0;
+          const ts        = new Date(nowMs - thirtyDays * (1 - fraction))
+            .toISOString().replace('T', ' ').substring(0, 19);
+
+          await touchRecordMeta(app, tableName, insertedId, null, 'Sample Data', ts);
+          result.rowsInserted++;
+        } catch (err) {
+          result.errors.push(`Sample "${tableName}[${i}]": ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
     }
   }
 

@@ -49,7 +49,7 @@ blueprintRouter.post('/generate', async (req, res, next) => {
 
     let raw: string;
     try {
-      raw = await aiService.callAi(aiSettings, BLUEPRINT_SYSTEM_PROMPT, userPrompt, 8192);
+      raw = await aiService.callAi(aiSettings, BLUEPRINT_SYSTEM_PROMPT, userPrompt, 16000);
     } catch (err) {
       return res.status(502).json({ error: `AI call failed: ${err instanceof Error ? err.message : String(err)}` });
     }
@@ -104,6 +104,7 @@ blueprintRouter.post('/apply', async (req, res, next) => {
     if (result.fieldsCreated)         parts.push(`${result.fieldsCreated} field(s)`);
     if (result.viewsCreated.length)   parts.push(`${result.viewsCreated.length} view(s)`);
     if (result.groupsCreated.length)  parts.push(`${result.groupsCreated.length} group(s)`);
+    if (result.rowsInserted)          parts.push(`${result.rowsInserted} sample record(s)`);
 
     const summary = parts.length ? `Created: ${parts.join(', ')}.` : 'Nothing was created.';
     const errorNote = result.errors.length
