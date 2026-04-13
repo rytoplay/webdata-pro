@@ -93,25 +93,6 @@
   </table>
 </div>
 {% endif %}
-
-<div class="card shadow-sm mt-4">
-  <div class="card-header"><i class="bi bi-box-arrow-up-right me-2"></i><strong>Embed Instructions</strong></div>
-  <div class="card-body">
-    <p class="text-muted small mb-2">Add to any HTML page or WordPress site:</p>
-    <pre class="p-3 rounded" style="background:var(--accent-soft);font-size:0.8rem;">&lt;!-- Place where you want the widget --&gt;
-&lt;div id="my-widget"&gt;&lt;/div&gt;
-
-&lt;!-- Before &lt;/body&gt; --&gt;
-&lt;script src="{{ request.protocol }}://{{ request.hostname }}{% if request.port != 80 and request.port != 443 %}:{{ request.port }}{% endif %}/static/embed.js"&gt;&lt;/script&gt;
-&lt;script&gt;
-  WDP.mount('#my-widget', {
-    app:     '{{ currentApp.slug }}',
-    view:    'your-view-name',
-    baseUrl: '{{ request.protocol }}://{{ request.hostname }}{% if request.port != 80 and request.port != 443 %}:{{ request.port }}{% endif %}'
-  });
-&lt;/script&gt;</pre>
-  </div>
-</div>
 <script>
 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
   new bootstrap.Tooltip(el);
