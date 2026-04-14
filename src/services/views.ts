@@ -663,21 +663,31 @@ export async function renderViewList(
   // Determine sort — for auto SQL the columns are aliased as table__field,
   // so we must prefix the sort/group field names with the base table name.
   // Meta sort fields (_meta__created_at etc.) come from _wdpro_metadata and are never prefixed.
+  // Sort buttons generate alias-format sort params (e.g. "items__genre_id") while
+  // view.primary_sort_field stores bare field names (e.g. "genre_id"). Normalise to bare name first.
   const META_SORT = new Set(['_meta__created_at', '_meta__updated_at', '_meta__created_by']);
   const isAuto = view.query_mode !== 'advanced_sql';
+
+  // Normalise a raw sort/group field to its SQL alias form.
+  // - Meta sorts (_meta__*) are passed through unchanged.
+  // - Fields that already contain __ are already full aliases (e.g. "genres__name"
+  //   from a sort button on a joined column) — use them as-is.
+  // - Bare field names (e.g. "title", "genre_id" from view.primary_sort_field)
+  //   need the base-table prefix prepended.
+  const toAlias = (raw: string): string => {
+    if (META_SORT.has(raw)) return raw;
+    if (!isAuto) return raw;
+    return raw.includes('__') ? raw : `${baseTableName}__${raw}`;
+  };
+
   const rawSort  = params.sort ?? view.primary_sort_field ?? null;
   const isMetaSort = rawSort ? META_SORT.has(rawSort) : false;
-  const sortField = rawSort
-    ? (isMetaSort ? rawSort : (isAuto ? `${baseTableName}__${rawSort}` : rawSort))
-    : null;
+  const sortField = rawSort ? toAlias(rawSort) : null;
   const sortDir   = (params.dir ?? view.primary_sort_direction ?? 'asc').toUpperCase();
   const rawSecondary = view.secondary_sort_field ?? null;
-  const isMetaSecondary = rawSecondary ? META_SORT.has(rawSecondary) : false;
-  const secondarySort = rawSecondary
-    ? (isMetaSecondary ? rawSecondary : (isAuto ? `${baseTableName}__${rawSecondary}` : rawSecondary))
-    : null;
+  const secondarySort = rawSecondary ? toAlias(rawSecondary) : null;
   const rawGroup = view.grouping_field ?? null;
-  const groupField = rawGroup ? (isAuto ? `${baseTableName}__${rawGroup}` : rawGroup) : null;
+  const groupField = rawGroup ? toAlias(rawGroup) : null;
 
   // Wrap for search + sort + count
   const q            = params.q?.trim() ?? '';
@@ -738,6 +748,7 @@ export async function renderViewList(
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   // If sorting by a metadata field, LEFT JOIN _wdpro_metadata to get those columns
+  const isMetaSecondary = rawSecondary ? META_SORT.has(rawSecondary) : false;
   const needsMetaJoin = isMetaSort || isMetaSecondary;
   let outerSql: string;
   if (needsMetaJoin) {

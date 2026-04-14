@@ -11,7 +11,7 @@ export interface AiSettings {
 
 const DEFAULTS: AiSettings = {
   provider: 'ollama',
-  model:    'llama3.2',
+  model:    'qwen3.5',
   baseUrl:  'http://localhost:11434',
   apiKey:   '',
 };
@@ -57,10 +57,11 @@ export async function callAi(
   settings: AiSettings,
   systemPrompt: string,
   userPrompt: string,
-  maxTokens?: number
+  maxTokens?: number,
+  temperature?: number,
 ): Promise<string> {
   switch (settings.provider) {
-    case 'ollama':     return callOllama(settings, systemPrompt, userPrompt, maxTokens);
+    case 'ollama':     return callOllama(settings, systemPrompt, userPrompt, maxTokens, temperature);
     case 'anthropic':  return callAnthropic(settings, systemPrompt, userPrompt, maxTokens);
     case 'openai':     return callOpenAI(settings, systemPrompt, userPrompt, maxTokens);
   }
@@ -68,27 +69,46 @@ export async function callAi(
 
 // ── Providers ────────────────────────────────────────────────────────────────
 
-async function callOllama(s: AiSettings, system: string, user: string, maxTokens?: number): Promise<string> {
-  // Some Qwen3 models support /no_think to skip the reasoning step — faster output.
-  const userMsg = s.model.toLowerCase().startsWith('qwen') ? `/no_think\n\n${user}` : user;
+async function callOllama(s: AiSettings, system: string, user: string, maxTokens?: number, temperature?: number): Promise<string> {
+  const userMsg = user;
 
   const res = await fetch(`${s.baseUrl}/api/chat`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model:    s.model,
-      stream:   false,
+      stream:   true,
       messages: [
         { role: 'system',  content: system },
         { role: 'user',    content: userMsg },
       ],
-      options: { temperature: 0.7, num_predict: maxTokens ?? 4096 },
+      options: {
+        temperature: temperature ?? 0.7,
+        num_predict: Math.min(maxTokens ?? 4096, 6000),
+        num_ctx:     8192,
+      },
+      think: s.model.toLowerCase().startsWith('qwen') ? false : undefined,
     }),
     signal: AbortSignal.timeout(600_000),   // 10 min — large local models are slow without a GPU
   });
   if (!res.ok) throw new Error(`Ollama error ${res.status}: ${await res.text()}`);
-  const data = await res.json() as { message?: { content: string } };
-  return stripThink(data.message?.content ?? '');
+
+  // Collect streamed chunks — keeps the TCP connection alive during long generations
+  const chunks: string[] = [];
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const line of decoder.decode(value).split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const chunk = JSON.parse(line) as { message?: { content: string }; done?: boolean };
+        if (chunk.message?.content) chunks.push(chunk.message.content);
+      } catch { /* ignore partial lines */ }
+    }
+  }
+  return stripThink(chunks.join(''));
 }
 
 async function callAnthropic(s: AiSettings, system: string, user: string, maxTokens?: number): Promise<string> {

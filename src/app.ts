@@ -1,11 +1,14 @@
 import express, { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
+import SQLiteStore from 'connect-sqlite3';
 import nunjucks from 'nunjucks';
 import path from 'path';
 import { config } from './config';
 import { adminRouter } from './routes/admin';
 import { apiViewsRouter } from './routes/api/views';
 import { memberRouter } from './routes/member';
+
+const SqliteSessionStore = SQLiteStore(session);
 
 export function createApp(): express.Application {
   const app = express();
@@ -15,6 +18,7 @@ export function createApp(): express.Application {
 
   app.use(
     session({
+      store: new SqliteSessionStore({ db: 'sessions.sqlite', dir: './' }),
       secret: config.session.secret,
       resave: false,
       saveUninitialized: false,

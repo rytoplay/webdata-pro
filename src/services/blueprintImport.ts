@@ -4,6 +4,9 @@ import * as viewsService from './views';
 import * as groupsService from './groups';
 import { touchRecordMeta } from './recordMeta';
 import { getAppDb } from '../db/adapters/appDb';
+import { db } from '../db/knex';
+import { buildStarterTemplates } from './templateGen';
+import type { TemplateField } from './templateGen';
 import type { App } from '../domain/types';
 import type { FieldDataType, UIWidget } from '../domain/types';
 
@@ -23,6 +26,7 @@ export interface BlueprintTable {
   table_name: string;
   label: string;
   fields: BlueprintField[];
+  sample_data?: Record<string, unknown>[];  // model sometimes puts sample data here
 }
 
 export interface BlueprintView {
@@ -37,7 +41,7 @@ export interface BlueprintView {
   secondary_sort_field?: string;
   secondary_sort_direction?: 'asc' | 'desc';
   grouping_field?: string;
-  templates?: Partial<Record<string, string>>;
+  style_hint?: string;  // optional style keyword passed to template generator
 }
 
 export interface BlueprintGroupTablePerm {
@@ -198,6 +202,66 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
     }
   }
 
+  // ── FK auto-detection + join creation ────────────────────────────────────
+  // Scan every table's fields for *_id fields that match another table in this
+  // app. Create app_joins entries and return a map for use in template generation.
+  // Convention: "artist_id" → look for table "artists" (or "artist").
+  type FkInfo = { relatedTable: string; labelField: string };
+  const fkByTableField = new Map<string, FkInfo>(); // "items.artist_id" → { relatedTable, labelField }
+
+  const allAppTables = await tablesService.listTables(app.id);
+  const tableByName  = new Map(allAppTables.map(t => [t.table_name, t]));
+
+  for (const baseTable of allAppTables) {
+    const fields = await fieldsService.listFields(baseTable.id);
+    for (const field of fields) {
+      if (!field.field_name.endsWith('_id')) continue;
+      const base = field.field_name.slice(0, -3); // strip "_id"
+
+      // Try table name = base + 's', base + 'es', or exact base
+      const relatedTable =
+        tableByName.get(base + 's') ??
+        tableByName.get(base + 'es') ??
+        tableByName.get(base);
+      if (!relatedTable || relatedTable.id === baseTable.id) continue;
+
+      // Find first non-PK string/text field as the label field
+      const relatedFields = await fieldsService.listFields(relatedTable.id);
+      const labelField = relatedFields.find(
+        f => !f.is_primary_key && ['string', 'text'].includes(f.data_type)
+      );
+      if (!labelField) continue;
+
+      const key = `${baseTable.table_name}.${field.field_name}`;
+      fkByTableField.set(key, { relatedTable: relatedTable.table_name, labelField: labelField.field_name });
+
+      // Create app_joins entry if it doesn't already exist
+      const pkField = relatedFields.find(f => f.is_primary_key);
+      if (!pkField) continue;
+
+      const existingJoin = await db('app_joins')
+        .where({
+          app_id:          app.id,
+          left_table_id:   baseTable.id,
+          left_field_name: field.field_name,
+          right_table_id:  relatedTable.id,
+        })
+        .first();
+
+      if (!existingJoin) {
+        await db('app_joins').insert({
+          app_id:             app.id,
+          left_table_id:      baseTable.id,
+          left_field_name:    field.field_name,
+          right_table_id:     relatedTable.id,
+          right_field_name:   pkField.field_name,
+          join_type_default:  'left',
+          relationship_label: `${baseTable.table_name}.${field.field_name} → ${relatedTable.table_name}`,
+        });
+      }
+    }
+  }
+
   // ── Views ─────────────────────────────────────────────────────────────────
   for (const bv of (bp.views ?? [])) {
     try {
@@ -240,15 +304,32 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
       viewIdByName.set(bv.view_name, view.id);
       result.viewsCreated.push(bv.label || bv.view_name);
 
-      if (bv.templates && Object.keys(bv.templates).length > 0) {
-        // Ensure all template values are strings (AI may return non-string values)
-        const safeTemplates: Partial<import('./views').ViewTemplates> = {};
-        for (const [k, v] of Object.entries(bv.templates)) {
-          if (v !== undefined && v !== null) {
-            (safeTemplates as Record<string, string>)[k] = typeof v === 'string' ? v : JSON.stringify(v);
-          }
-        }
-        await viewsService.saveViewTemplates(app.id, view.id, safeTemplates);
+      // Auto-generate templates from field metadata — never rely on AI for HTML.
+      // FK fields (e.g. artist_id) are enriched with the related table's label field
+      // so templates show "The Beatles" instead of "1".
+      {
+        const RESERVED_TEMPLATE = new Set(['id', 'created_at', 'updated_at']);
+        const templateFields: TemplateField[] = tableFields
+          .filter(f => !RESERVED_TEMPLATE.has(f.field_name))
+          .map(f => {
+            const fkKey = `${bv.base_table}.${f.field_name}`;
+            const fk    = fkByTableField.get(fkKey);
+            return {
+              field_name:      f.field_name,
+              label:           f.label,
+              data_type:       f.data_type,
+              table_name:      bv.base_table,
+              fk_table:        fk?.relatedTable,
+              fk_label_field:  fk?.labelField,
+            };
+          });
+        const starters = buildStarterTemplates(
+          { table_name: bv.base_table, label: bv.label },
+          templateFields,
+          bv.style_hint ?? '',
+          bv.is_public ?? false,
+        );
+        await viewsService.saveViewTemplates(app.id, view.id, starters);
       }
     } catch (err) {
       result.errors.push(`View "${bv.view_name}": ${err instanceof Error ? err.message : String(err)}`);
@@ -301,7 +382,11 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
         if (canView && homeViewId === null) homeViewId = viewId;
       }
 
-      // Set default home view so members land directly on the main view after login
+      // Set default home view so members land directly on the main view after login.
+      // Fallback: if no view permissions resolved, use the first created view.
+      if (homeViewId === null && viewIdByName.size > 0) {
+        homeViewId = viewIdByName.values().next().value ?? null;
+      }
       if (homeViewId !== null) {
         await groupsService.updateGroup(group.id, { default_home_view_id: homeViewId });
       }
@@ -311,7 +396,18 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
   }
 
   // ── Sample Data ───────────────────────────────────────────────────────────
-  if (bp.sample_data && Object.keys(bp.sample_data).length > 0) {
+  // Merge sample data from two places: top-level bp.sample_data AND inline
+  // table.sample_data (the model sometimes puts it inside the table object).
+  const mergedSampleData: Record<string, Record<string, unknown>[]> = { ...(bp.sample_data ?? {}) };
+  for (const bt of bp.tables) {
+    if (Array.isArray(bt.sample_data) && bt.sample_data.length > 0) {
+      if (!mergedSampleData[bt.table_name]) {
+        mergedSampleData[bt.table_name] = bt.sample_data as Record<string, unknown>[];
+      }
+    }
+  }
+
+  if (Object.keys(mergedSampleData).length > 0) {
     const appDb = getAppDb(app);
     const SKIP_TYPES = new Set(['image', 'upload']);
     const RESERVED   = new Set(['id', 'created_at', 'updated_at']);
@@ -321,7 +417,7 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
     const nowMs       = Date.now();
     const thirtyDays  = 30 * 24 * 60 * 60 * 1000;
 
-    for (const [tableName, rows] of Object.entries(bp.sample_data)) {
+    for (const [tableName, rows] of Object.entries(mergedSampleData)) {
       if (!Array.isArray(rows) || rows.length === 0) continue;
       const tableId = tableIdByName.get(tableName);
       if (!tableId) continue;

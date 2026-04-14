@@ -47,31 +47,49 @@ blueprintRouter.post('/generate', async (req, res, next) => {
     const aiSettings = await aiService.getAiSettings();
     const userPrompt = buildUserPrompt(answers);
 
-    let raw: string;
-    try {
-      raw = await aiService.callAi(aiSettings, BLUEPRINT_SYSTEM_PROMPT, userPrompt, 16000);
-    } catch (err) {
-      return res.status(502).json({ error: `AI call failed: ${err instanceof Error ? err.message : String(err)}` });
-    }
-
-    const jsonStr = aiService.extractJson(raw);
-
+    // Try up to 3 times — small local models occasionally produce invalid JSON
+    let lastRaw = '';
     let parsed: unknown;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      return res.status(422).json({ error: 'AI returned invalid JSON. Try again or adjust your description.', raw });
+    let parseError: string | null = null;
+    let validationErrors: { path: string; message: string }[] = [];
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let raw: string;
+      try {
+        // Use lower temperature for structured JSON output; decrease further on retries
+        const temp = attempt === 0 ? 0.4 : 0.2;
+        raw = await aiService.callAi(aiSettings, BLUEPRINT_SYSTEM_PROMPT, userPrompt, 16000, temp);
+      } catch (err) {
+        return res.status(502).json({ error: `AI call failed: ${err instanceof Error ? err.message : String(err)}` });
+      }
+      lastRaw = raw;
+
+      const jsonStr = aiService.extractJson(raw);
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        parseError = 'AI returned invalid JSON.';
+        continue;
+      }
+
+      validationErrors = validateBlueprint(parsed);
+      if (validationErrors.length === 0) {
+        parseError = null;
+        break;
+      }
     }
 
-    const errors = validateBlueprint(parsed);
-    if (errors.length > 0) {
+    if (parseError) {
+      return res.status(422).json({ error: `${parseError} Try again or adjust your description.`, raw: lastRaw });
+    }
+    if (validationErrors.length > 0) {
       return res.status(422).json({
-        error: `Blueprint validation failed: ${errors.map(e => `${e.path}: ${e.message}`).join('; ')}`,
-        raw
+        error: `Blueprint validation failed: ${validationErrors.map(e => `${e.path}: ${e.message}`).join('; ')}`,
+        raw: lastRaw,
       });
     }
 
-    res.json({ blueprint: parsed, raw });
+    res.json({ blueprint: parsed, raw: lastRaw });
   } catch (err) {
     next(err);
   }
