@@ -6,6 +6,7 @@ import * as viewsService from '../../services/views';
 import * as tablesService from '../../services/tables';
 import * as aiService from '../../services/ai';
 import { CSS_CLASS_REFERENCE } from '../../services/blueprintPrompt';
+import { buildStarterTemplates } from '../../services/templateGen';
 
 export const viewsRouter = Router();
 
@@ -262,6 +263,46 @@ viewsRouter.get('/:id/preview', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /admin/views/:id/preview-popup — bare popup shell for live preview ────
+
+viewsRouter.get('/:id/preview-popup', async (req, res, next) => {
+  try {
+    const app  = res.locals.currentApp as App;
+    const view = await viewsService.getView(Number(req.params.id));
+    if (!view || view.app_id !== app.id)
+      return res.status(404).send('<p>View not found.</p>');
+    res.render('admin/views/preview-popup', { view });
+  } catch (err) { next(err); }
+});
+
+// ── POST /admin/views/:id/preview-render — render with template overrides ─────
+
+viewsRouter.post('/:id/preview-render', async (req, res, next) => {
+  try {
+    const app  = res.locals.currentApp as App;
+    const view = await viewsService.getView(Number(req.params.id));
+    if (!view || view.app_id !== app.id)
+      return res.status(404).json({ error: 'View not found' });
+
+    const baseTable = await db('app_tables').where({ id: view.base_table_id }).first();
+    if (!baseTable) return res.status(500).json({ error: 'Base table not found' });
+
+    // Merge saved templates with any overrides from request body
+    const saved = await viewsService.getViewTemplates(app.id, view.id);
+    const overrides: Partial<viewsService.ViewTemplates> = {};
+    for (const type of viewsService.TEMPLATE_TYPES) {
+      if (req.body[type] !== undefined) overrides[type as keyof viewsService.ViewTemplates] = req.body[type];
+    }
+    const templates = { ...saved, ...overrides };
+
+    const html = await viewsService.renderViewList(app, view, baseTable.table_name, templates, {});
+    res.json({ html });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
+
 // ── POST /admin/views/:id/generate-templates — AI template generation ────────
 
 viewsRouter.post('/:id/generate-templates', async (req, res) => {
@@ -277,9 +318,6 @@ viewsRouter.post('/:id/generate-templates', async (req, res) => {
       await getReachableFields(app.id, view.base_table_id);
 
     if (!baseTable) return res.json({ error: 'Base table not found' });
-
-    // Separate decimal/currency fields so we can use $currency[] tokens for them
-    const currencyTypes = new Set(['decimal', 'float', 'bigInteger']);
 
     const tokenLines: string[] = [];
     for (const f of baseFields)  tokenLines.push(`\${${baseTable.table_name}.${f.field_name}} — ${f.label || f.field_name} (${f.data_type})`);
@@ -299,110 +337,17 @@ viewsRouter.post('/:id/generate-templates', async (req, res) => {
       ? sampleRows.map((r, i) => `Row ${i + 1}: ` + Object.entries(r).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')).join('\n')
       : '(no sample data available)';
 
-    // ── Color theme from style hint ──────────────────────────────────────────
-    const hint = styleHint.toLowerCase();
-    let colorVars = '--wdp-primary:#1e3a5f;--wdp-on-primary:#fff;--wdp-accent:#2e86de;--wdp-bg:#f0f4f8;--wdp-surface:#fff;--wdp-text:#1a2a3a;--wdp-border:#c8d8e8';
-    if (hint.includes('orange'))      colorVars = '--wdp-primary:#c44b00;--wdp-on-primary:#fff;--wdp-accent:#e87722;--wdp-bg:#fff8f0;--wdp-surface:#fff;--wdp-text:#1a0e00;--wdp-border:#f0c090';
-    else if (hint.includes('dark'))   colorVars = '--wdp-primary:#1a1a2e;--wdp-on-primary:#e0e0e0;--wdp-accent:#e94560;--wdp-bg:#16213e;--wdp-surface:#0f3460;--wdp-text:#e0e0e0;--wdp-border:#1a4a7a';
-    else if (hint.includes('green'))  colorVars = '--wdp-primary:#1a5c2a;--wdp-on-primary:#fff;--wdp-accent:#2d9e4a;--wdp-bg:#f0fff4;--wdp-surface:#fff;--wdp-text:#1a3a1a;--wdp-border:#b7e4c7';
-    else if (hint.includes('red'))    colorVars = '--wdp-primary:#8b1a1a;--wdp-on-primary:#fff;--wdp-accent:#c0392b;--wdp-bg:#fff5f5;--wdp-surface:#fff;--wdp-text:#1a0000;--wdp-border:#f5b7b1';
-    else if (hint.includes('purple')) colorVars = '--wdp-primary:#4a1a6b;--wdp-on-primary:#fff;--wdp-accent:#8e44ad;--wdp-bg:#f9f0ff;--wdp-surface:#fff;--wdp-text:#1a001a;--wdp-border:#d7b8f0';
-
-    // ── Determine layout pattern ─────────────────────────────────────────────
-    const useTable = hint.includes('table') || hint.includes('spreadsheet') || hint.includes('grid');
-
-    // ── Pre-build concrete template examples using real field names ──────────
-    // This gives the AI working examples with actual tokens already filled in,
-    // dramatically improving output quality.
+    // ── Build concrete "starter" templates via shared templateGen service ────
     const allFields = [...baseFields, ...joinedFields];
-    const titleField = allFields[0];
-    const subField   = allFields[1];
-    const metaField  = allFields[2];
-    const titleTok   = titleField ? `\${${titleField.table_name ?? baseTable.table_name}.${titleField.field_name}}` : '';
-    const subTok     = subField   ? `\${${subField.table_name   ?? baseTable.table_name}.${subField.field_name}}`   : '';
+    const starters  = buildStarterTemplates(baseTable, allFields, styleHint);
 
-    // Format currency fields with $currency[], others with plain ${token}
-    const metaTok = metaField
-      ? (currencyTypes.has(metaField.data_type)
-          ? `$currency[${metaField.table_name ?? baseTable.table_name}.${metaField.field_name},2]`
-          : `\${${metaField.table_name ?? baseTable.table_name}.${metaField.field_name}}`)
-      : '';
-
-    // Build the detail body: one .wdp-field per field
-    const detailFields = allFields.map(f => {
-      const tbl = f.table_name ?? baseTable.table_name;
-      const val = currencyTypes.has(f.data_type)
-        ? `$currency[${tbl}.${f.field_name},2]`
-        : `\${${tbl}.${f.field_name}}`;
-      return `<div class="wdp-field"><div class="wdp-field-label">${f.label || f.field_name}</div><div class="wdp-field-value">${val}</div></div>`;
-    }).join('');
-
-    // Map data_type to HTML input type (no ui_widget available at this level)
-    const inputTypeFor = (dataType: string) =>
-      dataType === 'integer' || dataType === 'decimal' || dataType === 'float' || dataType === 'bigInteger' ? 'number'
-      : dataType === 'date' ? 'date'
-      : dataType === 'datetime' ? 'datetime-local'
-      : dataType === 'boolean' ? 'checkbox'
-      : 'text';
-
-    // Build the form fields: one .wdp-form-group per field
-    const formFields = allFields.map(f => {
-      const tbl       = f.table_name ?? baseTable.table_name;
-      const valTok    = `\${${tbl}.${f.field_name}}`;
-      const fieldName = f.field_name;
-      const lbl       = f.label || f.field_name;
-      if (f.data_type === 'text') {
-        return `<div class="wdp-form-group"><label class="wdp-label">${lbl}</label><textarea class="wdp-textarea" name="${fieldName}">${valTok}</textarea></div>`;
-      }
-      return `<div class="wdp-form-group"><label class="wdp-label">${lbl}</label><input class="wdp-input" type="${inputTypeFor(f.data_type)}" name="${fieldName}" value="${valTok}"></div>`;
-    }).join('');
-
-    const createFormFields = allFields.map(f => {
-      const fieldName = f.field_name;
-      const lbl       = f.label || f.field_name;
-      if (f.data_type === 'text') {
-        return `<div class="wdp-form-group"><label class="wdp-label">${lbl}</label><textarea class="wdp-textarea" name="${fieldName}"></textarea></div>`;
-      }
-      return `<div class="wdp-form-group"><label class="wdp-label">${lbl}</label><input class="wdp-input" type="${inputTypeFor(f.data_type)}" name="${fieldName}" value=""></div>`;
-    }).join('');
-
-    // Table layout: build <th> headers with $sort[] tokens
-    const tableHeaders = allFields.slice(0, 5).map(f =>
-      `<th>$sort[${f.table_name ?? baseTable.table_name}.${f.field_name},${f.label || f.field_name}]</th>`
-    ).join('');
-    const tableCells = allFields.slice(0, 5).map(f => {
-      const tbl = f.table_name ?? baseTable.table_name;
-      const val = currencyTypes.has(f.data_type)
-        ? `$currency[${tbl}.${f.field_name},2]`
-        : `\${${tbl}.${f.field_name}}`;
-      return `<td>${val}</td>`;
-    }).join('');
-
-    const styleTag = `<style>:root{${colorVars}}</style>`;
-    const tableName = baseTable.label || baseTable.table_name;
-
-    // ── Build concrete "starter" templates ──────────────────────────────────
-    let starterSearchForm: string;
-    let starterHeader: string;
-    let starterRow: string;
-    let starterFooter: string;
-
-    if (useTable) {
-      starterSearchForm = `${styleTag}<div class="wdp"><div class="wdp-sf"><input type="text" name="q" value="\${_q}" placeholder="Search…"><button type="submit">Search</button>$perpage[10,25,50,100]</div>`;
-      starterHeader = `<div class="wdp-hdr"><span class="wdp-hdr-title">${tableName}</span><span class="wdp-hdr-meta">\${_total} results</span></div><table class="wdp-table"><thead><tr>${tableHeaders}</tr></thead><tbody>`;
-      starterRow = `<tr data-wdp-action="detail" data-wdp-id="\${_pk}">${tableCells}</tr>`;
-      starterFooter = `</tbody></table><div class="wdp-footer">\${_pagination}</div></div>`;
-    } else {
-      starterSearchForm = `${styleTag}<div class="wdp"><div class="wdp-sf"><input type="text" name="q" value="\${_q}" placeholder="Search…"><button type="submit">Search</button></div>`;
-      starterHeader = `<div class="wdp-hdr"><span class="wdp-hdr-title">${tableName}</span><span class="wdp-hdr-meta">\${_total} results</span></div>`;
-      const rowMeta = metaTok ? ` &bull; ${metaTok}` : '';
-      starterRow = `<div class="wdp-row" data-wdp-action="detail" data-wdp-id="\${_pk}"><div class="wdp-row-body"><div class="wdp-row-title">${titleTok}</div><div class="wdp-row-sub">${subTok}</div><div class="wdp-row-meta">${rowMeta}</div></div><span class="wdp-arr">&#8250;</span></div>`;
-      starterFooter = `<div class="wdp-footer">\${_pagination}</div></div>`;
-    }
-
-    const starterDetail = `${styleTag}<div class="wdp"><div class="wdp-detail"><button class="wdp-back" data-wdp-action="back">&#8249; Back</button><h2 class="wdp-detail-title">${titleTok}</h2><div class="wdp-detail-sub">${subTok}</div><div class="wdp-detail-body">${detailFields}</div></div></div>`;
-    const starterEditForm = `${styleTag}<div class="wdp"><div class="wdp-detail"><button class="wdp-back" data-wdp-action="back">&#8249; Cancel</button><h2 class="wdp-detail-title">Edit ${tableName}</h2><form data-wdp-form="edit" data-wdp-id="\${_pk}" style="margin-top:16px">${formFields}<button type="submit" class="wdp-btn">Save Changes</button></form></div></div>`;
-    const starterCreateForm = `${styleTag}<div class="wdp"><div class="wdp-detail"><button class="wdp-back" data-wdp-action="back">&#8249; Cancel</button><h2 class="wdp-detail-title">New ${tableName}</h2><form data-wdp-form="create" style="margin-top:16px">${createFormFields}<button type="submit" class="wdp-btn">Create ${tableName}</button></form></div></div>`;
+    const starterSearchForm  = starters.search_form;
+    const starterHeader      = starters.header;
+    const starterRow         = starters.row;
+    const starterFooter      = starters.footer;
+    const starterDetail      = starters.detail;
+    const starterEditForm    = starters.edit_form;
+    const starterCreateForm  = starters.create_form;
 
     // ── Assemble prompts ─────────────────────────────────────────────────────
     const systemPrompt = `You write HTML templates for Webdata Pro data widgets. Use \${token} syntax for data values. Output each template between ===MARKER=== delimiters exactly as shown. No JSON, no markdown, no explanation — just the delimited HTML blocks.
@@ -410,7 +355,8 @@ viewsRouter.post('/:id/generate-templates', async (req, res) => {
 ${CSS_CLASS_REFERENCE}`;
 
     const styleHintLine = styleHint ? `Style: ${styleHint}` : 'Style: clean, professional.';
-    const layoutLine = useTable
+    const hint2 = styleHint.toLowerCase();
+    const layoutLine = (hint2.includes('table') || hint2.includes('spreadsheet') || hint2.includes('grid'))
       ? 'Layout: TABLE (header opens <table class="wdp-table">, each row is a <tr>, footer closes </tbody></table>)'
       : 'Layout: CARD LIST (each row is a .wdp-row card)';
 
@@ -429,7 +375,7 @@ ${tokenLines.join('\n')}
 Sample data:
 ${sampleText}
 
-I have pre-built starter templates below. Your job is to REFINE them with the requested style — improve the layout, adjust content, apply the color theme. Do NOT change the structural HTML class names or action attributes. Replace the ${styleTag} color tag if you want different colors.
+I have pre-built starter templates below. Your job is to REFINE them with the requested style — improve the layout, adjust content, apply the color theme. Do NOT change the structural HTML class names or action attributes. You may replace the <style>:root{...}</style> color block if you want different colors.
 
 ===SEARCH_FORM===
 ${starterSearchForm}
@@ -465,33 +411,12 @@ Keep the same HTML structure and CSS classes. Adapt only visual details (colors 
     const blocks     = aiService.extractTemplateBlocks(raw, viewsService.TEMPLATE_TYPES);
 
     // If AI produced nothing useful, return the starters directly
-    const templates: Partial<viewsService.ViewTemplates> = Object.keys(blocks).length > 0 ? blocks : {
-      search_form:  starterSearchForm,
-      header:       starterHeader,
-      group_header: `<div class="wdp-grp"><span class="wdp-grp-label">\${_group_value}</span><div class="wdp-grp-bar"></div></div>`,
-      row:          starterRow,
-      group_footer: '',
-      footer:       starterFooter,
-      detail:       starterDetail,
-      edit_form:    starterEditForm,
-      create_form:  starterCreateForm,
-    };
+    const templates: Partial<viewsService.ViewTemplates> = Object.keys(blocks).length > 0 ? blocks : starters;
 
-    // Fill any missing slots (AI may have skipped create_form)
-    const starters: viewsService.ViewTemplates = {
-      search_form:  starterSearchForm,
-      header:       starterHeader,
-      group_header: `<div class="wdp-grp"><span class="wdp-grp-label">\${_group_value}</span><div class="wdp-grp-bar"></div></div>`,
-      row:          starterRow,
-      group_footer: '',
-      footer:       starterFooter,
-      detail:       starterDetail,
-      edit_form:    starterEditForm,
-      create_form:  starterCreateForm,
-    };
+    // Fill any missing slots (AI may have skipped create_form etc.)
     for (const key of viewsService.TEMPLATE_TYPES) {
       if (!(key in templates) || !(templates as Record<string, string>)[key]) {
-        (templates as Record<string, string>)[key] = starters[key];
+        (templates as Record<string, string>)[key] = starters[key as keyof typeof starters];
       }
     }
 

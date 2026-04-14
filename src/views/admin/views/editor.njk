@@ -11,7 +11,10 @@
     <a href="/admin/views/{{ view.id }}/edit" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-gear me-1"></i>Settings
     </a>
-    <a href="/admin/views/{{ view.id }}/preview" class="btn btn-sm btn-outline-primary">
+    <button type="button" id="btn-live-preview" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-layout-sidebar me-1"></i>Live Preview
+    </button>
+    <a href="/admin/views/{{ view.id }}/preview" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-play me-1"></i>Preview
     </a>
     <a href="/admin/views" class="btn btn-sm btn-outline-secondary">&larr; Views</a>
@@ -605,6 +608,58 @@
       clearInterval(timer);
       btnAiGo.disabled = false;
       btnAiGo.innerHTML = '<i class="bi bi-stars me-1"></i>Generate templates';
+    }
+  });
+})();
+
+// ── Live Preview ──────────────────────────────────────────────────────────────
+(function () {
+  const RENDER_URL = '/admin/views/{{ view.id }}/preview-render';
+  const POPUP_URL  = '/admin/views/{{ view.id }}/preview-popup';
+  let previewWin   = null;
+  let debounceTimer = null;
+
+  function collectTemplates() {
+    const data = {};
+    document.querySelectorAll('textarea[name]').forEach(ta => {
+      data[ta.name] = ta.value;
+    });
+    return data;
+  }
+
+  async function pushPreview() {
+    if (!previewWin || previewWin.closed) return;
+    try {
+      const res  = await fetch(RENDER_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(collectTemplates()),
+      });
+      const { html, error } = await res.json();
+      if (error) return;
+      previewWin.postMessage({ type: 'wdp-preview', html }, window.location.origin);
+    } catch (e) { /* ignore */ }
+  }
+
+  function schedulePush() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(pushPreview, 450);
+  }
+
+  // Wire up all template textareas (including ones added later by tab switching)
+  document.addEventListener('input', function(e) {
+    if (e.target.matches('textarea.tpl-textarea')) schedulePush();
+  });
+
+  document.getElementById('btn-live-preview').addEventListener('click', function() {
+    if (!previewWin || previewWin.closed) {
+      previewWin = window.open(POPUP_URL, 'wdp-live-preview',
+        'width=860,height=700,left=100,top=80,resizable=yes,scrollbars=yes');
+      // Give the popup a moment to load then push current state
+      setTimeout(pushPreview, 800);
+    } else {
+      previewWin.focus();
+      pushPreview();
     }
   });
 })();

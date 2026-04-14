@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preview — {{ view.label }}</title>
+  <link rel="stylesheet" href="/static/widget-base.css">
+  <style>
+    body { margin: 0; padding: 12px; font-family: system-ui, sans-serif; background: #f8fafc; }
+    #wdp-preview-status {
+      font-size: 0.75rem; color: #94a3b8; text-align: center;
+      padding: 8px; opacity: 1; transition: opacity 0.4s;
+    }
+    #wdp-preview-status.hidden { opacity: 0; }
+  </style>
+</head>
+<body>
+  <div id="wdp-preview-status">Waiting for preview…</div>
+  <div id="wdp-preview-content"></div>
+
+  <script>
+    window.addEventListener('message', function(e) {
+      if (!e.data || e.data.type !== 'wdp-preview') return;
+      document.getElementById('wdp-preview-status').classList.add('hidden');
+      document.getElementById('wdp-preview-content').innerHTML = e.data.html;
+    });
+  </script>
+</body>
+</html>
