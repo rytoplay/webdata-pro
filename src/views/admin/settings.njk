@@ -19,9 +19,10 @@
       <div class="mb-3">
         <label class="form-label">Provider</label>
         <select name="ai_provider" class="form-select" id="ai_provider">
-          <option value="ollama"    {% if settings.provider == 'ollama'    %}selected{% endif %}>Ollama (local — free)</option>
-          <option value="anthropic" {% if settings.provider == 'anthropic' %}selected{% endif %}>Anthropic (Claude)</option>
-          <option value="openai"    {% if settings.provider == 'openai'    %}selected{% endif %}>OpenAI (GPT)</option>
+          <option value="ollama"    {% if settings.provider == 'ollama'    %}selected{% endif %}>Ollama (local — free, requires install)</option>
+          <option value="anthropic" {% if settings.provider == 'anthropic' %}selected{% endif %}>Anthropic — Claude</option>
+          <option value="openai"    {% if settings.provider == 'openai'    %}selected{% endif %}>OpenAI — GPT</option>
+          <option value="gemini"    {% if settings.provider == 'gemini'    %}selected{% endif %}>Google — Gemini</option>
         </select>
       </div>
 
@@ -45,7 +46,7 @@
             {% endif %}
           </select>
           <div class="form-text">
-            <strong>Recommended:</strong> qwen3.5 or gemma3 for best template quality. llama3.2 is faster.
+            <strong>Recommended:</strong> <code>qwen2.5:7b</code> (good balance of speed and quality). Pull with: <code>ollama pull qwen2.5:7b</code>
           </div>
         </div>
       </div>
@@ -57,13 +58,14 @@
           <input type="text" name="ai_model_cloud" class="form-control font-monospace"
             id="cloud_model_input"
             value="{{ settings.model if settings.provider != 'ollama' else '' }}"
-            placeholder="e.g. claude-haiku-4-5-20251001 or gpt-4o-mini">
+            placeholder="e.g. claude-haiku-4-5-20251001 · gpt-4o-mini · gemini-2.0-flash">
+          <div class="form-text" id="cloud-model-hint"></div>
         </div>
         <div class="mb-3">
           <label class="form-label">API key</label>
           <input type="password" name="ai_api_key" class="form-control font-monospace"
-            value="{{ settings.apiKey }}" placeholder="sk-…">
-          <div class="form-text">Stored locally on your server. Never sent anywhere except the AI provider.</div>
+            value="{{ settings.apiKey }}" placeholder="API key">
+          <div class="form-text">Stored on your server only. Never sent anywhere except the AI provider you select.</div>
         </div>
       </div>
 
@@ -140,11 +142,23 @@
   const secOllama    = document.getElementById('section-ollama');
   const secCloud     = document.getElementById('section-cloud');
 
-  providerSel.addEventListener('change', () => {
-    const isOllama = providerSel.value === 'ollama';
+  const modelHints = {
+    anthropic: 'Recommended: <code>claude-haiku-4-5-20251001</code> (fast &amp; cheap) or <code>claude-sonnet-4-5</code> (higher quality). Get a key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.',
+    openai:    'Recommended: <code>gpt-4o-mini</code> (fast &amp; cheap) or <code>gpt-4o</code> (higher quality). Get a key at <a href="https://platform.openai.com" target="_blank">platform.openai.com</a>.',
+    gemini:    'Recommended: <code>gemini-2.0-flash</code> (fast &amp; cheap) or <code>gemini-2.5-pro</code> (higher quality). Get a key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a>.',
+  };
+
+  function updateHint() {
+    const v    = providerSel.value;
+    const hint = document.getElementById('cloud-model-hint');
+    const isOllama = v === 'ollama';
     secOllama.style.display = isOllama ? '' : 'none';
     secCloud.style.display  = isOllama ? 'none' : '';
-  });
+    if (hint) hint.innerHTML = modelHints[v] || '';
+  }
+
+  providerSel.addEventListener('change', updateHint);
+  updateHint();
 
   document.getElementById('btn-test').addEventListener('click', async () => {
     const el = document.getElementById('test-result');

@@ -3,10 +3,10 @@ import { db } from '../db/knex';
 // ── Settings ────────────────────────────────────────────────────────────────
 
 export interface AiSettings {
-  provider: 'ollama' | 'anthropic' | 'openai';
+  provider: 'ollama' | 'anthropic' | 'openai' | 'gemini';
   model:    string;
   baseUrl:  string;   // Ollama only
-  apiKey:   string;   // Anthropic / OpenAI
+  apiKey:   string;   // Anthropic / OpenAI / Gemini
 }
 
 const DEFAULTS: AiSettings = {
@@ -64,6 +64,7 @@ export async function callAi(
     case 'ollama':     return callOllama(settings, systemPrompt, userPrompt, maxTokens, temperature);
     case 'anthropic':  return callAnthropic(settings, systemPrompt, userPrompt, maxTokens);
     case 'openai':     return callOpenAI(settings, systemPrompt, userPrompt, maxTokens);
+    case 'gemini':     return callGemini(settings, systemPrompt, userPrompt, maxTokens);
   }
 }
 
@@ -152,6 +153,27 @@ async function callOpenAI(s: AiSettings, system: string, user: string, maxTokens
   if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${await res.text()}`);
   const data = await res.json() as { choices?: { message: { content: string } }[] };
   return data.choices?.[0]?.message.content ?? '';
+}
+
+async function callGemini(s: AiSettings, system: string, user: string, maxTokens?: number): Promise<string> {
+  const model = s.model || 'gemini-2.0-flash';
+  const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(s.apiKey)}`;
+  const res = await fetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }] }],
+      generationConfig: {
+        maxOutputTokens: maxTokens ?? 4096,
+        temperature:     0.7,
+      },
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${await res.text()}`);
+  const data = await res.json() as { candidates?: { content: { parts: { text: string }[] } }[] };
+  return data.candidates?.[0]?.content.parts.map(p => p.text).join('') ?? '';
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
