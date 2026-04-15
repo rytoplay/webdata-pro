@@ -74,5 +74,6 @@ declare module 'express-session' {
     pendingTotpSetup?: PendingTotpSetup;
     flash?: { type: string; message: string };
     currentAppId?: number;
+    sqlCsrfToken?: string;
   }
 }

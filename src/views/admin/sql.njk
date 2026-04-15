@@ -1,0 +1,118 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-terminal me-2"></i>SQL Console</h1>
+</div>
+
+{# ── Warning ── #}
+<div class="alert alert-danger d-flex gap-3 mb-4" role="alert">
+  <i class="bi bi-exclamation-triangle-fill fs-4 flex-shrink-0 mt-1"></i>
+  <div>
+    <strong>This interface is not safeguarded in any way.</strong>
+    It executes directly against the <strong>{{ currentApp.name }}</strong> database with no undo,
+    no confirmation, and no rollback. A single wrong <code>DROP TABLE</code> or
+    <code>DELETE FROM</code> without a <code>WHERE</code> clause will permanently destroy data.
+    Use it only if you know exactly what you are doing.
+  </div>
+</div>
+
+{# ── Query form ── #}
+<div class="card mb-4">
+  <div class="card-body p-4">
+    <form method="POST" action="/admin/sql">
+      <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+      <div class="mb-3">
+        <label class="form-label fw-bold" for="query">SQL Query</label>
+        <textarea
+          id="query"
+          name="query"
+          class="form-control font-monospace"
+          rows="10"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="SELECT * FROM pets LIMIT 10;"
+          style="font-size:0.875rem; resize:vertical;"
+        >{{ query if query }}</textarea>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <button type="submit" class="btn btn-danger">
+          <i class="bi bi-play-fill me-1"></i>Run Query
+        </button>
+        {% if query %}
+        <a href="/admin/sql" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
+        <span class="text-muted small ms-2">Runs against: <code>{{ currentApp.name }}</code></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Error ── #}
+{% if error %}
+<div class="card border-danger mb-4">
+  <div class="card-header text-danger fw-bold py-2 px-4" style="background:#fef2f2;">
+    <i class="bi bi-x-circle me-2"></i>Error
+  </div>
+  <div class="card-body p-4">
+    <pre class="mb-0 text-danger" style="font-size:0.875rem; white-space:pre-wrap; word-break:break-word;">{{ error }}</pre>
+  </div>
+</div>
+{% endif %}
+
+{# ── DML / DDL result ── #}
+{% if affected !== undefined and affected !== null %}
+<div class="alert alert-success d-flex align-items-center gap-2">
+  <i class="bi bi-check-circle-fill"></i>
+  <span>Query executed successfully &mdash; <strong>{{ affected }}</strong> row{{ 's' if affected != 1 }} affected.</span>
+</div>
+{% endif %}
+
+{# ── SELECT results ── #}
+{% if rows !== undefined and rows !== null %}
+  {% if rows.length === 0 %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>Query returned no rows.
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-header py-2 px-4 d-flex align-items-center justify-content-between">
+      <span class="fw-bold"><i class="bi bi-table me-2"></i>Results</span>
+      <span class="text-muted small">
+        {{ rowCount }} row{{ 's' if rowCount != 1 }}
+        {% if rowCount >= 500 %}&nbsp;&mdash;&nbsp;<span class="text-warning fw-bold">display capped at 500</span>{% endif %}
+      </span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="table table-sm table-bordered table-hover mb-0" style="font-size:0.82rem; font-family:monospace;">
+        <thead class="table-dark">
+          <tr>
+            {% for col in columns %}
+            <th class="fw-normal">{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          {% if loop.index <= 500 %}
+          <tr>
+            {% for col in columns %}
+            <td style="white-space:nowrap; max-width:320px; overflow:hidden; text-overflow:ellipsis;"
+                title="{{ row[col] }}">
+              {% if row[col] === null or row[col] === undefined %}
+              <span class="text-muted fst-italic">NULL</span>
+              {% else %}
+              {{ row[col] }}
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% endblock %}

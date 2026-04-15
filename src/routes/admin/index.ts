@@ -1,8 +1,11 @@
 import { Router } from 'express';
+import crypto from 'crypto';
+import fs from 'fs';
 import { config } from '../../config';
 import { requireAdmin } from '../../middleware/adminAuth';
 import { loadCurrentApp, requireApp } from '../../middleware/currentApp';
 import { listApps, updateApp } from '../../services/apps';
+import { getAppDb } from '../../db/adapters/appDb';
 import { appsRouter } from './apps';
 import { tablesRouter } from './tables';
 import { fieldsRouter } from './fields';
@@ -107,5 +110,99 @@ adminRouter.post('/app-settings', requireApp, async (req, res, next) => {
     });
     req.session.flash = { type: 'success', message: 'App settings saved.' };
     res.redirect('/admin/app-settings');
+  } catch (err) { next(err); }
+});
+
+// ── SQL Console ───────────────────────────────────────────────────────────────
+
+function appendSqlLog(appSlug: string, query: string, outcome: string) {
+  const line = `[${new Date().toISOString()}] [${appSlug}] ${outcome} | ${query.replace(/\s+/g, ' ').trim()}\n`;
+  try { fs.appendFileSync('sql-console.log', line); } catch { /* non-fatal */ }
+}
+
+/** Normalise knex.raw() results across SQLite and MySQL into { rows, affected }. */
+function normaliseResult(result: unknown, mode: string): {
+  rows: Record<string, unknown>[] | null;
+  columns: string[];
+  affected: number | null;
+} {
+  if (mode === 'mysql') {
+    if (Array.isArray(result)) {
+      const [first] = result as unknown[];
+      if (Array.isArray(first)) {
+        const rows = first as Record<string, unknown>[];
+        return { rows, columns: rows.length ? Object.keys(rows[0]) : [], affected: null };
+      }
+      const affected = (first as any)?.affectedRows ?? 0;
+      return { rows: null, columns: [], affected };
+    }
+  }
+  // SQLite (better-sqlite3): SELECT → array, DML/DDL → { changes, lastInsertRowid }
+  if (Array.isArray(result)) {
+    const rows = result as Record<string, unknown>[];
+    return { rows, columns: rows.length ? Object.keys(rows[0]) : [], affected: null };
+  }
+  const affected = (result as any)?.changes ?? 0;
+  return { rows: null, columns: [], affected };
+}
+
+adminRouter.get('/sql', requireApp, (req, res) => {
+  if (!req.session.sqlCsrfToken) {
+    req.session.sqlCsrfToken = crypto.randomBytes(24).toString('hex');
+  }
+  res.render('admin/sql', { title: 'SQL Console', csrfToken: req.session.sqlCsrfToken });
+});
+
+adminRouter.post('/sql', requireApp, async (req, res, next) => {
+  try {
+    const { _csrf, query } = req.body as { _csrf?: string; query?: string };
+
+    if (!_csrf || !req.session.sqlCsrfToken || _csrf !== req.session.sqlCsrfToken) {
+      return res.status(403).render('admin/error', {
+        title: 'Forbidden', message: 'Invalid CSRF token — please reload the page and try again.',
+      });
+    }
+    // Rotate token so each submission gets a fresh one
+    req.session.sqlCsrfToken = crypto.randomBytes(24).toString('hex');
+
+    const sql = (query ?? '').trim();
+    if (!sql) {
+      return res.render('admin/sql', {
+        title: 'SQL Console',
+        csrfToken: req.session.sqlCsrfToken,
+        query: sql,
+        error: 'Enter a query first.',
+      });
+    }
+
+    const app = res.locals.currentApp;
+    const appDb = getAppDb(app);
+
+    let renderVars: Record<string, unknown>;
+    try {
+      const raw = await appDb.raw(sql);
+      const { rows, columns, affected } = normaliseResult(raw, app.database_mode);
+      appendSqlLog(app.slug, sql, affected !== null ? `OK changes=${affected}` : `OK rows=${rows?.length ?? 0}`);
+      renderVars = {
+        title: 'SQL Console',
+        csrfToken: req.session.sqlCsrfToken,
+        query: sql,
+        rows,
+        columns,
+        affected,
+        rowCount: rows?.length ?? 0,
+      };
+    } catch (queryErr: unknown) {
+      const errorMsg = queryErr instanceof Error ? queryErr.message : String(queryErr);
+      appendSqlLog(app.slug, sql, `ERROR ${errorMsg}`);
+      renderVars = {
+        title: 'SQL Console',
+        csrfToken: req.session.sqlCsrfToken,
+        query: sql,
+        error: errorMsg,
+      };
+    }
+
+    res.render('admin/sql', renderVars);
   } catch (err) { next(err); }
 });
