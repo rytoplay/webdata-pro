@@ -13,21 +13,37 @@ You describe what you want in plain English. The AI builds the tables, the searc
 | Program | What it does | Where to get it |
 |---|---|---|
 | **Node.js 18 or higher** | Runs the Webdata Pro server | [nodejs.org](https://nodejs.org) — click the **LTS** button |
-| **Ollama** *(optional)* | Powers the AI app builder | [ollama.com](https://ollama.com) |
+| **An AI provider** *(optional)* | Powers the AI app builder | Ollama (free, local) or an online service — see below |
 
-> **About Ollama:** You only need it if you want to use the AI builder. If you prefer to set up your database by hand, you can skip Ollama entirely and do everything manually through the admin panel.
+> **About the AI builder:** You only need an AI provider if you want to use the AI app builder. If you prefer to set up your database by hand, you can skip this entirely and do everything manually through the admin panel.
 
-### If you're using the AI builder — install the AI model
+### Choosing an AI provider
 
-After installing Ollama, open a terminal and run this once:
+To use the AI builder you have two options:
+
+**Option A — Use an online AI service (no download required)**
+
+Sign up for an account with any of these providers, get an API key, and paste it into **Admin → Settings**:
+
+| Provider | Good starting model | Get a key |
+|---|---|---|
+| Anthropic (Claude) | `claude-haiku-4-5-20251001` | [console.anthropic.com](https://console.anthropic.com) |
+| OpenAI (ChatGPT) | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com) |
+| Google (Gemini) | `gemini-2.0-flash` | [aistudio.google.com](https://aistudio.google.com) |
+
+All three have pay-as-you-go pricing. Building a typical app costs a fraction of a cent.
+
+**Option B — Run your own AI model for free with Ollama**
+
+[Download Ollama](https://ollama.com), then open a terminal and run:
 
 ```
 ollama pull qwen2.5:7b
 ```
 
-This downloads the AI model (about 4.7 GB — roughly 20 minutes on a typical home connection). Ollama runs quietly in the background after that — you don't need to start it separately.
+This downloads the AI model to your computer (about 4.7 GB — roughly 20 minutes on a typical home connection). Ollama runs quietly in the background after that — you don't need to start it separately.
 
-> **Want better results?** The larger `qwen2.5:14b` model (9 GB) produces higher-quality output and handles more complex descriptions. If you have fast internet and at least 16 GB of RAM, run `ollama pull qwen2.5:14b` instead, then select it under **Admin → Settings → AI Model**.
+> **Have fast internet and 16 GB of RAM?** The larger `qwen2.5:14b` model (9 GB) gives better results. Run `ollama pull qwen2.5:14b` instead, then select it under **Admin → Settings**.
 
 ---
 
