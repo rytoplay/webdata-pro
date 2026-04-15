@@ -1,0 +1,822 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+<link rel="stylesheet" href="/static/widget-base.css">
+<style>
+/* ── Style guide chrome ─────────────────────────────────────────────────── */
+.sg-wrap       { display: flex; gap: 0; min-height: calc(100vh - 120px); }
+.sg-nav        { width: 210px; min-width: 210px; position: sticky; top: 80px; align-self: flex-start; max-height: calc(100vh - 100px); overflow-y: auto; }
+.sg-nav-group  { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #94a3b8; padding: 14px 14px 4px; }
+.sg-nav a      { display: block; font-size: 0.8rem; color: #475569; padding: 4px 14px; text-decoration: none; border-left: 3px solid transparent; line-height: 1.5; }
+.sg-nav a:hover{ color: #0f172a; background: #f1f5f9; }
+.sg-nav a.active { color: #3b82f6; border-left-color: #3b82f6; background: #eff6ff; }
+.sg-content    { flex: 1; min-width: 0; padding: 0 0 80px 32px; }
+.sg-section    { scroll-margin-top: 72px; margin-bottom: 56px; }
+.sg-h2         { font-size: 1.25rem; font-weight: 800; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin: 0 0 24px; }
+.sg-h3         { font-size: 0.95rem; font-weight: 700; color: #334155; margin: 24px 0 8px; }
+.sg-desc       { font-size: 0.875rem; color: #475569; line-height: 1.65; margin-bottom: 12px; }
+.sg-block      { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+.sg-block-label{ font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; padding: 6px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+.sg-demo       { padding: 20px; background: #fff; }
+.sg-demo.dark  { background: #f1f5f9; }
+.sg-code       { background: #1e293b; padding: 14px 16px; font-size: 0.76rem; font-family: 'SFMono-Regular', Consolas, monospace; color: #94a3b8; overflow-x: auto; white-space: pre; line-height: 1.55; margin: 0; }
+.sg-code .hl   { color: #7dd3fc; }
+.sg-code .str  { color: #86efac; }
+.sg-note       { font-size: 0.78rem; color: #64748b; background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 8px 14px; line-height: 1.6; }
+.sg-note code  { background: #e2e8f0; padding: 1px 5px; border-radius: 3px; font-size: 0.74rem; }
+.sg-table      { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 16px; }
+.sg-table th   { background: #f1f5f9; color: #334155; font-weight: 700; text-align: left; padding: 7px 12px; border: 1px solid #e2e8f0; }
+.sg-table td   { padding: 6px 12px; border: 1px solid #e2e8f0; color: #475569; vertical-align: top; }
+.sg-table td code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 0.76rem; color: #334155; }
+.sg-tag-official { display: inline-block; background: #dcfce7; color: #166534; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 10px; }
+.sg-tag-convention { display: inline-block; background: #fef9c3; color: #713f12; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 10px; }
+.sg-do-dont    { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.sg-do         { border: 1px solid #bbf7d0; border-radius: 8px; overflow: hidden; }
+.sg-dont       { border: 1px solid #fecaca; border-radius: 8px; overflow: hidden; }
+.sg-do-hdr     { background: #dcfce7; color: #166534; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 12px; }
+.sg-dont-hdr   { background: #fee2e2; color: #991b1b; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 12px; }
+.sg-callout    { border-left: 3px solid #3b82f6; background: #eff6ff; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 0.82rem; color: #1e40af; margin-bottom: 16px; }
+.sg-callout.warn { border-color: #f59e0b; background: #fffbeb; color: #92400e; }
+</style>
+
+<div class="page-header mb-3">
+  <div>
+    <h1>CSS Style Guide</h1>
+    <p class="text-muted small mb-0">All <code>wdp-</code> classes from <code>widget-base.css</code> — rendered examples, usage notes, and copy-paste patterns.</p>
+  </div>
+  <a href="/admin" class="btn btn-sm btn-outline-secondary">&larr; Admin</a>
+</div>
+
+<div class="sg-wrap">
+
+  {# ── Left nav ── #}
+  <nav class="sg-nav" id="sg-nav">
+    <div class="sg-nav-group">Getting started</div>
+    <a href="#sg-quickstart">Quick Start</a>
+    <a href="#sg-variables">CSS Variables</a>
+    <div class="sg-nav-group">Layout</div>
+    <a href="#sg-root">Root Container</a>
+    <a href="#sg-search">Search Form</a>
+    <a href="#sg-header">Header Bar</a>
+    <a href="#sg-group">Group Divider</a>
+    <a href="#sg-rows">Card Rows</a>
+    <a href="#sg-table">Table Layout</a>
+    <a href="#sg-footer">Footer &amp; Pagination</a>
+    <a href="#sg-detail">Detail View</a>
+    <div class="sg-nav-group">Fields &amp; Forms</div>
+    <a href="#sg-fields">Field Display</a>
+    <a href="#sg-forms">Form Inputs</a>
+    <a href="#sg-buttons">Buttons</a>
+    <div class="sg-nav-group">Reference</div>
+    <a href="#sg-utility">Utility Classes</a>
+    <a href="#sg-data-attrs">Data Attributes</a>
+    <a href="#sg-conventions">Conventions</a>
+    <a href="#sg-dosdont">Dos &amp; Don'ts</a>
+    <a href="#sg-examples">Complete Examples</a>
+  </nav>
+
+  {# ── Content ── #}
+  <div class="sg-content">
+
+    {# ══ QUICK START ══ #}
+    <section id="sg-quickstart" class="sg-section">
+      <h2 class="sg-h2">Quick Start</h2>
+      <p class="sg-desc">Every widget is a single <code>&lt;div class="wdp"&gt;</code> element. Webdata Pro renders server-side HTML into it. You style it entirely through CSS custom properties — no class names need to change between themes.</p>
+
+      <div class="sg-callout">
+        <strong>Key principle:</strong> The <code>wdp-</code> classes define <em>structure and layout</em>. Color, spacing, and typography are all driven by <code>--wdp-*</code> custom properties. To theme a widget, override those variables — don't write new CSS rules for the existing classes.
+      </div>
+
+      <div class="sg-block">
+        <div class="sg-block-label">Minimal themed widget skeleton</div>
+        <pre class="sg-code">&lt;<span class="hl">style</span>&gt;
+  :root {
+    --wdp-primary:    #7c3aed;   /* purple brand */
+    --wdp-on-primary: #ffffff;
+    --wdp-accent:     #a855f7;
+    --wdp-bg:         #f5f3ff;
+    --wdp-surface:    #ffffff;
+    --wdp-text:       #1e1b4b;
+    --wdp-border:     #ddd6fe;
+  }
+&lt;/<span class="hl">style</span>&gt;
+&lt;<span class="hl">div</span> class=<span class="str">"wdp"</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-sf"</span>&gt; ... search form ... &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-hdr"</span>&gt; ... header ... &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-row"</span>&gt; ... row ... &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-footer"</span>&gt; ... pagination ... &lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">The <code>:root</code> override block belongs in your <strong>search_form</strong> template — it applies to the whole widget. embed.js injects all template slots into a shared DOM, so one style block covers everything.</div>
+      </div>
+    </section>
+
+    {# ══ CSS VARIABLES ══ #}
+    <section id="sg-variables" class="sg-section">
+      <h2 class="sg-h2">CSS Custom Properties</h2>
+      <p class="sg-desc">These seven variables control every color in the widget. Override them in a <code>&lt;style&gt;</code> block at the top of your <code>search_form</code> template.</p>
+      <table class="sg-table">
+        <thead><tr><th>Variable</th><th>Default</th><th>Used for</th></tr></thead>
+        <tbody>
+          <tr><td><code>--wdp-primary</code></td><td><span style="display:inline-block;width:14px;height:14px;background:#1e3a5f;border-radius:2px;vertical-align:middle;margin-right:6px;"></span><code>#1e3a5f</code></td><td>Header background, button fill, labels, icon color</td></tr>
+          <tr><td><code>--wdp-on-primary</code></td><td><code>#ffffff</code></td><td>Text color on primary-colored backgrounds</td></tr>
+          <tr><td><code>--wdp-accent</code></td><td><span style="display:inline-block;width:14px;height:14px;background:#2e86de;border-radius:2px;vertical-align:middle;margin-right:6px;"></span><code>#2e86de</code></td><td>Links, badges, group labels, active sort indicator</td></tr>
+          <tr><td><code>--wdp-bg</code></td><td><span style="display:inline-block;width:14px;height:14px;background:#f0f4f8;border-radius:2px;vertical-align:middle;margin-right:6px;border:1px solid #ddd;"></span><code>#f0f4f8</code></td><td>Search bar, group header, footer, row hover background</td></tr>
+          <tr><td><code>--wdp-surface</code></td><td><code>#ffffff</code></td><td>Row background, input background, secondary button fill</td></tr>
+          <tr><td><code>--wdp-text</code></td><td><code>#1a2a3a</code></td><td>All body text</td></tr>
+          <tr><td><code>--wdp-border</code></td><td><span style="display:inline-block;width:14px;height:14px;background:#c8d8e8;border-radius:2px;vertical-align:middle;margin-right:6px;border:1px solid #aaa;"></span><code>#c8d8e8</code></td><td>All borders, dividers, input outlines</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    {# ══ ROOT CONTAINER ══ #}
+    <section id="sg-root" class="sg-section">
+      <h2 class="sg-h2">Root Container</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><span><code>.wdp</code> <span class="sg-tag-official">Official</span></span></div>
+        <div class="sg-demo dark">
+          <div class="wdp" style="border:2px dashed #cbd5e1;padding:8px;border-radius:4px;">
+            <span style="color:#94a3b8;font-size:0.8rem;">← everything lives inside here</span>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp"</span>&gt;
+  &lt;!-- all widget content --&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">Sets <code>font-family: system-ui</code>, <code>color</code>, and <code>line-height</code>. Also applies <code>box-sizing: border-box</code> to all descendants. Always wrap your entire widget in this class.</div>
+      </div>
+    </section>
+
+    {# ══ SEARCH FORM ══ #}
+    <section id="sg-search" class="sg-section">
+      <h2 class="sg-h2">Search Form</h2>
+
+      <div class="sg-block">
+        <div class="sg-block-label"><span><code>.wdp-sf</code> <span class="sg-tag-official">Official</span></span> <span>Simple search bar</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-sf">
+              <input type="text" placeholder="Search…">
+              <button>Search</button>
+              <a href="#" class="wdp-sf-clear">✕ Clear</a>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-sf"</span>&gt;
+  &lt;<span class="hl">input</span> type=<span class="str">"text"</span> name=<span class="str">"q"</span> value=<span class="str">"${_q}"</span> placeholder=<span class="str">"Search…"</span>&gt;
+  &lt;<span class="hl">button</span> type=<span class="str">"submit"</span>&gt;Search&lt;/<span class="hl">button</span>&gt;
+  &lt;<span class="hl">a</span> class=<span class="str">"wdp-sf-clear"</span> data-wdp-action=<span class="str">"clear"</span>&gt;✕ Clear&lt;/<span class="hl">a</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">Flex row with gap. Input fills remaining width (<code>flex: 1</code>). Must be inside a <code>&lt;form data-wdp-form="search"&gt;</code> for submission to work. Related: <code>.wdp-sf-clear</code>, <code>.wdp-sf-simple</code>, <code>.wdp-sf-adv</code>.</div>
+      </div>
+
+      <div class="sg-block">
+        <div class="sg-block-label"><span><code>.wdp-sf-adv</code> <span class="sg-tag-official">Official</span></span> <span>Advanced search panel</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-sf-adv">
+              <div class="wdp-adv-fields">
+                <div class="wdp-field"><div class="wdp-field-label">Name</div><input type="text" class="wdp-input" placeholder="e.g. Penny"></div>
+                <div class="wdp-field"><div class="wdp-field-label">Breed</div><input type="text" class="wdp-input" placeholder="e.g. Labrador"></div>
+                <div class="wdp-field"><div class="wdp-field-label">Animal Type</div><select class="wdp-select"><option value="">Any</option><option>Dog</option><option>Cat</option></select></div>
+              </div>
+              <div class="wdp-adv-btns">
+                <button class="wdp-btn" type="submit">Search</button>
+                <button class="wdp-adv-link" type="button">↑ Simple</button>
+                <a href="#" class="wdp-btn-link">Clear</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-sf-adv"</span> style=<span class="str">"display:none"</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-adv-fields"</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-field"</span>&gt;
+      &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-label"</span>&gt;Name&lt;/<span class="hl">div</span>&gt;
+      &lt;<span class="hl">input</span> class=<span class="str">"wdp-input"</span> type=<span class="str">"text"</span> name=<span class="str">"pets__name"</span>&gt;
+    &lt;/<span class="hl">div</span>&gt;
+    &lt;!-- more fields… --&gt;
+  &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-adv-btns"</span>&gt;
+    &lt;<span class="hl">button</span> class=<span class="str">"wdp-btn"</span>&gt;Search&lt;/<span class="hl">button</span>&gt;
+    &lt;<span class="hl">button</span> class=<span class="str">"wdp-adv-link"</span> type=<span class="str">"button"</span> onclick=<span class="str">"…"</span>&gt;↑ Simple&lt;/<span class="hl">button</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note"><code>.wdp-adv-fields</code> is a responsive CSS grid (auto-fill, min 160px columns). <code>.wdp-adv-btns</code> is a flex row. The panel starts hidden — toggled by JS. If your search_form template already contains <code>.wdp-sf-adv</code>, the server's auto-injection is skipped, giving you full control.</div>
+      </div>
+
+      <div class="sg-block">
+        <div class="sg-block-label"><span><code>.wdp-sf-simple</code> <span class="sg-tag-convention">Convention</span></span> <span>Simple panel toggle wrapper</span></div>
+        <pre class="sg-code">&lt;<span class="hl">form</span> data-wdp-form=<span class="str">"search"</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-sf wdp-sf-simple"</span>&gt;
+    &lt;<span class="hl">input</span> type=<span class="str">"text"</span> name=<span class="str">"q"</span> value=<span class="str">"${_q}"</span>&gt;
+    &lt;<span class="hl">button</span>&gt;Search&lt;/<span class="hl">button</span>&gt;
+    &lt;<span class="hl">a</span> href=<span class="str">"#"</span> class=<span class="str">"wdp-adv-link"</span> onclick=<span class="str">"…show adv…"</span>&gt;Advanced&lt;/<span class="hl">a</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-sf-adv"</span> style=<span class="str">"display:none"</span>&gt; … &lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">form</span>&gt;</pre>
+        <div class="sg-note">No visual CSS — purely a structural toggle target. The JS that switches Simple ↔ Advanced hides/shows <code>.wdp-sf-simple</code> and <code>.wdp-sf-adv</code>. Can be combined with <code>.wdp-sf</code> on the same element.</div>
+      </div>
+    </section>
+
+    {# ══ HEADER BAR ══ #}
+    <section id="sg-header" class="sg-section">
+      <h2 class="sg-h2">Header Bar</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-hdr</code> / <code>.wdp-hdr-title</code> / <code>.wdp-hdr-meta</code> <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-hdr">
+              <span class="wdp-hdr-title">🐾 Available Pets</span>
+              <span class="wdp-hdr-meta">24 results &nbsp;·&nbsp; page 1 of 2</span>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-hdr"</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-hdr-title"</span>&gt;🐾 Available Pets&lt;/<span class="hl">span</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-hdr-meta"</span>&gt;${_total} results &amp;nbsp;·&amp;nbsp; page ${_page} of ${_total_pages}&lt;/<span class="hl">span</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">Flex row, space-between. Primary background. <code>.wdp-hdr-meta</code> is 80% opacity. Sits directly below the search form — no gap needed, the search bar's <code>border-bottom: none</code> creates the visual connection. Good place for add/create buttons too.</div>
+      </div>
+    </section>
+
+    {# ══ GROUP DIVIDER ══ #}
+    <section id="sg-group" class="sg-section">
+      <h2 class="sg-h2">Group Divider</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-grp</code> / <code>.wdp-grp-label</code> / <code>.wdp-grp-bar</code> <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-grp">
+              <span class="wdp-grp-label">Dogs</span>
+              <span class="wdp-grp-bar"></span>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-grp"</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-grp-label"</span>&gt;${_group_value}&lt;/<span class="hl">span</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-grp-bar"</span>&gt;&lt;/<span class="hl">span</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">Used in the <code>group_header</code> template slot. Renders between rows when the grouping field value changes. <code>.wdp-grp-bar</code> is a flex-grow horizontal rule. Requires a grouping field to be set in View Settings.</div>
+      </div>
+    </section>
+
+    {# ══ CARD ROWS ══ #}
+    <section id="sg-rows" class="sg-section">
+      <h2 class="sg-h2">Card Rows</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-row</code> family <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-row" data-wdp-action="detail" data-wdp-id="1">
+              <div class="wdp-row-body">
+                <div class="wdp-row-title">Penny</div>
+                <div class="wdp-row-sub">Dog • Pug</div>
+                <div class="wdp-row-meta">2.5 years old &nbsp;·&nbsp; Good with kids</div>
+              </div>
+              <div class="wdp-arr">›</div>
+            </div>
+            <div class="wdp-row" data-wdp-action="detail" data-wdp-id="2">
+              <div class="wdp-row-body">
+                <div class="wdp-row-title">Mochi</div>
+                <div class="wdp-row-sub">Cat • British Shorthair</div>
+                <div class="wdp-row-meta">4 years old</div>
+              </div>
+              <div class="wdp-arr">›</div>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-row"</span> data-wdp-action=<span class="str">"detail"</span> data-wdp-id=<span class="str">"${_pk}"</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-body"</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-title"</span>&gt;${pets.name}&lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-sub"</span>&gt;${pets.animal_type} • ${pets.breed}&lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-meta"</span>&gt;${age_years} yrs old&lt;/<span class="hl">div</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-arr"</span>&gt;›&lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">
+          <code>.wdp-row</code> is a flex container with borders on left, right, and bottom (no top — header provides it). Hover state lightens background.
+          <code>.wdp-row-body</code> is <code>flex: 1; min-width: 0</code> — prevents long text from overflowing.
+          Hierarchy: <strong>title</strong> (bold, full size) → <strong>sub</strong> (accent color) → <strong>meta</strong> (muted, small).
+          <code>.wdp-arr</code> is a right-aligned chevron/arrow; can be any character or icon.
+        </div>
+      </div>
+    </section>
+
+    {# ══ TABLE LAYOUT ══ #}
+    <section id="sg-table" class="sg-section">
+      <h2 class="sg-h2">Table Layout</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-table</code> <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <table class="wdp-table">
+              <thead><tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Breed</th>
+                <th>Age</th>
+              </tr></thead>
+              <tbody>
+                <tr data-wdp-action="detail" data-wdp-id="1">
+                  <td>Penny</td><td>Dog</td><td>Pug</td><td>2.5 yrs</td>
+                </tr>
+                <tr data-wdp-action="detail" data-wdp-id="2">
+                  <td>Mochi</td><td>Cat</td><td>British Shorthair</td><td>4 yrs</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">table</span> class=<span class="str">"wdp-table"</span>&gt;
+  &lt;<span class="hl">thead</span>&gt;&lt;<span class="hl">tr</span>&gt;
+    &lt;<span class="hl">th</span>&gt;Name&lt;/<span class="hl">th</span>&gt;
+    &lt;<span class="hl">th</span>&gt;Type&lt;/<span class="hl">th</span>&gt;
+  &lt;/<span class="hl">tr</span>&gt;&lt;/<span class="hl">thead</span>&gt;
+  &lt;<span class="hl">tbody</span>&gt;
+    &lt;<span class="hl">tr</span> data-wdp-action=<span class="str">"detail"</span> data-wdp-id=<span class="str">"${_pk}"</span>&gt;
+      &lt;<span class="hl">td</span>&gt;${pets.name}&lt;/<span class="hl">td</span>&gt;
+      &lt;<span class="hl">td</span>&gt;${pets.animal_type}&lt;/<span class="hl">td</span>&gt;
+    &lt;/<span class="hl">tr</span>&gt;
+  &lt;/<span class="hl">tbody</span>&gt;
+&lt;/<span class="hl">table</span>&gt;</pre>
+        <div class="sg-note">Full-width, no top border (header provides it). <code>th</code> uses primary background. Rows with <code>data-wdp-action</code> get hover highlight automatically. Add <code>.wdp-sort-btn</code> inside <code>th</code> elements for sortable columns.</div>
+      </div>
+    </section>
+
+    {# ══ FOOTER & PAGINATION ══ #}
+    <section id="sg-footer" class="sg-section">
+      <h2 class="sg-h2">Footer &amp; Pagination</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-footer</code> / <code>.wdp-pagination</code> / <code>.wdp-page-btn</code> / <code>.wdp-page-info</code> <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-footer">
+              <div class="wdp-pagination">
+                <button class="wdp-page-btn" disabled>← Prev</button>
+                <button class="wdp-page-btn wdp-page-current">1</button>
+                <button class="wdp-page-btn">2</button>
+                <span class="wdp-page-ellipsis">…</span>
+                <button class="wdp-page-btn">8</button>
+                <span class="wdp-page-info">24 records</span>
+                <button class="wdp-page-btn">Next →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-footer"</span>&gt;
+  ${_pagination}   &lt;!-- built-in, or build your own: --&gt;
+
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-pagination"</span>&gt;
+    &lt;<span class="hl">button</span> class=<span class="str">"wdp-page-btn"</span>
+      data-wdp-action=<span class="str">"page"</span> data-wdp-page=<span class="str">"${_prev_page}"</span>
+      ${_has_prev ? <span class="str">""</span> : <span class="str">"disabled"</span>}&gt;← Prev&lt;/<span class="hl">button</span>&gt;
+    &lt;<span class="hl">span</span> class=<span class="str">"wdp-page-info"</span>&gt;${_page} of ${_total_pages}&lt;/<span class="hl">span</span>&gt;
+    &lt;<span class="hl">button</span> class=<span class="str">"wdp-page-btn"</span>
+      data-wdp-action=<span class="str">"page"</span> data-wdp-page=<span class="str">"${_next_page}"</span>
+      ${_has_next ? <span class="str">""</span> : <span class="str">"disabled"</span>}&gt;Next →&lt;/<span class="hl">button</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">
+          <code>.wdp-footer</code> has <code>border-radius: 0 0 6px 6px</code> — rounds the bottom of the widget.
+          <code>.wdp-page-btn[disabled]</code> is 35% opacity.
+          <code>.wdp-page-btn.wdp-page-current</code> shows the active page in primary color.
+          <code>.wdp-page-ellipsis</code> for truncated page ranges.
+          The built-in <code>${_pagination}</code> token renders a complete paginator automatically.
+        </div>
+      </div>
+    </section>
+
+    {# ══ DETAIL VIEW ══ #}
+    <section id="sg-detail" class="sg-section">
+      <h2 class="sg-h2">Detail View</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-detail</code> family <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-detail">
+              <button class="wdp-back">‹ Back to list</button>
+              <h2 class="wdp-detail-title">Penny</h2>
+              <div class="wdp-detail-sub">Dog • Pug</div>
+              <span class="wdp-badge">Available</span>
+              <div class="wdp-detail-body">
+                <div class="wdp-field">
+                  <div class="wdp-field-label">Age</div>
+                  <div class="wdp-field-value">2.5 years old</div>
+                </div>
+                <div class="wdp-field">
+                  <div class="wdp-field-label">Good for Kids</div>
+                  <div class="wdp-field-value">Yes</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-detail"</span>&gt;
+  &lt;<span class="hl">button</span> class=<span class="str">"wdp-back"</span> data-wdp-action=<span class="str">"back"</span>&gt;‹ Back&lt;/<span class="hl">button</span>&gt;
+
+  &lt;<span class="hl">h2</span> class=<span class="str">"wdp-detail-title"</span>&gt;${pets.name}&lt;/<span class="hl">h2</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-detail-sub"</span>&gt;${pets.animal_type} • ${pets.breed}&lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-badge"</span>&gt;Available&lt;/<span class="hl">span</span>&gt;
+
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-detail-body"</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-field"</span>&gt;
+      &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-label"</span>&gt;Age&lt;/<span class="hl">div</span>&gt;
+      &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-value"</span>&gt;${age_years} yrs&lt;/<span class="hl">div</span>&gt;
+    &lt;/<span class="hl">div</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">
+          <code>.wdp-back</code> is a bare button (no fill, no border) — styled as a text link. Always wire it to <code>data-wdp-action="back"</code>.
+          <code>.wdp-detail-body</code> has a top border for visual separation from title/badge.
+          <code>.wdp-badge</code> can be any short status word — accent-colored pill.
+        </div>
+      </div>
+    </section>
+
+    {# ══ FIELD DISPLAY ══ #}
+    <section id="sg-fields" class="sg-section">
+      <h2 class="sg-h2">Field Display</h2>
+      <p class="sg-desc">Use in detail views to display individual field values consistently. The label/value pair creates a standard key–value layout.</p>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-field</code> / <code>.wdp-field-label</code> / <code>.wdp-field-value</code> <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-field">
+              <div class="wdp-field-label">Temperament</div>
+              <div class="wdp-field-value">Calm, gentle, great with other animals</div>
+            </div>
+            <div class="wdp-field">
+              <div class="wdp-field-label">Health notes</div>
+              <div class="wdp-field-value">Up to date on all vaccines. Microchipped.</div>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-field"</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-label"</span>&gt;Temperament&lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-value"</span>&gt;${pets.temperament}&lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note"><code>.wdp-field-label</code> is uppercase, small, bold, primary color — visually similar to <code>.wdp-label</code> in forms. <code>.wdp-field</code> has <code>margin-bottom: 8px</code>. Inside <code>.wdp-adv-fields</code>, the margin is reset to 0 to respect the grid gap.</div>
+      </div>
+    </section>
+
+    {# ══ FORM INPUTS ══ #}
+    <section id="sg-forms" class="sg-section">
+      <h2 class="sg-h2">Form Inputs</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-form-group</code> / <code>.wdp-label</code> / <code>.wdp-input</code> / <code>.wdp-select</code> / <code>.wdp-textarea</code> <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-form-group">
+              <label class="wdp-label">Pet name</label>
+              <input class="wdp-input" type="text" value="Penny" placeholder="Enter name">
+            </div>
+            <div class="wdp-form-group">
+              <label class="wdp-label">Animal type</label>
+              <select class="wdp-select"><option>Dog</option><option>Cat</option><option>Rabbit</option></select>
+            </div>
+            <div class="wdp-form-group">
+              <label class="wdp-label">Health notes</label>
+              <textarea class="wdp-textarea" rows="3">Vaccines up to date.</textarea>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-form-group"</span>&gt;
+  &lt;<span class="hl">label</span> class=<span class="str">"wdp-label"</span>&gt;Pet name&lt;/<span class="hl">label</span>&gt;
+  &lt;<span class="hl">input</span> class=<span class="str">"wdp-input"</span> type=<span class="str">"text"</span> name=<span class="str">"pets__name"</span> value=<span class="str">"${pets.name}"</span>&gt;
+&lt;/<span class="hl">div</span>&gt;
+
+&lt;<span class="hl">div</span> class=<span class="str">"wdp-form-group"</span>&gt;
+  &lt;<span class="hl">label</span> class=<span class="str">"wdp-label"</span>&gt;Animal type&lt;/<span class="hl">label</span>&gt;
+  &lt;<span class="hl">select</span> class=<span class="str">"wdp-select"</span> name=<span class="str">"pets__animal_type"</span>&gt;
+    &lt;<span class="hl">option</span>&gt;Dog&lt;/<span class="hl">option</span>&gt;…
+  &lt;/<span class="hl">select</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">All inputs: <code>display: block; width: 100%</code>. Focus state shows accent-colored border. In edit forms, use <code>$update[table.field]</code> to auto-generate these — the classes are applied automatically. Use manual HTML when you need custom logic (e.g. a conditional field).</div>
+      </div>
+    </section>
+
+    {# ══ BUTTONS ══ #}
+    <section id="sg-buttons" class="sg-section">
+      <h2 class="sg-h2">Buttons</h2>
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-btn</code> / <code>.wdp-btn-secondary</code> / <code>.wdp-btn-link</code> <span class="sg-tag-official">Official</span></div>
+        <div class="sg-demo">
+          <div class="wdp" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="wdp-btn">Save</button>
+            <button class="wdp-btn-secondary">Cancel</button>
+            <button class="wdp-btn-link">Delete record</button>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">button</span> type=<span class="str">"submit"</span> class=<span class="str">"wdp-btn"</span>&gt;Save&lt;/<span class="hl">button</span>&gt;
+&lt;<span class="hl">button</span> type=<span class="str">"button"</span> class=<span class="str">"wdp-btn-secondary"</span> data-wdp-action=<span class="str">"back"</span>&gt;Cancel&lt;/<span class="hl">button</span>&gt;
+&lt;<span class="hl">a</span> class=<span class="str">"wdp-btn-link"</span> data-wdp-action=<span class="str">"clear"</span>&gt;Clear filters&lt;/<span class="hl">a</span>&gt;</pre>
+        <div class="sg-note">
+          <strong>.wdp-btn</strong> — primary action, filled with <code>--wdp-primary</code>.<br>
+          <strong>.wdp-btn-secondary</strong> — ghost button, surface background with border.<br>
+          <strong>.wdp-btn-link</strong> — link-style, accent color, no box — for low-emphasis actions like Clear, Delete, Cancel.
+          Works on <code>&lt;button&gt;</code>, <code>&lt;a&gt;</code>, or any element.
+        </div>
+      </div>
+
+      <div class="sg-block">
+        <div class="sg-block-label"><code>.wdp-sort-btn</code> / <code>.wdp-sort-active</code> <span class="sg-tag-convention">Convention</span></div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <table class="wdp-table">
+              <thead><tr>
+                <th><button class="wdp-sort-btn wdp-sort-active">Name ▲</button></th>
+                <th><button class="wdp-sort-btn">Breed</button></th>
+                <th><button class="wdp-sort-btn">Age</button></th>
+              </tr></thead>
+            </table>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">th</span>&gt;
+  &lt;<span class="hl">button</span> class=<span class="str">"wdp-sort-btn ${_sort == 'name' ? 'wdp-sort-active' : ''}"</span>
+    data-wdp-action=<span class="str">"sort"</span> data-wdp-field=<span class="str">"name"</span>&gt;
+    Name ${_sort == 'name' ? (_dir == 'asc' ? '▲' : '▼') : ''}
+  &lt;/<span class="hl">button</span>&gt;
+&lt;/<span class="hl">th</span>&gt;</pre>
+        <div class="sg-note">Inherits the <code>th</code> color. <code>.wdp-sort-active</code> switches to accent color to show current sort field. The sort direction arrow is part of the button text — toggle it with a ternary expression.</div>
+      </div>
+    </section>
+
+    {# ══ UTILITY ══ #}
+    <section id="sg-utility" class="sg-section">
+      <h2 class="sg-h2">Utility Classes</h2>
+      <table class="sg-table">
+        <thead><tr><th>Class</th><th>Status</th><th>Effect</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><td><code>.wdp-badge</code></td><td><span class="sg-tag-official">Official</span></td><td>Accent-colored rounded pill, uppercase tiny text</td><td>Status tags (Available, Sold, Featured)</td></tr>
+          <tr><td><code>.wdp-error</code></td><td><span class="sg-tag-official">Official</span></td><td>Red text, padding</td><td>Inline error messages (auto-applied by embed.js on failures)</td></tr>
+          <tr><td><code>.wdp-loading</code></td><td><span class="sg-tag-official">Official</span></td><td><code>opacity: 0.6; pointer-events: none</code></td><td>Auto-applied to the root widget div while fetching</td></tr>
+          <tr><td><code>.wdp-muted</code></td><td><span class="sg-tag-convention">Convention</span></td><td>55% opacity, small text</td><td>Secondary info: timestamps, IDs, captions</td></tr>
+          <tr><td><code>.wdp-arr</code></td><td><span class="sg-tag-official">Official</span></td><td>Accent-colored, 1.1rem, flex-shrink: 0</td><td>Right-side navigation arrow in card rows</td></tr>
+          <tr><td><code>.wdp-back</code></td><td><span class="sg-tag-official">Official</span></td><td>Bare button styled as a text link</td><td>Back button in detail and edit views</td></tr>
+          <tr><td><code>.wdp-per-page-select</code></td><td><span class="sg-tag-convention">Convention</span></td><td>Small inline select</td><td>Per-page size selector in header or footer</td></tr>
+          <tr><td><code>.wdp-page-ellipsis</code></td><td><span class="sg-tag-convention">Convention</span></td><td>Muted ellipsis between page numbers</td><td>Truncated pagination for large page counts</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    {# ══ DATA ATTRIBUTES ══ #}
+    <section id="sg-data-attrs" class="sg-section">
+      <h2 class="sg-h2">Data Attributes</h2>
+      <p class="sg-desc">These are not CSS classes — they are the mechanism by which any element in a template becomes interactive. embed.js listens for clicks and submits via event delegation.</p>
+      <table class="sg-table">
+        <thead><tr><th>Attribute</th><th>Values</th><th>What embed.js does</th></tr></thead>
+        <tbody>
+          <tr><td><code>data-wdp-action</code></td><td><code>"detail"</code></td><td>Loads the detail view for the record specified by <code>data-wdp-id</code></td></tr>
+          <tr><td></td><td><code>"edit"</code></td><td>Loads the edit form for the record specified by <code>data-wdp-id</code></td></tr>
+          <tr><td></td><td><code>"back"</code></td><td>Returns to the list view (re-renders last list state)</td></tr>
+          <tr><td></td><td><code>"page"</code></td><td>Navigates to the page number in <code>data-wdp-page</code></td></tr>
+          <tr><td></td><td><code>"sort"</code></td><td>Sorts by the field name in <code>data-wdp-field</code>; toggles asc/desc</td></tr>
+          <tr><td></td><td><code>"clear"</code></td><td>Clears all search state and reloads the default list</td></tr>
+          <tr><td></td><td><code>"create"</code></td><td>Loads the create form (new record)</td></tr>
+          <tr><td><code>data-wdp-form</code></td><td><code>"search"</code></td><td>Marks the search form — submit is intercepted, state encoded into hash</td></tr>
+          <tr><td></td><td><code>"edit"</code></td><td>Marks the edit form — submit sends a PATCH; <code>data-wdp-id</code> required</td></tr>
+          <tr><td></td><td><code>"create"</code></td><td>Marks the create form — submit sends a POST</td></tr>
+          <tr><td><code>data-wdp-id</code></td><td>Any record ID</td><td>Specifies which record to load for detail/edit/delete actions</td></tr>
+          <tr><td><code>data-wdp-page</code></td><td>Page number</td><td>Used with <code>data-wdp-action="page"</code></td></tr>
+          <tr><td><code>data-wdp-field</code></td><td>Field name</td><td>Used with <code>data-wdp-action="sort"</code> — field name only, no table prefix</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    {# ══ CONVENTIONS ══ #}
+    <section id="sg-conventions" class="sg-section">
+      <h2 class="sg-h2">Conventions</h2>
+
+      <h3 class="sg-h3">Search input naming — <code>tablename__fieldname</code></h3>
+      <p class="sg-desc">Any input whose <code>name</code> attribute follows the double-underscore pattern is treated as a per-field filter. The server applies it as a <code>WHERE</code> clause on that column.</p>
+      <div class="sg-block">
+        <div class="sg-block-label">Filter input naming</div>
+        <pre class="sg-code">&lt;!-- These are picked up as field filters automatically --&gt;
+&lt;<span class="hl">input</span> name=<span class="str">"pets__name"</span>&gt;          → WHERE pets__name LIKE '%value%'
+&lt;<span class="hl">input</span> name=<span class="str">"pets__animal_type"</span>&gt;   → WHERE pets__animal_type LIKE '%value%'
+&lt;<span class="hl">input</span> name=<span class="str">"pets__age_months"</span>&gt;    → WHERE pets__age_months LIKE '%value%'</pre>
+      </div>
+
+      <h3 class="sg-h3">Filter operator prefixes</h3>
+      <p class="sg-desc">Prefix the input <em>value</em> with an operator to get a non-LIKE comparison. Works in any input type — text, hidden, or select options.</p>
+      <div class="sg-block">
+        <div class="sg-block-label">Operator syntax in field values</div>
+        <pre class="sg-code">value=<span class="str">"poodle"</span>          → LIKE '%poodle%'  (default text search)
+value=<span class="str">"=1"</span>             → = '1'            (exact match — good for checkboxes)
+value=<span class="str">"&gt;96"</span>            → &gt; '96'           (greater than)
+value=<span class="str">"&lt;24"</span>            → &lt; '24'           (less than)
+value=<span class="str">"24..96"</span>         → &gt;= '24' AND &lt;= '96'  (inclusive range)
+value=<span class="str">"&gt;=2020-01-01"</span>  → &gt;= '2020-01-01'   (date comparison)</pre>
+      </div>
+    </section>
+
+    {# ══ DOS AND DON'TS ══ #}
+    <section id="sg-dosdont" class="sg-section">
+      <h2 class="sg-h2">Dos &amp; Don'ts</h2>
+
+      <div class="sg-do-dont">
+        <div class="sg-do">
+          <div class="sg-do-hdr">✓ Do</div>
+          <div class="sg-code" style="border-radius:0;">/* Override variables to theme */
+:root {
+  --wdp-primary: #7c3aed;
+  --wdp-accent:  #a855f7;
+}</div>
+        </div>
+        <div class="sg-dont">
+          <div class="sg-dont-hdr">✗ Don't</div>
+          <div class="sg-code" style="border-radius:0;">/* Override the class directly */
+.wdp-btn {
+  background: purple; /* breaks theming */
+}</div>
+        </div>
+      </div>
+
+      <div class="sg-do-dont">
+        <div class="sg-do">
+          <div class="sg-do-hdr">✓ Do</div>
+          <div class="sg-code" style="border-radius:0;">&lt;form data-wdp-form="search"&gt;
+  &lt;input name="q"&gt;
+  &lt;button&gt;Search&lt;/button&gt;
+&lt;/form&gt;</div>
+        </div>
+        <div class="sg-dont">
+          <div class="sg-dont-hdr">✗ Don't</div>
+          <div class="sg-code" style="border-radius:0;">&lt;!-- Missing data-wdp-form --&gt;
+&lt;form action="/search"&gt;
+  &lt;input name="q"&gt;
+  &lt;button&gt;Search&lt;/button&gt;
+&lt;/form&gt;
+&lt;!-- Form submits to /search, not the widget --&gt;</div>
+        </div>
+      </div>
+
+      <div class="sg-do-dont">
+        <div class="sg-do">
+          <div class="sg-do-hdr">✓ Do — JS calculations in templates work</div>
+          <div class="sg-code" style="border-radius:0;">&lt;!-- For display-only values --&gt;
+${Math.floor(pets.age_months / 12)} years old</div>
+        </div>
+        <div class="sg-dont">
+          <div class="sg-dont-hdr">✗ Don't try to filter by template-computed values</div>
+          <div class="sg-code" style="border-radius:0;">&lt;!-- This value only exists in the browser --&gt;
+&lt;!-- You can't filter/sort by age_years if it --&gt;
+&lt;!-- isn't in the SQL query                   --&gt;</div>
+        </div>
+      </div>
+
+      <div class="sg-do-dont">
+        <div class="sg-do">
+          <div class="sg-do-hdr">✓ Do — put &lt;style&gt; in search_form template</div>
+          <div class="sg-code" style="border-radius:0;">&lt;!-- search_form template --&gt;
+&lt;style&gt;:root { --wdp-primary: … }&lt;/style&gt;
+&lt;div class="wdp"&gt;&lt;form …&gt;…&lt;/form&gt;&lt;/div&gt;</div>
+        </div>
+        <div class="sg-dont">
+          <div class="sg-dont-hdr">✗ Don't put &lt;style&gt; in every slot</div>
+          <div class="sg-code" style="border-radius:0;">&lt;!-- row template --&gt;
+&lt;style&gt;:root { --wdp-primary: … }&lt;/style&gt;
+&lt;!-- Duplicated on every row render --&gt;</div>
+        </div>
+      </div>
+    </section>
+
+    {# ══ COMPLETE EXAMPLES ══ #}
+    <section id="sg-examples" class="sg-section">
+      <h2 class="sg-h2">Complete Copy-Paste Examples</h2>
+
+      <h3 class="sg-h3">1 — Browse list with search and pagination</h3>
+      <div class="sg-block">
+        <div class="sg-block-label">search_form + header + row + footer templates combined</div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-sf">
+              <input type="text" placeholder="Search pets…">
+              <button>Search</button>
+            </div>
+            <div class="wdp-hdr">
+              <span class="wdp-hdr-title">🐾 Available Pets</span>
+              <span class="wdp-hdr-meta">24 found &nbsp;·&nbsp; p.1 of 2</span>
+            </div>
+            <div class="wdp-row">
+              <div class="wdp-row-body">
+                <div class="wdp-row-title">Penny</div>
+                <div class="wdp-row-sub">Dog • Pug</div>
+                <div class="wdp-row-meta">2.5 yrs &nbsp;·&nbsp; Kid friendly</div>
+              </div>
+              <div class="wdp-arr">›</div>
+            </div>
+            <div class="wdp-row">
+              <div class="wdp-row-body">
+                <div class="wdp-row-title">Mochi</div>
+                <div class="wdp-row-sub">Cat • British Shorthair</div>
+              </div>
+              <div class="wdp-arr">›</div>
+            </div>
+            <div class="wdp-footer">
+              <div class="wdp-pagination">
+                <button class="wdp-page-btn" disabled>← Prev</button>
+                <span class="wdp-page-info">1 of 2</span>
+                <button class="wdp-page-btn">Next →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;!-- SEARCH FORM --&gt;
+&lt;<span class="hl">div</span> class=<span class="str">"wdp"</span>&gt;&lt;<span class="hl">form</span> data-wdp-form=<span class="str">"search"</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-sf"</span>&gt;
+    &lt;<span class="hl">input</span> type=<span class="str">"text"</span> name=<span class="str">"q"</span> value=<span class="str">"${_q}"</span> placeholder=<span class="str">"Search pets…"</span>&gt;
+    &lt;<span class="hl">button</span> type=<span class="str">"submit"</span>&gt;Search&lt;/<span class="hl">button</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">form</span>&gt;
+
+&lt;!-- HEADER --&gt;
+&lt;<span class="hl">div</span> class=<span class="str">"wdp-hdr"</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-hdr-title"</span>&gt;🐾 Available Pets&lt;/<span class="hl">span</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-hdr-meta"</span>&gt;${_total} found &amp;nbsp;·&amp;nbsp; p.${_page} of ${_total_pages}&lt;/<span class="hl">span</span>&gt;
+&lt;/<span class="hl">div</span>&gt;
+
+&lt;!-- ROW --&gt;
+&lt;<span class="hl">div</span> class=<span class="str">"wdp-row"</span> data-wdp-action=<span class="str">"detail"</span> data-wdp-id=<span class="str">"${_pk}"</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-body"</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-title"</span>&gt;${pets.name}&lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-sub"</span>&gt;${pets.animal_type} • ${pets.breed}&lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-meta"</span>&gt;${age_years} yrs ${pets.good_for_kids ? '· Kid friendly' : ''}&lt;/<span class="hl">div</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-arr"</span>&gt;›&lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;
+
+&lt;!-- FOOTER --&gt;
+&lt;<span class="hl">div</span> class=<span class="str">"wdp-footer"</span>&gt;${_pagination}&lt;/<span class="hl">div</span>&gt;&lt;/<span class="hl">div</span>&gt;</pre>
+      </div>
+
+      <h3 class="sg-h3">2 — Detail view with edit button</h3>
+      <div class="sg-block">
+        <div class="sg-block-label">detail template</div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-detail"</span>&gt;
+  &lt;<span class="hl">button</span> class=<span class="str">"wdp-back"</span> data-wdp-action=<span class="str">"back"</span>&gt;‹ Back&lt;/<span class="hl">button</span>&gt;
+  &lt;<span class="hl">h2</span> class=<span class="str">"wdp-detail-title"</span>&gt;${pets.name}&lt;/<span class="hl">h2</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-detail-sub"</span>&gt;${pets.animal_type} • ${pets.breed}&lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-badge"</span>&gt;${pets.status}&lt;/<span class="hl">span</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-detail-body"</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-field"</span>&gt;
+      &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-label"</span>&gt;Age&lt;/<span class="hl">div</span>&gt;
+      &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-value"</span>&gt;${age_years} years old&lt;/<span class="hl">div</span>&gt;
+    &lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-field"</span>&gt;
+      &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-label"</span>&gt;Good for kids&lt;/<span class="hl">div</span>&gt;
+      &lt;<span class="hl">div</span> class=<span class="str">"wdp-field-value"</span>&gt;$if(pets.good_for_kids, "Yes ✓", "No")&lt;/<span class="hl">div</span>&gt;
+    &lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> style=<span class="str">"margin-top:16px;"</span>&gt;
+      &lt;<span class="hl">button</span> class=<span class="str">"wdp-btn"</span> data-wdp-action=<span class="str">"edit"</span> data-wdp-id=<span class="str">"${_pk}"</span>&gt;Edit&lt;/<span class="hl">button</span>&gt;
+    &lt;/<span class="hl">div</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+      </div>
+
+      <h3 class="sg-h3">3 — Edit form</h3>
+      <div class="sg-block">
+        <div class="sg-block-label">edit_form template</div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-detail"</span>&gt;
+  &lt;<span class="hl">button</span> class=<span class="str">"wdp-back"</span> data-wdp-action=<span class="str">"back"</span>&gt;‹ Cancel&lt;/<span class="hl">button</span>&gt;
+  &lt;<span class="hl">form</span> data-wdp-form=<span class="str">"edit"</span> data-wdp-id=<span class="str">"${_pk}"</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-form-group"</span>&gt;
+      &lt;<span class="hl">label</span> class=<span class="str">"wdp-label"</span>&gt;Name&lt;/<span class="hl">label</span>&gt;
+      $update[pets.name]
+    &lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-form-group"</span>&gt;
+      &lt;<span class="hl">label</span> class=<span class="str">"wdp-label"</span>&gt;Animal type&lt;/<span class="hl">label</span>&gt;
+      $update[pets.animal_type]
+    &lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> style=<span class="str">"display:flex;gap:8px;margin-top:16px;"</span>&gt;
+      &lt;<span class="hl">button</span> type=<span class="str">"submit"</span> class=<span class="str">"wdp-btn"</span>&gt;Save&lt;/<span class="hl">button</span>&gt;
+      &lt;<span class="hl">button</span> type=<span class="str">"button"</span> class=<span class="str">"wdp-btn-secondary"</span> data-wdp-action=<span class="str">"back"</span>&gt;Cancel&lt;/<span class="hl">button</span>&gt;
+    &lt;/<span class="hl">div</span>&gt;
+  &lt;/<span class="hl">form</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+      </div>
+    </section>
+
+  </div>{# end sg-content #}
+</div>{# end sg-wrap #}
+
+<script>
+(function() {
+  var links = document.querySelectorAll('.sg-nav a');
+  var sections = document.querySelectorAll('.sg-section');
+  window.addEventListener('scroll', function() {
+    var active = sections[0];
+    sections.forEach(function(s) {
+      if (s.getBoundingClientRect().top <= 84) active = s;
+    });
+    links.forEach(function(a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + active.id);
+    });
+  }, { passive: true });
+  links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var t = document.querySelector(a.getAttribute('href'));
+      if (t) t.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+}());
+</script>
+{% endblock %}

@@ -168,6 +168,21 @@
 .wdp-btn-secondary { display: inline-block; padding: 8px 18px; background: var(--wdp-surface); color: var(--wdp-primary); border: 1.5px solid var(--wdp-border); border-radius: 4px; font-size: 0.875rem; cursor: pointer; }
 .wdp-btn-link      { background: none; border: none; color: var(--wdp-accent); cursor: pointer; font-size: 0.875rem; padding: 0; text-decoration: none; display: inline-block; }
 
+/* ── Sort controls ──────────────────────────────────────────────────────── */
+.wdp-sort-btn     { background: none; border: none; color: inherit; cursor: pointer; font-weight: bold; padding: 0; font-size: inherit; white-space: nowrap; }
+.wdp-sort-btn:hover { text-decoration: underline; }
+.wdp-sort-active  { color: var(--wdp-accent); }
+
+/* ── Per-page select ────────────────────────────────────────────────────── */
+.wdp-per-page-select { padding: 3px 6px; border: 1px solid var(--wdp-border); border-radius: 4px; font-size: 0.8rem; background: var(--wdp-surface); color: var(--wdp-text); cursor: pointer; }
+
+/* ── Pagination extras ──────────────────────────────────────────────────── */
+.wdp-page-btn.wdp-page-current { background: var(--wdp-primary); color: var(--wdp-on-primary); border-color: var(--wdp-primary); cursor: default; }
+.wdp-page-ellipsis { color: var(--wdp-text); opacity: 0.5; padding: 0 4px; font-size: 0.875rem; }
+
+/* ── Text helpers ───────────────────────────────────────────────────────── */
+.wdp-muted        { color: var(--wdp-text); opacity: 0.55; font-size: 0.85rem; }
+
 /* ── Utility ────────────────────────────────────────────────────────────── */
 .wdp-error        { color: #991b1b; padding: 12px; }
 .wdp-loading      { opacity: 0.6; pointer-events: none; }

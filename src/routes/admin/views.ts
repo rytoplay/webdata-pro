@@ -295,7 +295,18 @@ viewsRouter.post('/:id/preview-render', async (req, res, next) => {
     }
     const templates = { ...saved, ...overrides };
 
-    const html = await viewsService.renderViewList(app, view, baseTable.table_name, templates, {});
+    // Forward search/pagination state from query string
+    const q    = req.query['q']    as string | undefined;
+    const page = req.query['page'] ? Number(req.query['page']) : undefined;
+    const sort = req.query['sort'] as string | undefined;
+    const dir  = req.query['dir'] === 'desc' ? 'desc' : req.query['dir'] === 'asc' ? 'asc' : undefined;
+    const fieldFilters: Record<string, string> = {};
+    for (const [k, v] of Object.entries(req.query)) {
+      if (k.startsWith('f_') && typeof v === 'string' && v) fieldFilters[k.slice(2)] = v;
+    }
+
+    const html = await viewsService.renderViewList(app, view, baseTable.table_name, templates,
+      { q, page, sort, dir, fieldFilters });
     res.json({ html });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

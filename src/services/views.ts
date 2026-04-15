@@ -245,6 +245,22 @@ function applyGroupTags(template: string, tags: GroupTagInfo[]): string {
 // ── SQL generation ──────────────────────────────────────────────────────────
 
 /**
+ * Extract column aliases from a custom SQL string.
+ * Matches: AS "alias", AS alias, AS `alias`
+ * Used to validate which columns are safe to reference in the outer WHERE clause.
+ */
+function extractSqlAliases(sql: string): Set<string> {
+  const aliases = new Set<string>();
+  const re = /\bAS\s+(?:"([^"]+)"|`([^`]+)`|'([^']+)'|([a-z_][a-z0-9_]*))/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(sql)) !== null) {
+    const alias = (m[1] ?? m[2] ?? m[3] ?? m[4] ?? '').toLowerCase();
+    if (alias) aliases.add(alias);
+  }
+  return aliases;
+}
+
+/**
  * Parse ${table.field} tokens from view templates, ignoring system ${_*} tokens
  * and tokens that live inside <group> tags (those are handled by GROUP_CONCAT).
  */
@@ -695,8 +711,10 @@ export async function renderViewList(
   const whereParts:  string[] = [];
   const bindings:    string[] = [];
 
-  // Global keyword search across all text columns (auto SQL only)
-  if (q && view.query_mode !== 'advanced_sql') {
+  // Global keyword search across all text/string columns.
+  // Works in both automatic and advanced_sql modes — advanced SQL must use table__field aliases
+  // (the documented convention) for the WHERE clause to reference them correctly.
+  if (q) {
     const tokens = parseViewTokens(templates);
     const combined = Object.values(templates).filter(Boolean).join('\n');
     const groupTagsList = parseGroupTags(combined);
@@ -714,9 +732,17 @@ export async function renderViewList(
     const textTypes    = new Set(['text', 'varchar', 'char', 'string', 'json']);
     const fieldTypeMap = new Map(fieldTypes.map((f: { field_name: string; data_type: string }) => [f.field_name, f.data_type]));
 
+    // In advanced_sql mode, only search columns that are actually aliased in the custom SQL.
+    // Template tokens can reference computed/display-only fields that aren't in the SELECT.
+    const customSqlAliases: Set<string> | null =
+      view.query_mode === 'advanced_sql' && view.custom_sql
+        ? extractSqlAliases(view.custom_sql)
+        : null;
+
     const regularCols = tokens
       .filter(t => !groupedColKeys.has(`${t.table}.${t.field}`))
       .filter(t => textTypes.has((fieldTypeMap.get(t.field) ?? 'text').toLowerCase()))
+      .filter(t => !customSqlAliases || customSqlAliases.has(`${t.table}__${t.field}`))
       .map(t => `"${t.table}__${t.field}"`);
 
     // GROUP_CONCAT aliases are plain text — safe to LIKE search
@@ -730,10 +756,23 @@ export async function renderViewList(
   }
 
   // Per-field filters from $search[...] inputs ("table__field" → value)
+  // Supports operator prefixes: >=, <=, >, <, = (exact), and range syntax "a..b"
+  // Bare values use LIKE %value% for text search.
   for (const [col, val] of Object.entries(fieldFilters)) {
-    if (!val.trim()) continue;
-    whereParts.push(`"${col}" LIKE ?`);
-    bindings.push(`%${val.trim()}%`);
+    const v = val.trim();
+    if (!v) continue;
+    const qcol = `"${col}"`;
+    if (v.startsWith('>='))      { whereParts.push(`${qcol} >= ?`);  bindings.push(v.slice(2)); }
+    else if (v.startsWith('<=')) { whereParts.push(`${qcol} <= ?`);  bindings.push(v.slice(2)); }
+    else if (v.startsWith('>'))  { whereParts.push(`${qcol} > ?`);   bindings.push(v.slice(1)); }
+    else if (v.startsWith('<'))  { whereParts.push(`${qcol} < ?`);   bindings.push(v.slice(1)); }
+    else if (v.startsWith('='))  { whereParts.push(`${qcol} = ?`);   bindings.push(v.slice(1)); }
+    else if (v.includes('..'))   {
+      const [lo, hi] = v.split('..', 2);
+      if (lo.trim()) { whereParts.push(`${qcol} >= ?`); bindings.push(lo.trim()); }
+      if (hi.trim()) { whereParts.push(`${qcol} <= ?`); bindings.push(hi.trim()); }
+    }
+    else { whereParts.push(`${qcol} LIKE ?`); bindings.push(`%${v}%`); }
   }
 
   // Ownership filter: when ownerId is set, restrict to records owned by that member
@@ -977,6 +1016,11 @@ function parseTextareaOptions(json: string | null): { rows: number; cols: number
 /**
  * If a rendered search form lacks an advanced-search panel, inject one automatically.
  * This makes the Advanced toggle work for templates generated before the feature existed.
+ *
+ * Handles three cases:
+ *   1. <form data-wdp-form="search"> (double quotes)
+ *   2. <form data-wdp-form='search'> (single quotes — AI-generated templates)
+ *   3. <div class="wdp-sf"> with no form wrapper (old AI templates) — wraps in a form
  */
 async function injectAdvancedSearch(
   html: string,
@@ -985,17 +1029,22 @@ async function injectAdvancedSearch(
   tableName: string
 ): Promise<string> {
   if (html.includes('wdp-sf-adv')) return html; // already present
-  if (!html.includes('data-wdp-form="search"')) return html; // no search form
 
+  const hasProperForm = html.includes('data-wdp-form="search"') || html.includes("data-wdp-form='search'");
+  const hasSfDiv      = /class=["']wdp-sf["']/.test(html);
+
+  if (!hasProperForm && !hasSfDiv) return html; // no search form to enhance
+
+  // Auto-inject simple-search inputs for text-like fields only.
+  // date/number/url/textarea need custom treatment (ranges, selects, etc.) — designer handles those manually.
   const fields = await db('app_fields')
     .where({ table_id: tableId })
+    .whereIn('ui_widget', ['text', 'select', 'checkbox'])
     .orderBy('sort_order')
-    .limit(5)
     .select('field_name');
   if (fields.length === 0) return html;
 
-  // Render $search[] tokens for the first 3 base-table fields
-  const searchTpl = fields.slice(0, 3)
+  const searchTpl = fields
     .map((f: { field_name: string }) => `$search[${tableName}.${f.field_name}]`)
     .join('\n');
   const renderedInputs = await renderWidgetTokens(searchTpl, appId, {}, 'search');
@@ -1006,11 +1055,20 @@ async function injectAdvancedSearch(
   const advPanel = `\n<div class="wdp-sf-adv" style="display:none"><div class="wdp-adv-fields">${renderedInputs}</div><div class="wdp-adv-btns"><button type="submit" class="wdp-btn">Search</button> <button type="button" class="wdp-adv-link" onclick="${onShowSimple}">&#8593; Simple</button> <a data-wdp-action="clear" class="wdp-btn-link">Clear</a></div></div>`;
   const advLink  = ` <a href="#" class="wdp-adv-link" onclick="${onShowAdv}">Advanced</a>`;
 
-  // Wrap the existing form content in .wdp-sf-simple and append the advanced panel
+  if (hasProperForm) {
+    // Case 1 & 2: wrap existing form body in .wdp-sf-simple and append advanced panel
+    return html.replace(
+      /(<form[^>]*data-wdp-form=["']search["'][^>]*>)([\s\S]*?)(<\/form>)/,
+      (_match, open: string, content: string, close: string) =>
+        `${open}<div class="wdp-sf-simple">${content.trimEnd()}${advLink}</div>${advPanel}${close}`
+    );
+  }
+
+  // Case 3: no form wrapper — find the .wdp-sf div and wrap it in a proper form
   return html.replace(
-    /(<form[^>]*data-wdp-form="search"[^>]*>)([\s\S]*?)(<\/form>)/,
+    /(<div[^>]*\bclass=["']wdp-sf["'][^>]*>)([\s\S]*?)(<\/div>)/,
     (_match, open: string, content: string, close: string) =>
-      `${open}<div class="wdp-sf-simple">${content.trimEnd()}${advLink}</div>${advPanel}${close}`
+      `<form data-wdp-form="search"><div class="wdp-sf-simple">${open}${content}${close}${advLink}</div>${advPanel}</form>`
   );
 }
 

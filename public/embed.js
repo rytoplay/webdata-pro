@@ -13,6 +13,21 @@
     return '';
   }());
 
+  // ── Inject HTML and execute any <script> tags it contains ───────────────────
+  // innerHTML is fast but deliberately skips <script> execution — this re-runs them
+  // so designers can include helper functions in their templates (e.g. date calculators).
+  function setHtml(el, html) {
+    el.innerHTML = html;
+    el.querySelectorAll('script').forEach(function (old) {
+      var s = document.createElement('script');
+      for (var i = 0; i < old.attributes.length; i++) {
+        s.setAttribute(old.attributes[i].name, old.attributes[i].value);
+      }
+      s.textContent = old.textContent;
+      old.parentNode.replaceChild(s, old);
+    });
+  }
+
   // ── In-memory JWT store (never touches localStorage / sessionStorage) ───────
   const _tokens = {};   // key: app+view → { access, refresh }
 
@@ -163,7 +178,7 @@
       } else {
         html = await fetchFragment(cfg, listPath(cfg, state));
       }
-      el.innerHTML = html;
+      setHtml(el, html);
       // Restore per-field filter values and show advanced panel if any are active
       if (mode === 'list') {
         var advPanel = el.querySelector('.wdp-sf-adv');

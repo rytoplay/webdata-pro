@@ -41,4 +41,5 @@ export interface UpdateAppInput {
   description?: string | null;
   database_mode?: DatabaseMode;
   database_config_json?: string | null;
+  allowed_origins_json?: string | null;
 }

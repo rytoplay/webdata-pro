@@ -70,10 +70,17 @@
       <div class="card shadow-sm h-100" style="font-size:0.8rem;">
         <div class="card-header py-2 d-flex justify-content-between align-items-center">
           <strong>Field tokens</strong>
-          <button type="button" id="help-toggle" title="Show / hide template help"
-            style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.72rem;padding:1px 7px;cursor:pointer;line-height:1.6;">
-            ? Help
-          </button>
+          <div class="d-flex gap-1">
+            <button type="button" id="help-toggle" title="Show / hide quick help"
+              style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.72rem;padding:1px 7px;cursor:pointer;line-height:1.6;">
+              ? Help
+            </button>
+            <button type="button" id="help-fullscreen" title="Open full designer reference"
+              data-bs-toggle="modal" data-bs-target="#designerRefModal"
+              style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.72rem;padding:1px 7px;cursor:pointer;line-height:1.6;">
+              <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+          </div>
         </div>
         <div id="help-panel" class="d-none" style="font-size:0.78rem;line-height:1.55;max-height:400px;overflow-y:auto;background:#f8fafc;border-bottom:1px solid #e2e8f0;"></div>
         <div class="card-body p-2" style="overflow-y:auto;max-height:420px;">
@@ -266,6 +273,439 @@
     </div>
   </div>
 </div>
+
+{# ── Designer Reference Modal ─────────────────────────────────────────────── #}
+<div class="modal fade" id="designerRefModal" tabindex="-1" aria-labelledby="designerRefModalLabel">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header py-2">
+        <h5 class="modal-title" id="designerRefModalLabel">
+          <i class="bi bi-book me-2"></i>Webdata Pro — Designer Reference
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body p-0" style="display:flex;min-height:70vh;">
+
+        {# ── Left nav ── #}
+        <nav class="d-none d-md-block" style="width:200px;min-width:200px;border-right:1px solid #e2e8f0;padding:16px 0;background:#f8fafc;">
+          {% set refSections = [
+            ['ref-overview',    'bi-grid-3x3-gap', 'Template Slots'],
+            ['ref-tokens',      'bi-braces',        'Tokens & Expressions'],
+            ['ref-search',      'bi-search',        'Search Form'],
+            ['ref-actions',     'bi-cursor-fill',   'Actions & Forms'],
+            ['ref-sql',         'bi-terminal',      'SQL & Calculations'],
+            ['ref-how',         'bi-diagram-3',     'How It Works'],
+            ['ref-embed',       'bi-code-slash',    'Embedding']
+          ] %}
+          {% for sec in refSections %}
+          <a href="#{{ sec[0] }}" class="ref-nav-link d-flex align-items-center gap-2 px-4 py-2 text-decoration-none"
+            style="font-size:0.82rem;color:#475569;border-left:3px solid transparent;">
+            <i class="bi {{ sec[1] }}"></i>{{ sec[2] }}
+          </a>
+          {% endfor %}
+        </nav>
+
+        {# ── Content ── #}
+        <div class="ref-content flex-fill p-4" style="overflow-y:auto;max-height:72vh;font-size:0.88rem;line-height:1.65;">
+
+          {# ── TEMPLATE SLOTS ── #}
+          <section id="ref-overview" class="ref-section mb-5">
+            <h4 class="ref-h4">Template Slots</h4>
+            <p class="text-muted">Each view has eight template slots. They render in sequence to build the complete widget output. All slots share the same token syntax.</p>
+            <table class="table table-sm table-bordered" style="font-size:0.82rem;">
+              <thead class="table-light"><tr><th>Slot</th><th>When it renders</th><th>Typical use</th></tr></thead>
+              <tbody>
+                <tr><td><code>search_form</code></td><td>Once, at the top — always visible</td><td>Search inputs, filter controls</td></tr>
+                <tr><td><code>header</code></td><td>Once, between search form and first row</td><td>Column headings, record count, sort buttons</td></tr>
+                <tr><td><code>group_header</code></td><td>Once per group (when grouping is set)</td><td>Group label/divider</td></tr>
+                <tr><td><code>row</code></td><td>Once per record</td><td>Title, summary, thumbnail, action buttons</td></tr>
+                <tr><td><code>group_footer</code></td><td>Once after the last row of each group</td><td>Group subtotals, closing dividers</td></tr>
+                <tr><td><code>footer</code></td><td>Once, after all rows</td><td>Pagination</td></tr>
+                <tr><td><code>detail</code></td><td>When a row is clicked</td><td>Full record layout, edit button</td></tr>
+                <tr><td><code>edit_form</code></td><td>When the Edit button is clicked</td><td>Input form for updating a record</td></tr>
+              </tbody>
+            </table>
+            <div class="alert alert-info py-2" style="font-size:0.82rem;">
+              <strong>How modes work:</strong> The widget lives in one DOM element. Clicking a row replaces the list with the detail view inside that same element. Clicking Back restores the list from cache. No page navigation happens — it's all in-place.
+            </div>
+          </section>
+
+          {# ── TOKENS & EXPRESSIONS ── #}
+          <section id="ref-tokens" class="ref-section mb-5">
+            <h4 class="ref-h4">Tokens &amp; Expressions</h4>
+
+            <h6 class="ref-h6">Field values — <code>${'$'}{table.field}</code></h6>
+            <p>Every column in your query is available as a token. For auto-generated queries use <code>${'$'}{tablename.fieldname}</code>. For custom SQL, use whatever alias you gave the column.</p>
+            <pre class="ref-pre">${'$'}{pets.name}          — a field from the base table
+${'$'}{owners.last_name}   — a field from a joined table
+${'$'}{age_in_years}       — a custom SQL alias</pre>
+
+            <h6 class="ref-h6 mt-3">System tokens</h6>
+            <pre class="ref-pre">${'$'}{_pk}            Primary key of the current row
+${'$'}{_row_num}       Row number starting at 1
+${'$'}{_q}            Current search term (empty if none)
+${'$'}{_page}         Current page number
+${'$'}{_total}        Total records matching the current search
+${'$'}{_total_pages}  Total pages
+${'$'}{_has_prev}     Non-empty string if a previous page exists
+${'$'}{_has_next}     Non-empty string if a next page exists
+${'$'}{_prev_page}    Previous page number
+${'$'}{_next_page}    Next page number
+${'$'}{_pagination}   Ready-made Prev / Page X of Y / Next widget
+${'$'}{_sort}         Current sort field name
+${'$'}{_dir}          Current sort direction: "asc" or "desc"
+${'$'}{_group_value}  Value of the grouping field (group templates only)</pre>
+
+            <h6 class="ref-h6 mt-3">Metadata tokens (detail &amp; edit_form)</h6>
+            <pre class="ref-pre">${'$'}{_meta.created_by}   Member who first saved the record
+${'$'}{_meta.created_at}   When it was first saved
+${'$'}{_meta.updated_by}   Last member to edit it
+${'$'}{_meta.updated_at}   When it was last edited</pre>
+
+            <h6 class="ref-h6 mt-3">JavaScript ternary — inline logic</h6>
+            <p>Any token expression can be a full JavaScript ternary because tokens are evaluated inside template literals:</p>
+            <pre class="ref-pre">${'$'}{pets.age_months &lt; 24 ? '🐾 Puppy' : pets.age_months &gt; 96 ? '🦮 Senior' : 'Mid range'}
+
+${'$'}{_sort == 'name' ? (_dir == 'asc' ? '▲' : '▼') : ''}</pre>
+
+            <h6 class="ref-h6 mt-3">$if() — conditional blocks</h6>
+            <p>For longer conditional HTML, <code>$if()</code> is cleaner than a ternary:</p>
+            <pre class="ref-pre">$if(pets.good_for_kids, "&lt;span class='badge bg-success'&gt;Kid friendly&lt;/span&gt;")
+$if(pets.age_months &gt; 96, "&lt;em&gt;Senior&lt;/em&gt;", "&lt;em&gt;Young&lt;/em&gt;")</pre>
+            <p class="text-muted small">Operators: <code>&gt; &lt; &gt;= &lt;= == != &lt;&gt;</code>. Wrap branch text in quotes if it contains a comma. Both branches may contain <code>${'$'}{...}</code> tokens.</p>
+
+            <h6 class="ref-h6 mt-3">&lt;group&gt; — multi-row concat</h6>
+            <p>When a JOIN produces multiple rows per record (e.g. one book with many authors), wrap the repeating content so the system uses SQL <code>GROUP_CONCAT</code> to collapse them:</p>
+            <pre class="ref-pre">&lt;group delimiter=", "&gt;${'$'}{authors.first_name} ${'$'}{authors.last_name}&lt;/group&gt;</pre>
+          </section>
+
+          {# ── SEARCH FORM ── #}
+          <section id="ref-search" class="ref-section mb-5">
+            <h4 class="ref-h4">Search Form</h4>
+
+            <h6 class="ref-h6">Required form attribute</h6>
+            <p>The widget identifies your search form by the attribute <code>data-wdp-form="search"</code> on the <code>&lt;form&gt;</code> tag. Without it nothing is submitted.</p>
+            <pre class="ref-pre">&lt;form data-wdp-form="search"&gt;
+  ...
+&lt;/form&gt;</pre>
+
+            <h6 class="ref-h6 mt-3">Global keyword search — <code>name="q"</code></h6>
+            <p>A single text input that runs a <code>LIKE %value%</code> search across every text column in the query simultaneously.</p>
+            <pre class="ref-pre">&lt;input type="text" name="q" value="${'$'}{_q}" placeholder="Search…"&gt;</pre>
+            <p class="text-muted small"><code>${'$'}{_q}</code> pre-fills the box so users can refine their search without retyping.</p>
+
+            <h6 class="ref-h6 mt-3">Per-field inputs — <code>name="table__field"</code></h6>
+            <p>Any input whose name matches the pattern <code>tablename__fieldname</code> (two underscores) is applied as a filter on that specific column. You can write this HTML by hand — no tokens required:</p>
+            <pre class="ref-pre">&lt;input type="text" name="pets__name" placeholder="Name…"&gt;
+&lt;input type="text" name="pets__breed" placeholder="Breed…"&gt;</pre>
+
+            <h6 class="ref-h6 mt-3">Auto-rendered inputs — <code>$search[table.field]</code></h6>
+            <p>Generates the right input for the field's widget type automatically (text box, select, Yes/No/Any for checkboxes). Useful for building a search panel quickly without writing HTML.</p>
+            <pre class="ref-pre">$search[pets.name]
+$search[pets.animal_type]
+$search[pets.good_for_kids]</pre>
+
+            <h6 class="ref-h6 mt-3">Filter operators — value prefixes</h6>
+            <p>By default, filters use <code>LIKE %value%</code> — good for text. For numbers, dates, and ranges, prefix the value with an operator. This works on any input the designer controls, including hidden fields and selects:</p>
+            <table class="table table-sm table-bordered" style="font-size:0.82rem;">
+              <thead class="table-light"><tr><th>Value</th><th>SQL generated</th><th>Example use</th></tr></thead>
+              <tbody>
+                <tr><td><code>poodle</code></td><td><code>LIKE '%poodle%'</code></td><td>Default text search</td></tr>
+                <tr><td><code>=1</code></td><td><code>= '1'</code></td><td>Exact match (checkbox true/false)</td></tr>
+                <tr><td><code>&gt;48</code></td><td><code>&gt; '48'</code></td><td>Older than 4 years (age_months)</td></tr>
+                <tr><td><code>&lt;24</code></td><td><code>&lt; '24'</code></td><td>Under 2 years old</td></tr>
+                <tr><td><code>24..96</code></td><td><code>&gt;= '24' AND &lt;= '96'</code></td><td>Age range</td></tr>
+                <tr><td><code>&gt;=2020-01-01</code></td><td><code>&gt;= '2020-01-01'</code></td><td>Born after a date</td></tr>
+              </tbody>
+            </table>
+
+            <h6 class="ref-h6 mt-3">Custom select with JavaScript date calculation</h6>
+            <p>For fields like <code>dob</code> where the meaningful search is "Puppy / Mid Range / Senior" rather than a raw date, use a hidden field plus a JavaScript function. The function calculates today's actual date boundary at query time — so the age categories stay accurate forever.</p>
+            <pre class="ref-pre">&lt;input type="hidden" name="pets__dob" id="dob_filter"&gt;
+&lt;select onchange="setDobFilter(this.value)"&gt;
+  &lt;option value=""&gt;Any age&lt;/option&gt;
+  &lt;option value="puppy"&gt;Puppy (under 2 yrs)&lt;/option&gt;
+  &lt;option value="mid"&gt;Mid Range (2–8 yrs)&lt;/option&gt;
+  &lt;option value="senior"&gt;Senior (8+ yrs)&lt;/option&gt;
+&lt;/select&gt;
+
+&lt;script&gt;
+function setDobFilter(val) {
+  var field = document.getElementById('dob_filter');
+  var now = new Date();
+  function ago(yrs) {
+    return new Date(now.getFullYear()-yrs, now.getMonth(), now.getDate())
+      .toISOString().slice(0,10);
+  }
+  if (val === 'puppy')  field.value = '&gt;' + ago(2);
+  if (val === 'mid')    field.value = ago(8) + '..' + ago(2);
+  if (val === 'senior') field.value = '&lt;' + ago(8);
+  if (!val)             field.value = '';
+}
+&lt;/script&gt;</pre>
+            <p class="text-muted small"><strong>Note:</strong> <code>&lt;script&gt;</code> tags in templates are executed correctly — the widget re-runs them after each render.</p>
+
+            <h6 class="ref-h6 mt-3">Simple / Advanced toggle panel</h6>
+            <p>The widget auto-injects an Advanced panel for templates that don't already have one. To take full control, add your own <code>.wdp-sf-simple</code> and <code>.wdp-sf-adv</code> divs inside the form — the auto-injection is skipped when these are present.</p>
+            <pre class="ref-pre">&lt;form data-wdp-form="search"&gt;
+  &lt;div class="wdp-sf-simple"&gt;
+    &lt;input type="text" name="q" value="${'$'}{_q}" placeholder="Search…"&gt;
+    &lt;button type="submit"&gt;Search&lt;/button&gt;
+    &lt;a href="#" onclick="…show adv…"&gt;Advanced&lt;/a&gt;
+  &lt;/div&gt;
+  &lt;div class="wdp-sf-adv" style="display:none"&gt;
+    &lt;!-- your custom advanced fields --&gt;
+    &lt;button type="submit"&gt;Search&lt;/button&gt;
+    &lt;button type="button" onclick="…show simple…"&gt;↑ Simple&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/form&gt;</pre>
+          </section>
+
+          {# ── ACTIONS & FORMS ── #}
+          <section id="ref-actions" class="ref-section mb-5">
+            <h4 class="ref-h4">Actions &amp; Forms</h4>
+            <p>Any element can be made interactive by adding <code>data-wdp-action</code> attributes. The widget listens for clicks and form submits via event delegation — no per-element JavaScript needed.</p>
+
+            <table class="table table-sm table-bordered" style="font-size:0.82rem;">
+              <thead class="table-light"><tr><th>Attribute</th><th>Goes on</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>data-wdp-action="detail"</code> + <code>data-wdp-id="${'$'}{_pk}"</code></td><td>Any element in a row</td><td>Loads the detail view for that record</td></tr>
+                <tr><td><code>data-wdp-action="edit"</code> + <code>data-wdp-id="${'$'}{_pk}"</code></td><td>Any element</td><td>Loads the edit form for that record</td></tr>
+                <tr><td><code>data-wdp-action="back"</code></td><td>Any element</td><td>Returns to the list view</td></tr>
+                <tr><td><code>data-wdp-action="page"</code> + <code>data-wdp-page="${'$'}{_next_page}"</code></td><td>Any element</td><td>Navigates to a specific page</td></tr>
+                <tr><td><code>data-wdp-action="sort"</code> + <code>data-wdp-field="fieldname"</code></td><td>Any element</td><td>Sorts by the field; repeated clicks toggle asc/desc</td></tr>
+                <tr><td><code>data-wdp-action="clear"</code></td><td>Any element</td><td>Clears all search filters and reloads</td></tr>
+                <tr><td><code>data-wdp-form="search"</code></td><td><code>&lt;form&gt;</code></td><td>Marks the search form — submit is intercepted</td></tr>
+                <tr><td><code>data-wdp-form="edit"</code> + <code>data-wdp-id</code></td><td><code>&lt;form&gt;</code></td><td>Marks the edit form — submit sends a PATCH request</td></tr>
+              </tbody>
+            </table>
+
+            <h6 class="ref-h6 mt-3">$update[table.field] — auto-rendered edit inputs</h6>
+            <p>In the <code>edit_form</code> template, use this token to generate the correct input widget pre-filled with the current value. The <code>name</code> attribute is set automatically.</p>
+            <pre class="ref-pre">$update[pets.name]           → &lt;input type="text" name="pets__name" value="Penny"&gt;
+$update[pets.animal_type]    → &lt;select name="pets__animal_type"&gt;…&lt;/select&gt;
+$update[pets.good_for_kids]  → &lt;input type="checkbox" name="pets__good_for_kids"&gt;</pre>
+          </section>
+
+          {# ── SQL & CALCULATIONS ── #}
+          <section id="ref-sql" class="ref-section mb-5">
+            <h4 class="ref-h4">SQL &amp; Calculations</h4>
+
+            <h6 class="ref-h6">Auto-generated SQL</h6>
+            <p>By default, the query is built automatically from the <code>${'$'}{table.field}</code> tokens in your templates. You never have to write SQL unless you need something the auto-builder can't express.</p>
+
+            <h6 class="ref-h6 mt-3">Custom SQL — calculated columns</h6>
+            <p>Click <strong>Customize SQL</strong> in the SQL panel to take full control. You can add calculated columns using standard SQLite expressions. Any column alias you define becomes available as a <code>${'$'}{alias}</code> token:</p>
+            <pre class="ref-pre">SELECT
+  pets.*,
+  -- Age calculated fresh on every query
+  ROUND((julianday('now') - julianday(pets.dob)) / 365.25, 1) AS age_years,
+  -- Friendly age tier
+  CASE
+    WHEN (julianday('now') - julianday(pets.dob)) / 365.25 &lt; 2  THEN 'Puppy'
+    WHEN (julianday('now') - julianday(pets.dob)) / 365.25 &lt; 8  THEN 'Mid Range'
+    ELSE 'Senior'
+  END AS age_tier
+FROM pets</pre>
+            <p>Then in your row template:</p>
+            <pre class="ref-pre">${'$'}{pets.name} — ${'$'}{age_tier} (${'$'}{age_years} yrs)</pre>
+
+            <h6 class="ref-h6 mt-3">Calculations in template JavaScript</h6>
+            <p>For display-only formatting, you can calculate directly in the template using JavaScript expressions. The server sends raw values; the browser computes the display:</p>
+            <pre class="ref-pre">&lt;!-- Age from DOB, calculated in the browser --&gt;
+${'$'}{Math.floor((Date.now() - new Date(pets.dob)) / (365.25*24*60*60*1000))} yrs old
+
+&lt;!-- Price formatted as currency --&gt;
+${'$'}{Number(items.price).toFixed(2)}
+
+&lt;!-- Conditional badge --&gt;
+${'$'}{pets.age_months &lt; 24 ? '🐾 Puppy' : pets.age_months &gt; 96 ? '🦮 Senior' : 'Adult'}</pre>
+            <div class="alert alert-warning py-2 mt-2" style="font-size:0.82rem;">
+              <strong>SQL vs template JS — which to use:</strong> Use SQL when you need to <em>filter or sort</em> by the calculated value. Use template JS when you only need to <em>display</em> it differently. You can't filter by a value that only exists in the browser.
+            </div>
+          </section>
+
+          {# ── HOW IT WORKS ── #}
+          <section id="ref-how" class="ref-section mb-5">
+            <h4 class="ref-h4">How It Works</h4>
+            <p>Understanding the flow lets you build custom search controls, style the loading state, and debug unexpected behaviour.</p>
+
+            <h6 class="ref-h6">The render cycle</h6>
+            <ol style="line-height:2;">
+              <li>User action triggers a state change (search submit, page click, etc.)</li>
+              <li>embed.js encodes the new state into the URL hash: <code>#wdp-myview=mode:list|page:2|q:poodle</code></li>
+              <li>embed.js fetches the appropriate API endpoint (see below)</li>
+              <li>The server runs the SQL, renders all templates, and returns HTML</li>
+              <li>embed.js sets <code>el.innerHTML</code> with the new HTML — the widget div is replaced in place</li>
+              <li>Any <code>&lt;script&gt;</code> tags in the returned HTML are re-executed</li>
+            </ol>
+
+            <h6 class="ref-h6 mt-3">API endpoints called by embed.js</h6>
+            <table class="table table-sm table-bordered" style="font-size:0.82rem;">
+              <thead class="table-light"><tr><th>Mode</th><th>Endpoint</th><th>Parameters</th></tr></thead>
+              <tbody>
+                <tr><td>List</td><td><code>GET /api/:app/views/:view/render</code></td><td><code>q, page, sort, dir, f_table__field, …</code></td></tr>
+                <tr><td>Detail</td><td><code>GET /api/:app/views/:view/render/:id</code></td><td>Record ID in path</td></tr>
+                <tr><td>Edit form</td><td><code>GET /api/:app/views/:view/render/:id/edit</code></td><td>Record ID in path</td></tr>
+                <tr><td>Create form</td><td><code>GET /api/:app/views/:view/render/create</code></td><td>—</td></tr>
+                <tr><td>Save edit</td><td><code>PATCH /api/:app/views/:view/records/:id</code></td><td>Form fields in body</td></tr>
+              </tbody>
+            </table>
+            <p class="text-muted small">Replace <code>:app</code> with the app slug and <code>:view</code> with the view name.</p>
+
+            <h6 class="ref-h6 mt-3">URL hash state</h6>
+            <p>Each widget instance stores its state in the URL hash. Multiple widgets on the same page don't interfere — each uses a key derived from its element ID:</p>
+            <pre class="ref-pre">#wdp-pets=mode:list|page:1|q:poodle|f_pets__animal_type:Dog</pre>
+            <p>The <code>f_</code> prefix marks per-field filter values. This means bookmarking or sharing a URL preserves the current search state.</p>
+
+            <h6 class="ref-h6 mt-3">The widget DOM element</h6>
+            <p>The widget lives entirely inside the element you mounted it on. On every render, only that element's <code>innerHTML</code> is replaced — nothing outside it is touched. This makes it safe to embed alongside other React components, WordPress blocks, or existing page content.</p>
+            <pre class="ref-pre">&lt;div id="my-widget"&gt;
+  &lt;!-- Everything here is owned by Webdata Pro --&gt;
+  &lt;!-- Replaced on every render               --&gt;
+&lt;/div&gt;</pre>
+
+            <h6 class="ref-h6 mt-3">Authentication</h6>
+            <p>Public views require no credentials. For member-protected views, embed.js handles a JWT challenge automatically — it redirects to the login page, then returns the user to the current view after authentication. The token is stored in memory (never in localStorage) for the lifetime of the page.</p>
+          </section>
+
+          {# ── EMBEDDING ── #}
+          <section id="ref-embed" class="ref-section mb-5">
+            <h4 class="ref-h4">Embedding</h4>
+
+            <h6 class="ref-h6">Vanilla HTML / any CMS</h6>
+            <pre class="ref-pre">&lt;!-- Load once per page --&gt;
+&lt;script src="https://yourserver.com/static/embed.js"&gt;&lt;/script&gt;
+
+&lt;!-- Place this where you want the widget --&gt;
+&lt;div id="wdp-{{ view.view_name }}"&gt;&lt;/div&gt;
+&lt;script&gt;
+  WDP.mount('#wdp-{{ view.view_name }}', {
+    app:     '{{ currentApp.slug }}',
+    view:    '{{ view.view_name }}',
+    baseUrl: 'https://yourserver.com'
+  });
+&lt;/script&gt;</pre>
+
+            <h6 class="ref-h6 mt-3">React component wrapper</h6>
+            <pre class="ref-pre">import { useEffect, useRef } from 'react';
+
+function WDPWidget({ app, view, baseUrl }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    // Load embed.js once
+    if (!window.WDP) {
+      const s = document.createElement('script');
+      s.src = baseUrl + '/static/embed.js';
+      s.onload = () => window.WDP.mount(ref.current, { app, view, baseUrl });
+      document.head.appendChild(s);
+    } else {
+      window.WDP.mount(ref.current, { app, view, baseUrl });
+    }
+    // WDP owns the innerHTML — React should not diff it
+    return () => { if (ref.current) ref.current.innerHTML = ''; };
+  }, [app, view, baseUrl]);
+
+  return &lt;div ref={ref} /&gt;;
+}
+
+// Usage
+&lt;WDPWidget app="pet-shelter" view="pets_browse"
+           baseUrl="https://yourserver.com" /&gt;</pre>
+            <div class="alert alert-info py-2" style="font-size:0.82rem;">
+              The <code>return () =&gt; innerHTML = ''</code> cleanup prevents React from trying to reconcile DOM that Webdata Pro owns. Without it you may see React warnings on hot-reload.
+            </div>
+
+            <h6 class="ref-h6 mt-3">WordPress</h6>
+            <p>Add this to your theme's <code>functions.php</code> or a custom plugin:</p>
+            <pre class="ref-pre">// Register shortcode: [wdp_view app="pet-shelter" view="pets_browse"]
+add_shortcode('wdp_view', function($atts) {
+  $a = shortcode_atts(['app'=>'','view'=>'','base_url'=>'https://yourserver.com'], $atts);
+  $id = 'wdp-' . esc_attr($a['view']);
+  return sprintf(
+    '&lt;div id="%s"&gt;&lt;/div&gt;
+     &lt;script src="%s/static/embed.js"&gt;&lt;/script&gt;
+     &lt;script&gt;WDP.mount("#%s",{app:"%s",view:"%s",baseUrl:"%s"});&lt;/script&gt;',
+    $id, esc_url($a['base_url']), $id,
+    esc_js($a['app']), esc_js($a['view']), esc_url($a['base_url'])
+  );
+});</pre>
+            <p>Then in any post or page: <code>[wdp_view app="pet-shelter" view="pets_browse"]</code></p>
+
+            <h6 class="ref-h6 mt-3">CORS</h6>
+            <p>Cross-origin requests are allowed per-app. If you embed this widget on a different domain or port than this server, go to <a href="/admin/app-settings" target="_blank">App Settings</a> and add that origin (e.g. <code>https://localshelter.com</code>) to the <strong>Allowed Origins</strong> list. Use <code>*</code> to allow any origin (suitable for fully public, read-only views).</p>
+
+            <h6 class="ref-h6 mt-3">WDP.mount() options</h6>
+            <table class="table table-sm table-bordered" style="font-size:0.82rem;">
+              <thead class="table-light"><tr><th>Option</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>app</code></td><td>string</td><td>App slug (required)</td></tr>
+                <tr><td><code>view</code></td><td>string</td><td>View name (required)</td></tr>
+                <tr><td><code>baseUrl</code></td><td>string</td><td>Server URL, empty string for same-origin</td></tr>
+                <tr><td><code>requireSearch</code></td><td>boolean</td><td>Don't load results until the user searches</td></tr>
+                <tr><td><code>pageSize</code></td><td>number</td><td>Override the view's default page size</td></tr>
+                <tr><td><code>token</code></td><td>string</td><td>Pre-supply a JWT for member authentication</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+        </div>{# end ref-content #}
+      </div>{# end modal-body #}
+
+      <div class="modal-footer py-2 d-flex justify-content-between align-items-center">
+        <a href="/admin/styleguide" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-palette me-1"></i>CSS Style Guide
+        </a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.ref-h4 { font-size:1rem; font-weight:700; color:#1e293b; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:14px; }
+.ref-h6 { font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#475569; margin-bottom:6px; }
+.ref-pre { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:5px; padding:10px 14px; font-size:0.78rem; white-space:pre-wrap; word-break:break-all; color:#1e293b; margin-bottom:10px; }
+.ref-nav-link:hover, .ref-nav-link.active { background:#e2e8f0; color:#0f172a !important; border-left-color:#3b82f6 !important; }
+.ref-section { scroll-margin-top: 16px; }
+</style>
+
+<script>
+// ── Ref modal nav highlighting ────────────────────────────────────────────────
+(function() {
+  var modal = document.getElementById('designerRefModal');
+  if (!modal) return;
+  modal.addEventListener('shown.bs.modal', function() {
+    var content  = modal.querySelector('.ref-content');
+    var navLinks = modal.querySelectorAll('.ref-nav-link');
+    if (!content || !navLinks.length) return;
+    function updateActive() {
+      var sections = modal.querySelectorAll('.ref-section');
+      var active = sections[0];
+      sections.forEach(function(s) {
+        if (s.getBoundingClientRect().top <= content.getBoundingClientRect().top + 40) active = s;
+      });
+      navLinks.forEach(function(a) {
+        var isActive = a.getAttribute('href') === '#' + active.id;
+        a.classList.toggle('active', isActive);
+        a.style.borderLeftColor = isActive ? '#3b82f6' : 'transparent';
+      });
+    }
+    content.addEventListener('scroll', updateActive);
+    navLinks.forEach(function(a) {
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var target = modal.querySelector(a.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+    updateActive();
+  });
+}());
+</script>
 
 <script>
 (function () {
@@ -652,11 +1092,15 @@
   let debounceTimer = null;
   let popupBlobUrl  = null;
 
-  // Build the popup page as a blob so it needs no server auth
+  // Build the popup page as a blob.
+  // The popup stores current templates locally and handles search/pagination
+  // by calling preview-render directly — giving real-time template preview
+  // AND working search/pagination without embed.js.
   function getPopupUrl() {
     if (popupBlobUrl) return popupBlobUrl;
-    const cssHref = window.location.origin + '/static/widget-base.css';
-    const html = [
+    const cssHref   = window.location.origin + '/static/widget-base.css';
+    const renderUrl = RENDER_URL;
+    const lines = [
       '<!DOCTYPE html><html lang="en"><head>',
       '<meta charset="UTF-8">',
       '<meta name="viewport" content="width=device-width,initial-scale=1">',
@@ -671,15 +1115,55 @@
       '<div id="wdp-status">Waiting for preview\u2026</div>',
       '<div id="wdp-content"></div>',
       '<script>',
+      'var _url=' + JSON.stringify(renderUrl) + ';',
+      'var _tpl=null;',
+      'var _st=new URLSearchParams({mode:"list",page:"1"});',
+
+      // Receive rendered HTML + templates from editor
       'window.addEventListener("message",function(e){',
       '  if(!e.data||e.data.type!=="wdp-preview")return;',
       '  document.getElementById("wdp-status").classList.add("hidden");',
       '  document.getElementById("wdp-content").innerHTML=e.data.html;',
+      '  if(e.data.templates)_tpl=e.data.templates;',
+      '  _st=new URLSearchParams({mode:"list",page:"1"});',
+      '});',
+
+      // Re-fetch with current templates + query state
+      'function _fetch(){',
+      '  if(!_tpl)return;',
+      '  fetch(_url+"?"+_st.toString(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(_tpl)})',
+      '  .then(function(r){return r.json();})',
+      '  .then(function(d){',
+      '    if(d.html)document.getElementById("wdp-content").innerHTML=d.html;',
+      '    else if(d.error)document.getElementById("wdp-content").innerHTML=\'<p style="color:red;padding:12px;font-family:monospace">\'+d.error+\'</p>\';',
+      '  });',
+      '}',
+
+      // Search form submit
+      'document.addEventListener("submit",function(e){',
+      '  var form=e.target.closest("[data-wdp-form=\\"search\\"]");',
+      '  if(!form)return;',
+      '  e.preventDefault();',
+      '  _st=new URLSearchParams({mode:"list",page:"1"});',
+      '  var q=form.querySelector("[name=q]");',
+      '  if(q&&q.value)_st.set("q",q.value);',
+      '  new FormData(form).forEach(function(v,k){if(k!=="q"&&String(v).trim())_st.set("f_"+k,String(v));});',
+      '  _fetch();',
+      '});',
+
+      // Pagination, sort, clear
+      'document.addEventListener("click",function(e){',
+      '  var el=e.target.closest("[data-wdp-action]");',
+      '  if(!el)return;',
+      '  var act=el.dataset.wdpAction;',
+      '  if(act==="page"){e.preventDefault();_st.set("page",el.dataset.wdpPage||"1");_fetch();}',
+      '  else if(act==="clear"){e.preventDefault();_st=new URLSearchParams({mode:"list",page:"1"});_fetch();}',
+      '  else if(act==="sort"){e.preventDefault();var f=el.dataset.wdpField,d=(_st.get("sort")===f&&_st.get("dir")==="asc")?"desc":"asc";_st.set("sort",f);_st.set("dir",d);_st.set("page","1");_fetch();}',
       '});',
       '<\/script>',
       '</body></html>'
-    ].join('');
-    const blob = new Blob([html], { type: 'text/html' });
+    ];
+    const blob = new Blob([lines.join('')], { type: 'text/html' });
     popupBlobUrl = URL.createObjectURL(blob);
     return popupBlobUrl;
   }
@@ -695,17 +1179,19 @@
   async function pushPreview() {
     if (!previewWin || previewWin.closed) return;
     try {
+      const templates = collectTemplates();
       const res  = await fetch(RENDER_URL, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(collectTemplates()),
+        body:    JSON.stringify(templates),
       });
       const { html, error } = await res.json();
       if (error) {
         previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Error: ' + error + '</p>' }, '*');
         return;
       }
-      previewWin.postMessage({ type: 'wdp-preview', html }, '*');
+      // Pass both rendered HTML and raw templates so popup can re-fetch on interaction
+      previewWin.postMessage({ type: 'wdp-preview', html, templates }, '*');
     } catch (e) {
       previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Request failed: ' + e.message + '</p>' }, '*');
     }
@@ -716,7 +1202,6 @@
     debounceTimer = setTimeout(pushPreview, 450);
   }
 
-  // Wire up all template textareas (including ones added later by tab switching)
   document.addEventListener('input', function(e) {
     if (e.target.matches('textarea.tpl-textarea')) schedulePush();
   });
@@ -725,7 +1210,6 @@
     if (!previewWin || previewWin.closed) {
       previewWin = window.open(getPopupUrl(), 'wdp-live-preview',
         'width=860,height=700,left=100,top=80,resizable=yes,scrollbars=yes');
-      // Give the popup a moment to load then push current state
       setTimeout(pushPreview, 800);
     } else {
       previewWin.focus();

@@ -1,0 +1,88 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-sliders me-2"></i>App Settings</h1>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── CORS / Allowed Origins ───────────────────────────────────────────── -->
+  <div class="col-12 col-lg-7">
+    <div class="card">
+      <div class="card-header fw-bold py-3 px-4">
+        <i class="bi bi-globe me-2 text-primary"></i>Allowed Origins (CORS)
+      </div>
+      <div class="card-body p-4">
+        {% if flash %}
+        <div class="alert alert-{{ flash.type }} alert-dismissible fade show mb-4" role="alert">
+          {{ flash.message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <p class="text-muted small mb-3">
+          List the websites allowed to embed this app's widget. Enter one origin per line
+          (scheme + hostname + optional port). Use <code>*</code> on its own line to allow
+          any origin (useful during development).
+        </p>
+
+        <form method="POST" action="/admin/app-settings">
+          <div class="mb-3">
+            <label class="form-label" for="allowed_origins">Allowed origins</label>
+            <textarea
+              id="allowed_origins"
+              name="allowed_origins"
+              class="form-control font-monospace"
+              rows="8"
+              placeholder="https://localshelter.com&#10;https://www.mypetstore.com&#10;http://localhost:8080"
+              spellcheck="false"
+            >{{ originsText }}</textarea>
+            <div class="form-text">
+              One origin per line — e.g. <code>https://localshelter.com</code>.
+              Do <strong>not</strong> include a trailing slash or path.
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Save
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Help panel ───────────────────────────────────────────────────────── -->
+  <div class="col-12 col-lg-5">
+    <div class="card h-100">
+      <div class="card-header fw-bold py-3 px-4">
+        <i class="bi bi-info-circle me-2 text-primary"></i>What is an origin?
+      </div>
+      <div class="card-body p-4 small text-muted">
+        <p>
+          An <strong>origin</strong> is the combination of <em>scheme</em>, <em>hostname</em>,
+          and <em>port</em> — no path. Examples:
+        </p>
+        <ul class="mb-3">
+          <li><code>https://localshelter.com</code></li>
+          <li><code>http://localhost:3000</code></li>
+          <li><code>https://www.mypetstore.com</code></li>
+        </ul>
+        <p>
+          When a visitor's browser loads the widget on one of these sites, it sends an
+          <code>Origin</code> header with that value. Webdata Pro checks the list and
+          returns the correct <code>Access-Control-Allow-Origin</code> header so the
+          embed script can fetch data.
+        </p>
+        <p>
+          If the list is <strong>empty</strong>, no cross-origin requests are allowed
+          (only same-origin — i.e. pages served directly by this server).
+        </p>
+        <p class="mb-0">
+          Add <code>*</code> to allow <em>any</em> origin. Fine for public read-only
+          widgets; avoid for apps with member authentication.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

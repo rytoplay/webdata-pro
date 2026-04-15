@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { config } from '../../config';
 import { requireAdmin } from '../../middleware/adminAuth';
 import { loadCurrentApp, requireApp } from '../../middleware/currentApp';
-import { listApps } from '../../services/apps';
+import { listApps, updateApp } from '../../services/apps';
 import { appsRouter } from './apps';
 import { tablesRouter } from './tables';
 import { fieldsRouter } from './fields';
@@ -76,3 +76,36 @@ adminRouter.use('/members',    requireApp, membersRouter);
 adminRouter.use('/home',       requireApp, homeRouter);
 adminRouter.use('/blueprint',  requireApp, blueprintRouter);
 adminRouter.get('/auth',      requireApp, (_req, res) => res.render('admin/stub', { title: 'Auth / SSO' }));
+adminRouter.get('/styleguide', (_req, res) => res.render('admin/styleguide', { title: 'CSS Style Guide' }));
+
+// ── App Settings ──────────────────────────────────────────────────────────────
+
+adminRouter.get('/app-settings', requireApp, (req, res) => {
+  const app = res.locals.currentApp;
+  const origins: string[] = app.allowed_origins_json
+    ? (JSON.parse(app.allowed_origins_json) as string[])
+    : [];
+  const flash = req.session.flash;
+  delete req.session.flash;
+  res.render('admin/app-settings', {
+    title: 'App Settings',
+    originsText: origins.join('\n'),
+    flash,
+  });
+});
+
+adminRouter.post('/app-settings', requireApp, async (req, res, next) => {
+  try {
+    const app = res.locals.currentApp;
+    const body = req.body as { allowed_origins?: string };
+    const lines = (body.allowed_origins ?? '')
+      .split('\n')
+      .map((l: string) => l.trim())
+      .filter(Boolean);
+    await updateApp(app.id, {
+      allowed_origins_json: lines.length ? JSON.stringify(lines) : null,
+    });
+    req.session.flash = { type: 'success', message: 'App settings saved.' };
+    res.redirect('/admin/app-settings');
+  } catch (err) { next(err); }
+});
