@@ -53,10 +53,31 @@
         <p class="text-muted mb-2" style="font-size:0.8rem;"><code>{{ app.slug }}</code></p>
         <span class="badge bg-light text-dark border" style="font-size:0.75rem;">{{ app.database_mode }}</span>
       </div>
+      <div class="card-footer bg-transparent border-top-0 d-flex justify-content-end pb-2 pe-2"
+           onclick="event.stopPropagation()">
+        <form method="POST" action="/admin/apps/{{ app.id }}/delete" class="delete-app-form">
+          <button type="button" class="btn btn-sm btn-outline-danger delete-app-btn"
+                  data-name="{{ app.name }}">
+            <i class="bi bi-trash me-1"></i>Delete
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 
   {% endfor %}
 </div>
 {% endif %}
+
+<script>
+document.querySelectorAll('.delete-app-btn').forEach(function(btn) {
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var name = btn.getAttribute('data-name');
+    if (window.confirm('Delete app "' + name + '" and all its data?\nThis cannot be undone.')) {
+      btn.closest('form').submit();
+    }
+  });
+});
+</script>
 {% endblock %}

@@ -8,6 +8,17 @@ export const appsRouter = Router();
 
 // ── App selection (deselect must be defined before /:id) ──────────────────
 
+appsRouter.post('/:id/delete', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    // Clear session if this was the active app
+    if (req.session.currentAppId === id) delete req.session.currentAppId;
+    await appsService.deleteApp(id);
+    req.session.flash = { type: 'success', message: 'App deleted.' };
+    res.redirect('/admin');
+  } catch (err) { next(err); }
+});
+
 appsRouter.post('/deselect', (req, res) => {
   delete req.session.currentAppId;
   res.redirect('/admin');

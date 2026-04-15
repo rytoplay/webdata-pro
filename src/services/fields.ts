@@ -4,7 +4,7 @@ import { getTable } from './tables';
 import { getApp } from './apps';
 import { getAppDb } from '../db/adapters/appDb';
 
-const RESERVED_NAMES = new Set(['created_at', 'updated_at']);
+const RESERVED_NAMES = new Set(['id', 'created_at', 'updated_at']);
 
 // SQLite type map for DDL generation
 const TYPE_MAP: Record<string, string> = {

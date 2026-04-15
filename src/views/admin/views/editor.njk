@@ -594,12 +594,18 @@
         aiStatus.textContent = '✗ ' + data.error;
         aiStatus.style.color = '#991b1b';
       } else {
+        let changed = 0;
         for (const [type, content] of Object.entries(data.templates)) {
           const ta = document.querySelector(`.tpl-textarea[data-tpl="${type}"]`);
-          if (ta) ta.value = content;
+          if (ta && ta.value !== content) { ta.value = content; changed++; }
         }
         bootstrap.Modal.getInstance(document.getElementById('aiModal'))?.hide();
         await refreshSql();
+        // Notify live preview of the new template content
+        document.querySelector('.tpl-textarea')?.dispatchEvent(new Event('input', { bubbles: true }));
+        if (changed === 0) {
+          console.info('[AI Design] Templates unchanged — model may need a style hint to produce different output.');
+        }
       }
     } catch (e) {
       aiStatus.textContent = '✗ Request failed: ' + e.message;
@@ -615,9 +621,41 @@
 // ── Live Preview ──────────────────────────────────────────────────────────────
 (function () {
   const RENDER_URL = '/admin/views/{{ view.id }}/preview-render';
-  const POPUP_URL  = '/admin/views/{{ view.id }}/preview-popup';
   let previewWin   = null;
   let debounceTimer = null;
+  let popupBlobUrl  = null;
+
+  // Build the popup page as a blob so it needs no server auth
+  function getPopupUrl() {
+    if (popupBlobUrl) return popupBlobUrl;
+    const cssHref = window.location.origin + '/static/widget-base.css';
+    const html = [
+      '<!DOCTYPE html><html lang="en"><head>',
+      '<meta charset="UTF-8">',
+      '<meta name="viewport" content="width=device-width,initial-scale=1">',
+      '<title>Live Preview</title>',
+      '<link rel="stylesheet" href="' + cssHref + '">',
+      '<style>',
+      'body{margin:0;padding:12px;font-family:system-ui,sans-serif;background:#f8fafc;}',
+      '#wdp-status{font-size:.75rem;color:#94a3b8;text-align:center;padding:8px;}',
+      '#wdp-status.hidden{display:none;}',
+      '</style>',
+      '</head><body>',
+      '<div id="wdp-status">Waiting for preview\u2026</div>',
+      '<div id="wdp-content"></div>',
+      '<script>',
+      'window.addEventListener("message",function(e){',
+      '  if(!e.data||e.data.type!=="wdp-preview")return;',
+      '  document.getElementById("wdp-status").classList.add("hidden");',
+      '  document.getElementById("wdp-content").innerHTML=e.data.html;',
+      '});',
+      '<\/script>',
+      '</body></html>'
+    ].join('');
+    const blob = new Blob([html], { type: 'text/html' });
+    popupBlobUrl = URL.createObjectURL(blob);
+    return popupBlobUrl;
+  }
 
   function collectTemplates() {
     const data = {};
@@ -636,9 +674,14 @@
         body:    JSON.stringify(collectTemplates()),
       });
       const { html, error } = await res.json();
-      if (error) return;
-      previewWin.postMessage({ type: 'wdp-preview', html }, window.location.origin);
-    } catch (e) { /* ignore */ }
+      if (error) {
+        previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Error: ' + error + '</p>' }, '*');
+        return;
+      }
+      previewWin.postMessage({ type: 'wdp-preview', html }, '*');
+    } catch (e) {
+      previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Request failed: ' + e.message + '</p>' }, '*');
+    }
   }
 
   function schedulePush() {
@@ -653,7 +696,7 @@
 
   document.getElementById('btn-live-preview').addEventListener('click', function() {
     if (!previewWin || previewWin.closed) {
-      previewWin = window.open(POPUP_URL, 'wdp-live-preview',
+      previewWin = window.open(getPopupUrl(), 'wdp-live-preview',
         'width=860,height=700,left=100,top=80,resizable=yes,scrollbars=yes');
       // Give the popup a moment to load then push current state
       setTimeout(pushPreview, 800);

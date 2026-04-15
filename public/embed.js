@@ -238,7 +238,6 @@
         const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
         const access  = getAccess(instance.cfg);
         if (access) headers['Authorization'] = 'Bearer ' + access;
-
         fetch(url, { method: 'POST', headers, credentials: 'include', body })
           .then(function (res) {
             if (res.ok) {

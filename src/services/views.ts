@@ -738,7 +738,8 @@ export async function renderViewList(
 
   // Ownership filter: when ownerId is set, restrict to records owned by that member
   if (params.ownerId) {
-    const pkAlias = isAuto ? `${baseTableName}__${pkName}` : pkName;
+    // Always use table__field alias — custom SQL is built from auto-generated SQL which follows this convention
+    const pkAlias = `${baseTableName}__${pkName}`;
     whereParts.push(
       `EXISTS (SELECT 1 FROM _wdpro_metadata WHERE _wdpro_metadata.record_id = ${castToText(app, `"_v"."${pkAlias}"`)} AND _wdpro_metadata.table_name = ? AND _wdpro_metadata.created_by_id = ?)`
     );
@@ -752,7 +753,8 @@ export async function renderViewList(
   const needsMetaJoin = isMetaSort || isMetaSecondary;
   let outerSql: string;
   if (needsMetaJoin) {
-    const pkAlias = isAuto ? `${baseTableName}__${pkName}` : pkName;
+    // Always use table__field alias — custom SQL follows the same convention as auto-generated SQL
+    const pkAlias = `${baseTableName}__${pkName}`;
     outerSql = `SELECT _v.*, _m.created_at AS "_meta__created_at", _m.updated_at AS "_meta__updated_at", _m.created_by_name AS "_meta__created_by" ` +
       `FROM (${baseSql}) AS _v ` +
       `LEFT JOIN _wdpro_metadata _m ON ${castToText(app, `_v."${pkAlias}"`)} = _m.record_id AND _m.table_name = '${baseTableName}' ` +

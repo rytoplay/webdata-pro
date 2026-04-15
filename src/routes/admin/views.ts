@@ -352,7 +352,46 @@ viewsRouter.post('/:id/generate-templates', async (req, res) => {
     // ── Assemble prompts ─────────────────────────────────────────────────────
     const systemPrompt = `You write HTML templates for Webdata Pro data widgets. Use \${token} syntax for data values. Output each template between ===MARKER=== delimiters exactly as shown. No JSON, no markdown, no explanation — just the delimited HTML blocks.
 
-${CSS_CLASS_REFERENCE}`;
+${CSS_CLASS_REFERENCE}
+
+## Design Principles — apply these to every template
+
+VISUAL HIERARCHY
+- Every list row must have exactly three levels of information:
+  1. TITLE — the record's primary identifier, bold and prominent (.wdp-row-title)
+  2. SUBTITLE — the most important secondary detail, accent color (.wdp-row-sub)
+  3. META — supporting info (date, location, count), small and muted (.wdp-row-meta)
+- Never put everything at equal visual weight. If all fields look the same, the design has failed.
+- In detail views, group related fields together. Most important fields first.
+
+BADGES
+- Use .wdp-badge for: status fields, boolean yes/no fields, category/type fields with few options.
+- A badge should contain a SHORT label (1-3 words). Never put a full sentence in a badge.
+- Boolean true → show the badge. Boolean false → omit the badge entirely (don't show "No").
+- Example: good_for_kids=true → <span class="wdp-badge">Kid Friendly</span>
+
+NUMBERS & PRICES
+- Currency/price fields: bold, right-aligned or prominently placed. Use $currency[] token.
+- Dates: always muted small text. Never make a date the dominant element.
+- IDs and foreign keys: never display raw integer IDs to the user.
+
+ROW CONTENT SELECTION
+- Show only 3-5 fields in a list row. Choose the fields a user would scan to identify records.
+- The fields you OMIT from the row are as important as the ones you include.
+- Put full detail in the detail view — the row is a preview, not a data dump.
+
+DOMAIN AWARENESS
+- Look at the table name and field names to identify the domain, then apply professional conventions:
+  - Pet adoption: warm/friendly colors, animal name as hero title, species+breed as subtitle,
+    age+good_for_kids badges in meta. Detail view should feel welcoming, not clinical.
+  - Real estate: address as title, price bold and prominent, beds/baths/sqft on subtitle,
+    status badge (Active/Pending/Sold). Professional and trustworthy color scheme.
+  - Classifieds / marketplace: title prominent, price right-aligned bold, category badge,
+    posted date muted. Dense and scannable.
+  - Vehicles: Year Make Model as title, price prominent, mileage+condition on subtitle.
+  - Documents / records: title/name as title, date on subtitle, type/category badge.
+  - Events: event name as title, date+time as subtitle (formatted nicely), location as meta.
+  - People / contacts: full name as title, role/company as subtitle, email/phone as meta.`;
 
     const styleHintLine = styleHint ? `Style: ${styleHint}` : 'Style: clean, professional.';
     const hint2 = styleHint.toLowerCase();
@@ -364,6 +403,9 @@ ${CSS_CLASS_REFERENCE}`;
 ${styleHintLine}
 ${layoutLine}
 
+First, identify the domain from the table name "${baseTable.table_name}" and field names below.
+Then apply the professional design conventions for that domain from the Design Principles.
+
 Available tokens (copy exactly including \${ and }):
 ${tokenLines.join('\n')}
 \${_pk}          — primary key
@@ -372,10 +414,17 @@ ${tokenLines.join('\n')}
 \${_pagination}  — pagination HTML (place in footer)
 \${_group_value} — group label (group_header only)
 
-Sample data:
+Sample data (use this to understand real content and choose the right fields to display):
 ${sampleText}
 
-I have pre-built starter templates below. Your job is to REFINE them with the requested style — improve the layout, adjust content, apply the color theme. Do NOT change the structural HTML class names or action attributes. You may replace the <style>:root{...}</style> color block if you want different colors.
+I have pre-built starter templates below. IMPROVE them significantly:
+- Apply domain-appropriate design conventions
+- Enforce visual hierarchy (title > subtitle > meta)
+- Use .wdp-badge for boolean and status fields
+- Select only the most meaningful fields for the row view
+- Make it look like it was designed by an experienced professional, not auto-generated
+Do NOT change structural HTML class names or data-wdp-* action attributes.
+You MAY replace the <style>:root{...}</style> color block with better colors for this domain.
 
 ===SEARCH_FORM===
 ${starterSearchForm}
@@ -402,8 +451,8 @@ ${starterDetail}
 ${starterEditForm}
 ===END===
 
-Now rewrite all 8 templates above, improving the style to match: ${styleHintLine}
-Keep the same HTML structure and CSS classes. Adapt only visual details (colors via the :root style tag, spacing, extra elements). Output each template between its ===MARKER=== delimiters.`;
+Now rewrite all 8 templates, applying professional domain-appropriate design.
+Output each template between its ===MARKER=== delimiters. Nothing else.`;
 
     // ── Call AI ──────────────────────────────────────────────────────────────
     const aiSettings = await aiService.getAiSettings();
