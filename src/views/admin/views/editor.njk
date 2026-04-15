@@ -190,15 +190,16 @@
 
   {# ── SQL section ── #}
   <div class="card shadow-sm mt-3">
-    <div class="card-header d-flex align-items-center justify-content-between py-2">
+    <div class="card-header d-flex align-items-center justify-content-between py-2" style="cursor:pointer;" id="sql-card-header">
       <span>
+        <i class="bi bi-chevron-{{ 'down' if view.query_mode == 'advanced_sql' else 'right' }} me-1 text-muted" id="sql-chevron" style="font-size:0.8rem;transition:transform 0.15s;"></i>
         <i class="bi bi-terminal me-2"></i><strong>Query SQL</strong>
         <span id="sql-mode-badge" class="badge ms-2
           {{ 'bg-warning text-dark' if view.query_mode == 'advanced_sql' else 'bg-light text-dark border' }}">
           {{ 'Custom SQL' if view.query_mode == 'advanced_sql' else 'Auto-generated' }}
         </span>
       </span>
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2" onclick="event.stopPropagation()">
         <button type="button" id="btn-refresh-sql" class="btn btn-sm btn-outline-secondary">
           <i class="bi bi-arrow-clockwise me-1"></i>Refresh SQL
         </button>
@@ -212,17 +213,19 @@
         </button>
       </div>
     </div>
-    <div class="card-body p-0">
-      <textarea id="sql-editor" class="form-control font-monospace border-0 rounded-0"
-        rows="8" style="font-size:0.8rem;resize:vertical;border-radius:0 !important;"
-        {% if view.query_mode != 'advanced_sql' %}readonly{% endif %}>{{ view.custom_sql if view.query_mode == 'advanced_sql' else generatedSql }}</textarea>
-    </div>
-    <div class="card-footer py-2 text-muted small" id="sql-hint">
-      {% if view.query_mode == 'advanced_sql' %}
-      Custom SQL active. Column aliases become available as <code>\${alias}</code> tokens in templates.
-      {% else %}
-      Auto-generated from <code>\${table.field}</code> tokens found in your templates. Click <em>Customize SQL</em> to edit.
-      {% endif %}
+    <div id="sql-collapsible" {% if view.query_mode != 'advanced_sql' %}style="display:none"{% endif %}>
+      <div class="card-body p-0">
+        <textarea id="sql-editor" class="form-control font-monospace border-0 rounded-0"
+          rows="8" style="font-size:0.8rem;resize:vertical;border-radius:0 !important;"
+          {% if view.query_mode != 'advanced_sql' %}readonly{% endif %}>{{ view.custom_sql if view.query_mode == 'advanced_sql' else generatedSql }}</textarea>
+      </div>
+      <div class="card-footer py-2 text-muted small" id="sql-hint">
+        {% if view.query_mode == 'advanced_sql' %}
+        Custom SQL active. Column aliases become available as <code>\${alias}</code> tokens in templates.
+        {% else %}
+        Auto-generated from <code>\${table.field}</code> tokens found in your templates. Click <em>Customize SQL</em> to edit.
+        {% endif %}
+      </div>
     </div>
   </div>
 
@@ -493,6 +496,25 @@
     });
   });
 
+  // ── SQL section collapse ─────────────────────────────────────────────────
+  document.getElementById('sql-card-header').addEventListener('click', function() {
+    const panel   = document.getElementById('sql-collapsible');
+    const chevron = document.getElementById('sql-chevron');
+    const isHidden = panel.style.display === 'none';
+    panel.style.display = isHidden ? '' : 'none';
+    chevron.className = (isHidden ? 'bi bi-chevron-down' : 'bi bi-chevron-right') + ' me-1 text-muted';
+  });
+
+  // Expand automatically when "Customize SQL" is clicked
+  function ensureSqlExpanded() {
+    const panel   = document.getElementById('sql-collapsible');
+    const chevron = document.getElementById('sql-chevron');
+    if (panel.style.display === 'none') {
+      panel.style.display = '';
+      chevron.className = 'bi bi-chevron-down me-1 text-muted';
+    }
+  }
+
   // ── SQL mode ─────────────────────────────────────────────────────────────
   const sqlEditor    = document.getElementById('sql-editor');
   const modeInput    = document.getElementById('query_mode_input');
@@ -514,7 +536,7 @@
       : 'Auto-generated from <code>${table.field}</code> tokens found in your templates.';
   }
 
-  btnCustomize?.addEventListener('click', () => setCustomMode(true));
+  btnCustomize?.addEventListener('click', () => { ensureSqlExpanded(); setCustomMode(true); });
 
   btnReset?.addEventListener('click', async () => {
     await refreshSql();

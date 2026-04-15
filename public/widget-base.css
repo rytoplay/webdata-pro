@@ -50,6 +50,28 @@
 }
 .wdp-sf-clear { color: var(--wdp-primary); font-size: 0.8rem; cursor: pointer; text-decoration: none; padding: 0 4px; }
 
+/* ── Advanced search panel ───────────────────────────────────────────────── */
+.wdp-sf-adv {
+  background: var(--wdp-bg);
+  padding: 10px 12px;
+  border: 1px solid var(--wdp-border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+.wdp-adv-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+.wdp-adv-fields .wdp-field { margin-bottom: 0; }
+.wdp-adv-btns { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wdp-adv-link {
+  font-size: 0.78rem; color: var(--wdp-accent); text-decoration: none;
+  cursor: pointer; background: none; border: none; padding: 0; line-height: 1;
+}
+.wdp-adv-link:hover { text-decoration: underline; }
+
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .wdp-hdr {
   background: var(--wdp-primary);

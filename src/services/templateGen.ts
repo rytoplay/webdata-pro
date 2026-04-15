@@ -126,19 +126,59 @@ export function buildStarterTemplates(
 
   const addBtn = isPublic ? '' : `<button class="wdp-btn" data-wdp-action="create" style="float:right;margin-top:4px">+ New</button>`;
 
+  // Build $search[] tokens for the fields shown in the row (same slice as the row template uses)
+  const rowFieldSlice = useTable ? fields.slice(0, 5) : fields.slice(0, 3);
+  const advSearchFields = rowFieldSlice.filter(Boolean);
+  const searchTokenLines = advSearchFields.map(f => {
+    const ref = (f.fk_table && f.fk_label_field)
+      ? `${f.fk_table}.${f.fk_label_field}`
+      : `${f.table_name}.${f.field_name}`;
+    return `      $search[${ref}]`;
+  }).join('\n');
+
+  // Inline toggle handlers — closest('[data-wdp-form]') finds the form without relying on class name
+  const onShowAdv    = `event.preventDefault();var s=this.closest('[data-wdp-form]');s.querySelector('.wdp-sf-simple').style.display='none';s.querySelector('.wdp-sf-adv').style.display=''`;
+  const onShowSimple = `var s=this.closest('[data-wdp-form]');s.querySelector('.wdp-sf-adv').style.display='none';s.querySelector('.wdp-sf-simple').style.display=''`;
+
+  const advPanel = advSearchFields.length > 0 ? `
+  <div class="wdp-sf-adv" style="display:none">
+    <div class="wdp-adv-fields">
+${searchTokenLines}
+    </div>
+    <div class="wdp-adv-btns">
+      <button type="submit" class="wdp-btn">Search</button>
+      <button type="button" class="wdp-adv-link" onclick="${onShowSimple}">&#8593; Simple</button>
+      <a data-wdp-action="clear" class="wdp-btn-link">Clear</a>
+    </div>
+  </div>` : '';
+
+  const advLink = advSearchFields.length > 0
+    ? ` <a href="#" class="wdp-adv-link" onclick="${onShowAdv}">Advanced</a>`
+    : '';
+
   if (useTable) {
     const tableHeaders = fields.slice(0, 5).map(f =>
       `<th>$sort[${sortRef(f)},${f.label || f.field_name}]</th>`
     ).join('');
     const tableCells = fields.slice(0, 5).map(f => `<td>${tok(f)}</td>`).join('');
 
-    search_form = `${styleTag}<div class="wdp"><div class="wdp-sf"><input type="text" name="q" value="\${_q}" placeholder="Search…"><button type="submit">Search</button>$perpage[10,25,50,100]</div>`;
+    search_form = `${styleTag}<div class="wdp"><form data-wdp-form="search">
+  <div class="wdp-sf wdp-sf-simple">
+    <input type="text" name="q" value="\${_q}" placeholder="Search\u2026" class="wdp-input">
+    <button type="submit" class="wdp-btn">Search</button> $perpage[10,25,50,100]${advLink}
+  </div>${advPanel}
+</form>`;
     header      = `<div class="wdp-hdr"><span class="wdp-hdr-title">${tableName}</span><span class="wdp-hdr-meta">\${_total} results</span>${addBtn}</div><table class="wdp-table"><thead><tr>${tableHeaders}</tr></thead><tbody>`;
     row         = `<tr data-wdp-action="detail" data-wdp-id="\${_pk}">${tableCells}</tr>`;
     footer      = `</tbody></table><div class="wdp-footer">\${_pagination}</div></div>`;
   } else {
     const metaTok = metaField ? ` &bull; ${tok(metaField)}` : '';
-    search_form = `${styleTag}<div class="wdp"><div class="wdp-sf"><input type="text" name="q" value="\${_q}" placeholder="Search…"><button type="submit">Search</button></div>`;
+    search_form = `${styleTag}<div class="wdp"><form data-wdp-form="search">
+  <div class="wdp-sf wdp-sf-simple">
+    <input type="text" name="q" value="\${_q}" placeholder="Search\u2026" class="wdp-input">
+    <button type="submit" class="wdp-btn">Search</button>${advLink}
+  </div>${advPanel}
+</form>`;
     header      = `<div class="wdp-hdr"><span class="wdp-hdr-title">${tableName}</span><span class="wdp-hdr-meta">\${_total} results</span>${addBtn}</div>`;
     row         = `<div class="wdp-row" data-wdp-action="detail" data-wdp-id="\${_pk}"><div class="wdp-row-body"><div class="wdp-row-title">${titleTok}</div><div class="wdp-row-sub">${subTok}</div><div class="wdp-row-meta">${metaTok}</div></div><span class="wdp-arr">&#8250;</span></div>`;
     footer      = `<div class="wdp-footer">\${_pagination}</div></div>`;

@@ -1,6 +1,7 @@
 import express, { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import SQLiteStore from 'connect-sqlite3';
+import cors from 'cors';
 import nunjucks from 'nunjucks';
 import path from 'path';
 import { config } from './config';
@@ -35,6 +36,16 @@ export function createApp(): express.Application {
 
   app.use('/static', express.static(path.join(__dirname, '../public')));
   app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+
+  // CORS for the widget API — allow any origin so the embed script works cross-domain.
+  // Credentials are included so member session cookies work for private views.
+  app.use('/api', cors({
+    origin: (origin, callback) => callback(null, origin || '*'),
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }));
+  app.options('/api/*', cors());  // handle preflight for all /api routes
 
   app.use('/admin', adminRouter);
   app.use('/api/v/:appSlug', apiViewsRouter);

@@ -164,6 +164,25 @@
         html = await fetchFragment(cfg, listPath(cfg, state));
       }
       el.innerHTML = html;
+      // Restore per-field filter values and show advanced panel if any are active
+      if (mode === 'list') {
+        var advPanel = el.querySelector('.wdp-sf-adv');
+        if (advPanel) {
+          var hasFilters = false;
+          state.forEach(function(val, key) {
+            if (key.startsWith('f_') && val) {
+              hasFilters = true;
+              var inp = el.querySelector('[name="' + key.slice(2) + '"]');
+              if (inp) inp.value = val;
+            }
+          });
+          if (hasFilters) {
+            var simplePanel = el.querySelector('.wdp-sf-simple');
+            advPanel.style.display = '';
+            if (simplePanel) simplePanel.style.display = 'none';
+          }
+        }
+      }
     } catch (err) {
       el.innerHTML = '<p class="wdp-error">Failed to load view: ' + escHtml(String(err)) + '</p>';
     } finally {

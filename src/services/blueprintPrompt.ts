@@ -3,8 +3,14 @@
 export const CSS_CLASS_REFERENCE = `## CSS Class Reference — use ONLY these classes, no others
 
 SEARCH BAR:
-  .wdp-sf — flex wrapper for the search bar (light background, rounded top)
-  Plain <input type="text" name="q"> and <button type="submit"> inside .wdp-sf get auto-styled.
+  The search bar is a <form data-wdp-form="search"> element containing:
+    .wdp-sf — flex wrapper for the simple search row (light background, rounded top)
+    Plain <input type="text" name="q"> and <button type="submit"> inside .wdp-sf get auto-styled.
+    .wdp-sf-simple — the div that wraps the simple search row (always present)
+    .wdp-sf-adv — advanced search panel (hidden by default, toggled client-side)
+    .wdp-adv-fields — CSS grid inside .wdp-sf-adv; holds $search[table.field] inputs
+    .wdp-adv-link — text-only toggle link/button (accent color, no background)
+  CRITICAL: The outer form MUST have data-wdp-form="search". Without it, search will not work.
 
 HEADER BAR:
   .wdp-hdr — dark primary-colored bar (flex, space-between)
