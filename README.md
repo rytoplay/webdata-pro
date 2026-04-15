@@ -22,10 +22,12 @@ You describe what you want in plain English. The AI builds the tables, the searc
 After installing Ollama, open a terminal and run this once:
 
 ```
-ollama pull qwen2.5:14b
+ollama pull qwen2.5:7b
 ```
 
-It will download the AI model (about 9 GB). Ollama runs quietly in the background after that — you don't need to start it separately.
+This downloads the AI model (about 4.7 GB — roughly 20 minutes on a typical home connection). Ollama runs quietly in the background after that — you don't need to start it separately.
+
+> **Want better results?** The larger `qwen2.5:14b` model (9 GB) produces higher-quality output and handles more complex descriptions. If you have fast internet and at least 16 GB of RAM, run `ollama pull qwen2.5:14b` instead, then select it under **Admin → Settings → AI Model**.
 
 ---
 

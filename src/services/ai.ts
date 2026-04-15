@@ -11,7 +11,7 @@ export interface AiSettings {
 
 const DEFAULTS: AiSettings = {
   provider: 'ollama',
-  model:    'qwen3.5',
+  model:    'qwen2.5:7b',
   baseUrl:  'http://localhost:11434',
   apiKey:   '',
 };
