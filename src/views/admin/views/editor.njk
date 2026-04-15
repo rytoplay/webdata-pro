@@ -496,24 +496,29 @@
     });
   });
 
-  // ── SQL section collapse ─────────────────────────────────────────────────
-  document.getElementById('sql-card-header').addEventListener('click', function() {
+  // ── SQL section collapse (state persisted in localStorage per view) ─────
+  const SQL_PREF_KEY = 'wdp_sql_{{ loginAt }}_{{ view.id }}';
+
+  function setSqlExpanded(expanded) {
     const panel   = document.getElementById('sql-collapsible');
     const chevron = document.getElementById('sql-chevron');
-    const isHidden = panel.style.display === 'none';
-    panel.style.display = isHidden ? '' : 'none';
-    chevron.className = (isHidden ? 'bi bi-chevron-down' : 'bi bi-chevron-right') + ' me-1 text-muted';
+    panel.style.display = expanded ? '' : 'none';
+    chevron.className   = (expanded ? 'bi bi-chevron-down' : 'bi bi-chevron-right') + ' me-1 text-muted';
+    try { localStorage.setItem(SQL_PREF_KEY, expanded ? '1' : '0'); } catch(e) {}
+  }
+
+  // Apply saved preference on load (overrides the server-rendered default)
+  try {
+    const saved = localStorage.getItem(SQL_PREF_KEY);
+    if (saved !== null) setSqlExpanded(saved === '1');
+  } catch(e) {}
+
+  document.getElementById('sql-card-header').addEventListener('click', function() {
+    setSqlExpanded(document.getElementById('sql-collapsible').style.display === 'none');
   });
 
-  // Expand automatically when "Customize SQL" is clicked
-  function ensureSqlExpanded() {
-    const panel   = document.getElementById('sql-collapsible');
-    const chevron = document.getElementById('sql-chevron');
-    if (panel.style.display === 'none') {
-      panel.style.display = '';
-      chevron.className = 'bi bi-chevron-down me-1 text-muted';
-    }
-  }
+  // Used by "Customize SQL" button — expand and persist
+  function ensureSqlExpanded() { setSqlExpanded(true); }
 
   // ── SQL mode ─────────────────────────────────────────────────────────────
   const sqlEditor    = document.getElementById('sql-editor');

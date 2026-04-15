@@ -29,7 +29,7 @@ adminRouter.get('/login', (req, res) => {
 adminRouter.post('/login', (req, res) => {
   const { username, password } = req.body as { username: string; password: string };
   if (username === config.admin.username && password === config.admin.password) {
-    req.session.admin = { isAdmin: true };
+    req.session.admin = { isAdmin: true, loginAt: Date.now() };
     res.redirect('/admin');
   } else {
     req.session.flash = { type: 'danger', message: 'Invalid credentials.' };

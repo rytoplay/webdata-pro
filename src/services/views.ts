@@ -803,7 +803,7 @@ export async function renderViewList(
   const parts: string[] = [];
 
   const searchFormTpl = await renderWidgetTokens(tpl.search_form, app.id, {}, 'search');
-  parts.push(renderTokens(searchFormTpl, sys));
+  parts.push(await injectAdvancedSearch(renderTokens(searchFormTpl, sys), app.id, view.base_table_id, baseTableName));
   parts.push(renderTokens(tpl.header, sys));
 
   const hasDetail = !!tpl.detail?.trim();
@@ -972,6 +972,46 @@ function parseTextareaOptions(json: string | null): { rows: number; cols: number
     const p = JSON.parse(json) as { rows?: number; cols?: number };
     return { rows: p.rows ?? 4, cols: p.cols ?? 60 };
   } catch { return { rows: 4, cols: 60 }; }
+}
+
+/**
+ * If a rendered search form lacks an advanced-search panel, inject one automatically.
+ * This makes the Advanced toggle work for templates generated before the feature existed.
+ */
+async function injectAdvancedSearch(
+  html: string,
+  appId: number,
+  tableId: number,
+  tableName: string
+): Promise<string> {
+  if (html.includes('wdp-sf-adv')) return html; // already present
+  if (!html.includes('data-wdp-form="search"')) return html; // no search form
+
+  const fields = await db('app_fields')
+    .where({ table_id: tableId })
+    .orderBy('sort_order')
+    .limit(5)
+    .select('field_name');
+  if (fields.length === 0) return html;
+
+  // Render $search[] tokens for the first 3 base-table fields
+  const searchTpl = fields.slice(0, 3)
+    .map((f: { field_name: string }) => `$search[${tableName}.${f.field_name}]`)
+    .join('\n');
+  const renderedInputs = await renderWidgetTokens(searchTpl, appId, {}, 'search');
+
+  const onShowAdv    = `event.preventDefault();var s=this.closest('[data-wdp-form]');s.querySelector('.wdp-sf-simple').style.display='none';s.querySelector('.wdp-sf-adv').style.display=''`;
+  const onShowSimple = `var s=this.closest('[data-wdp-form]');s.querySelector('.wdp-sf-adv').style.display='none';s.querySelector('.wdp-sf-simple').style.display=''`;
+
+  const advPanel = `\n<div class="wdp-sf-adv" style="display:none"><div class="wdp-adv-fields">${renderedInputs}</div><div class="wdp-adv-btns"><button type="submit" class="wdp-btn">Search</button> <button type="button" class="wdp-adv-link" onclick="${onShowSimple}">&#8593; Simple</button> <a data-wdp-action="clear" class="wdp-btn-link">Clear</a></div></div>`;
+  const advLink  = ` <a href="#" class="wdp-adv-link" onclick="${onShowAdv}">Advanced</a>`;
+
+  // Wrap the existing form content in .wdp-sf-simple and append the advanced panel
+  return html.replace(
+    /(<form[^>]*data-wdp-form="search"[^>]*>)([\s\S]*?)(<\/form>)/,
+    (_match, open: string, content: string, close: string) =>
+      `${open}<div class="wdp-sf-simple">${content.trimEnd()}${advLink}</div>${advPanel}${close}`
+  );
 }
 
 /**

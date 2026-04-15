@@ -42,6 +42,7 @@ export interface AuthAuditLog {
 
 export interface AdminSession {
   isAdmin: boolean;
+  loginAt?: number;
 }
 
 export interface MemberSession {
