@@ -467,6 +467,14 @@
       // React to browser back/forward (pushState navigation triggers popstate)
       window.addEventListener('popstate', () => instance.render());
 
+      // If a specific initial mode is requested (e.g. single_record views), seed
+      // the hash before the first render so the widget opens in the right state.
+      if (cfg.initialMode) {
+        const initParams = new URLSearchParams({ mode: cfg.initialMode });
+        if (cfg.initialId) initParams.set('id', String(cfg.initialId));
+        writeHash(instanceId, initParams);
+      }
+
       // Initial render
       instance.render();
 

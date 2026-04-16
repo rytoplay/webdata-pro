@@ -7,6 +7,7 @@ import { config } from './config';
 import { adminRouter } from './routes/admin';
 import { apiViewsRouter } from './routes/api/views';
 import { memberRouter } from './routes/member';
+import { filesRouter } from './routes/files';
 
 const SqliteSessionStore = SQLiteStore(session);
 
@@ -34,7 +35,7 @@ export function createApp(): express.Application {
   app.set('view engine', 'njk');
 
   app.use('/static', express.static(path.join(__dirname, '../public')));
-  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+  app.use('/files', filesRouter);
 
   // CORS is handled per-app by the appCors middleware in src/routes/api/views.ts.
   // Allowed origins are configured per-app via Admin → App Settings.

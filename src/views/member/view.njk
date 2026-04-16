@@ -25,7 +25,11 @@
   WDP.mount('#wdp-view', {
     app:     '{{ app.slug }}',
     view:    '{{ view.view_name }}',
-    baseUrl: ''
+    baseUrl: '',
+    {% if singleRecord %}
+    initialMode: '{{ "edit" if existingRecordId else "create" }}',
+    {% if existingRecordId %}initialId: '{{ existingRecordId }}',{% endif %}
+    {% endif %}
   });
 </script>
 </body>

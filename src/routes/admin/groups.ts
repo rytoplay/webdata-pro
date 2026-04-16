@@ -138,6 +138,7 @@ groupsRouter.post('/:id/permissions', async (req, res, next) => {
       view_id:              v.id,
       can_view:             !!(body[`vp_${v.id}_can_view`]),
       limit_to_own_records: !!(body[`vp_${v.id}_limit_to_own_records`]),
+      single_record:        !!(body[`vp_${v.id}_single_record`]),
     }));
     await groupsService.saveViewPermGrid(group.id, viewRows);
 

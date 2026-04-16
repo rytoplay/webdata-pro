@@ -6,3 +6,5 @@ dist/
 .env
 generated/
 .DS_Store
+uploads/
+sql-console.log

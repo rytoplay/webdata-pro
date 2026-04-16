@@ -1,49 +1,31 @@
 # Webdata Pro
 
-**Turn any database into a searchable widget you can put on any website — no back-end experience required.**
+**Build data-driven web apps without hand-coding the back end.**
 
-You describe what you want in plain English. The AI builds the tables, the search forms, and the sample data. When you're ready, you copy two lines of code and paste them into any web page.
+Webdata Pro is a visual builder for database-powered websites and applications. Describe your project in plain English and the AI builds your tables, search forms, and sample records. Or skip the AI and set everything up by hand through the admin panel. Either way, you stay in full control — of your tables, fields, templates, permissions, and data — from first prototype to working application.
 
-**Great for:** animal shelters, libraries, real estate listings, product catalogs, event directories, member rosters — anything where you have data and want people to search it.
+**Built for:** product catalogs, member directories, event listings, real estate databases, animal shelters, school projects, small business tools, staff rosters, internal directories — any project where you have structured data that people need to search, browse, or manage.
 
 ---
 
 ## What you'll need
 
-| Program | What it does | Where to get it |
-|---|---|---|
-| **Node.js 18 or higher** | Runs the Webdata Pro server | [nodejs.org](https://nodejs.org) — click the **LTS** button |
-| **An AI provider** *(optional)* | Powers the AI app builder | Ollama (free, local) or an online service — see below |
+**Node.js 18 or higher** — this runs the Webdata Pro server.
+Download it from [nodejs.org](https://nodejs.org) and click the **LTS** button.
 
-> **About the AI builder:** You only need an AI provider if you want to use the AI app builder. If you prefer to set up your database by hand, you can skip this entirely and do everything manually through the admin panel.
+Webdata Pro includes its own web server, database engine, admin panel, and embed system. No other software is required to get started.
 
-### Choosing an AI provider
+> **Want to use the AI builder?** After Webdata Pro is running, you can connect it to an AI service — a free local install or a cloud provider. Full details are in the [Optional: Choose an AI for the App Builder](#optional-choose-an-ai-for-the-app-builder) section at the bottom of this page.
 
-To use the AI builder you have two options:
+---
 
-**Option A — Use an online AI service (no download required)**
+## What a first session looks like
 
-Sign up for an account with any of these providers, get an API key, and paste it into **Admin → Settings**:
-
-| Provider | Good starting model | Get a key |
-|---|---|---|
-| Anthropic (Claude) | `claude-haiku-4-5-20251001` | [console.anthropic.com](https://console.anthropic.com) |
-| OpenAI (ChatGPT) | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com) |
-| Google (Gemini) | `gemini-2.0-flash` | [aistudio.google.com](https://aistudio.google.com) |
-
-All three have pay-as-you-go pricing. Building a typical app costs a fraction of a cent.
-
-**Option B — Run your own AI model for free with Ollama**
-
-[Download Ollama](https://ollama.com), then open a terminal and run:
-
-```
-ollama pull qwen2.5:7b
-```
-
-This downloads the AI model to your computer (about 4.7 GB — roughly 20 minutes on a typical home connection). Ollama runs quietly in the background after that — you don't need to start it separately.
-
-> **Have fast internet and 16 GB of RAM?** The larger `qwen2.5:14b` model (9 GB) gives better results. Run `ollama pull qwen2.5:14b` instead, then select it under **Admin → Settings**.
+1. Install Webdata Pro and open the admin page in your browser
+2. Create a new app and give it a name
+3. Use the AI builder — or set up your tables by hand — to define your database
+4. Preview a working, searchable application right in the browser
+5. Paste the embed block into any web page and your app is live there
 
 ---
 
@@ -69,7 +51,7 @@ cd webdata-pro
 npm install
 ```
 
-This downloads everything Webdata Pro needs. It may take a minute or two.
+This downloads everything Webdata Pro needs to run. It takes a minute or two.
 
 ### Step 3 — Create your settings file
 
@@ -77,18 +59,18 @@ This downloads everything Webdata Pro needs. It may take a minute or two.
 cp .env.example .env
 ```
 
-This creates a file called `.env` that controls your server settings. Open it in any text editor:
+This creates a file called `.env` that holds your server settings. Open it in any text editor:
 
 ```
 PORT=3456
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=changeme
-SESSION_SECRET=change-this-to-a-long-random-string-in-production
+SESSION_SECRET=change-this-to-a-long-random-string
 ```
 
-**Change `ADMIN_PASSWORD` to something strong before you share this with anyone.** The admin account has full access to every database you create — treat the password like a house key.
+**Change `ADMIN_PASSWORD` before you share the app with anyone.** The admin account has full control over your data — treat it like a house key.
 
-Also replace `SESSION_SECRET` with any long random phrase (it doesn't matter what it says — just make it unique to you).
+Also replace `SESSION_SECRET` with any long phrase of your choosing. It doesn't matter what it says — just make it unique to you.
 
 ### Step 4 — Start the server
 
@@ -96,7 +78,7 @@ Also replace `SESSION_SECRET` with any long random phrase (it doesn't matter wha
 npm run dev
 ```
 
-You should see something like:
+You should see:
 
 ```
 Webdata Pro 2.0 running at http://localhost:3456
@@ -105,7 +87,7 @@ Admin panel: http://localhost:3456/admin
 
 Open your browser and go to **http://localhost:3456/admin**
 
-> **Port already in use?** Edit your `.env` file and change `PORT=3456` to any other number, like `4000` or `8080`.
+> **Port already in use?** Edit `.env` and change `PORT=3456` to any other number, like `4000`.
 
 ---
 
@@ -114,64 +96,68 @@ Open your browser and go to **http://localhost:3456/admin**
 ### 1. Log in
 
 - **Username:** `admin`
-- **Password:** whatever you set in your `.env` file (default is `changeme`)
+- **Password:** whatever you set in `.env` (default is `changeme`)
 
 ### 2. Create a new app
 
-Click **New App** on the dashboard. Give it a name — for example, *"Pet Shelter"*.
+Click **New App** on the dashboard. Give it a name — for example, *"Pet Adoption"*.
 
-Each app gets its own database, its own address, and its own embed code. You can have as many apps as you want.
+Each app gets its own database, its own URL, and its own embed code. You can run as many apps as you need from a single Webdata Pro installation.
 
-### 3. Build with AI
+### 3. Build your app
 
-Click **AI Builder** in the left menu. You'll see a text box. Describe your database in plain English — for example:
+**With the AI builder:** Click **AI Builder** in the left menu and describe your project in plain English:
 
-> *"I want a searchable database of pets available for adoption. Each pet has a name, animal type (dog, cat, rabbit), breed, date of birth, temperament, and whether they are good with kids."*
+> *"I want a searchable database of pets available for adoption. Each pet has a name, animal type, breed, date of birth, temperament, and whether they are good with kids."*
 
-Click **Build App**. The AI will create your tables, set up the fields, build search views, and add sample data — usually in under a minute.
+Click **Build App**. The AI creates your tables, sets up the fields, and adds sample records — usually in under a minute.
 
-### 4. See it working
+**Without AI:** Go to **Tables** in the left menu and add your tables and fields by hand, then use **Data** to enter records. It takes a little longer but gives you full control from the start.
 
-Click **Views** in the left menu. You'll see one or two views that the AI created. Click **Preview** next to any of them.
+### 4. Preview your app
 
-You'll see a working, searchable widget right in your browser. Type a name into the search box and press Search. It works.
+Click **Views** in the left menu and click **Preview** next to any view.
+
+You'll see a working, searchable application in your browser. Search, filtering, pagination, and detail views are all handled automatically — no additional code required.
 
 ### 5. Put it on a website
 
-On the Preview page, look for the **Embed Code** section. You'll see something like this:
+On the Preview page, look for the **Embed Code** section. You'll see an embed block like this:
 
 ```html
-<script src="http://localhost:3456/static/embed.js"></script>
+<script src="http://yourserver.com/static/embed.js"></script>
 
 <div id="wdp-pets_browse"></div>
 
 <script>
   WDP.mount('#wdp-pets_browse', {
-    app:     'pet-shelter',
+    app:     'pet-adoption',
     view:    'pets_browse',
     baseUrl: 'http://yourserver.com'
   });
 </script>
 ```
 
-Copy those lines and paste them into any HTML page. Change `baseUrl` to your server's actual address. The widget will appear and work on that page.
+Paste that block into any HTML page and replace `yourserver.com` with your server's actual address.
 
-> **Embedding on a different website?** If your website is hosted somewhere other than this server (a different domain or port), go to **App Settings** in the left menu and add your website's address to the **Allowed Origins** list. For example: `https://mywebsite.com`. This is a security feature — it controls which websites are allowed to load your data.
+**Still testing locally?** Use `http://localhost:3456` as the `baseUrl`. When you move to a real server, update it to that server's address.
+
+> **Embedding on a different website?** Go to **App Settings** and add your website's address to the **Allowed Origins** list — for example: `https://mywebsite.com`. This security setting controls which sites are permitted to load your data.
 
 ---
 
 ## Adjusting your app
 
-Everything in Webdata Pro can be changed after the AI builds it:
+Everything can be changed after the initial build:
 
 | Section | What you can do |
 |---|---|
 | **Tables** | Add, rename, or remove fields |
 | **Data** | Browse, add, edit, or delete records |
-| **Views** | Customize how search results look using HTML templates |
+| **Views** | Customize how results look using HTML templates |
 | **Groups & Members** | Control who can log in and what they can see |
-| **SQL Console** | Run raw SQL queries directly against your database |
-| **App Settings** | Set allowed origins for cross-site embedding |
+| **SQL Console** | Run queries directly against your database |
+| **App Settings** | Set allowed origins for embedding on other sites |
 
 ---
 
@@ -211,15 +197,44 @@ Node.js is not installed. Download it from [nodejs.org](https://nodejs.org) and 
 Run `npm install` again — some packages may not have downloaded correctly.
 
 **The AI builder doesn't respond or gives an error**
-- Make sure Ollama is installed and running
-- Open a terminal and run `ollama pull qwen2.5:14b` to confirm the model is downloaded
-- Go to **Admin → Settings** and confirm the AI provider is set to **Ollama**
+- For Ollama: make sure it's running and the model is downloaded (`ollama pull qwen2.5:7b`)
+- For cloud providers: check that your API key is saved in **Admin → Settings**
 
 **"I can't log in"**
 Your username and password come from the `.env` file — check `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
 
-**The embed widget loads on my site but search doesn't work**
-Your website's address is not in the Allowed Origins list. Go to **Admin → App Settings** and add it.
+**My app loads on another site but search doesn't work**
+Your website's address is not in the Allowed Origins list. Go to **App Settings** and add it.
+
+---
+
+## Optional: Choose an AI for the App Builder
+
+You only need this section if you want to use the AI-powered app builder. If you'd rather build your database by hand, skip it — Webdata Pro is fully functional without AI.
+
+### Option A — Use a cloud AI service (nothing to download)
+
+Sign up for an account with any of these providers, get an API key, and paste it into **Admin → Settings**:
+
+| Provider | Good starting model | Get a key |
+|---|---|---|
+| Anthropic (Claude) | `claude-haiku-4-5-20251001` | [console.anthropic.com](https://console.anthropic.com) |
+| OpenAI (ChatGPT) | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com) |
+| Google (Gemini) | `gemini-2.0-flash` | [aistudio.google.com](https://aistudio.google.com) |
+
+All three offer pay-as-you-go pricing. Building a typical app costs a fraction of a cent.
+
+### Option B — Run your own AI model for free with Ollama
+
+[Download Ollama](https://ollama.com), then open a terminal and run:
+
+```
+ollama pull qwen2.5:7b
+```
+
+This downloads an AI model to your computer (about 4.7 GB — roughly 10–20 minutes on a typical home connection). Ollama runs quietly in the background and does not need to be restarted each time.
+
+> **Have 16 GB of RAM and a faster connection?** The larger `qwen2.5:14b` model (9 GB) gives better results. Run `ollama pull qwen2.5:14b` instead, then select it under **Admin → Settings**.
 
 ---
 

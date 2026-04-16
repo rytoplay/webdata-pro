@@ -506,21 +506,20 @@ function processIfTags(template: string, data: Record<string, unknown>): string 
 }
 
 export function renderTokens(template: string, data: Record<string, unknown>): string {
-  // $thumbnail[table.field] → <img src="/uploads/..." width="100"> (thumbnail)
+  // $thumbnail[table.field] → <img src="/files/...?thumb=1" width="100"> (thumbnail)
   let result = template.replace(/\$thumbnail\[([^\]]+)\]/g, (_, ref: string) => {
     const alias = ref.replace('.', '__');
     const val   = String(data[alias] ?? data[ref] ?? '');
     if (!val) return '';
-    const thumb = val.replace(/(\.[^.]+)$/, '_thumb$1');
-    return `<img src="/uploads/${thumb}" width="100" style="border-radius:4px;" alt="">`;
+    return `<img src="/files/${val}?thumb=1" width="100" style="border-radius:4px;" alt="">`;
   });
 
-  // $img[table.field] → <img src="/uploads/..."> (full image)
+  // $img[table.field] → <img src="/files/..."> (full image)
   result = result.replace(/\$img\[([^\]]+)\]/g, (_, ref: string) => {
     const alias = ref.replace('.', '__');
     const val   = String(data[alias] ?? data[ref] ?? '');
     if (!val) return '';
-    return `<img src="/uploads/${val}" style="max-width:100%;" alt="">`;
+    return `<img src="/files/${val}" style="max-width:100%;" alt="">`;
   });
 
   // $currency[table.field] or $currency[table.field,2] → comma-formatted number
@@ -898,7 +897,7 @@ export async function renderViewDetail(
   let pkAlias: string;
   if (view.query_mode === 'advanced_sql' && view.custom_sql) {
     baseSql  = view.custom_sql;
-    pkAlias  = pkName;  // custom SQL uses whatever the user named it
+    pkAlias  = `${baseTableName}__${pkName}`;  // custom SQL follows table__field convention
   } else {
     baseSql  = await generateViewSql(app.id, baseTableName, templates);
     pkAlias  = `${baseTableName}__${pkName}`;  // auto SQL always aliases as table__field
@@ -938,7 +937,7 @@ export async function renderViewEditForm(
   let pkAlias: string;
   if (view.query_mode === 'advanced_sql' && view.custom_sql) {
     baseSql = view.custom_sql;
-    pkAlias = pkName;
+    pkAlias = `${baseTableName}__${pkName}`;
   } else {
     baseSql = await generateViewSql(app.id, baseTableName, templates);
     pkAlias = `${baseTableName}__${pkName}`;

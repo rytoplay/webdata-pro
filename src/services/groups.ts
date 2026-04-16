@@ -113,11 +113,12 @@ export async function getViewPermGrid(appId: number, groupId: number): Promise<V
   const perms = await db('view_group_permissions').where({ group_id: groupId });
   const pm    = new Map(perms.map((p: { view_id: number }) => [p.view_id, p]));
   return views.map((v: { id: number; view_name: string; label: string }) => {
-    const p = (pm.get(v.id) ?? {}) as { can_view?: boolean; limit_to_own_records?: boolean };
+    const p = (pm.get(v.id) ?? {}) as { can_view?: boolean; limit_to_own_records?: boolean; single_record?: boolean };
     return {
       view_id: v.id, view_name: v.view_name, label: v.label || v.view_name,
       can_view:             p.can_view             ?? false,
       limit_to_own_records: p.limit_to_own_records ?? false,
+      single_record:        p.single_record        ?? false,
     };
   });
 }
@@ -125,7 +126,7 @@ export async function getViewPermGrid(appId: number, groupId: number): Promise<V
 /** Save the view-permission grid for a group */
 export async function saveViewPermGrid(
   groupId: number,
-  rows: { view_id: number; can_view: boolean; limit_to_own_records: boolean }[]
+  rows: { view_id: number; can_view: boolean; limit_to_own_records: boolean; single_record: boolean }[]
 ): Promise<void> {
   for (const row of rows) {
     const existing = await db('view_group_permissions')
@@ -135,6 +136,7 @@ export async function saveViewPermGrid(
       view_id:  row.view_id,
       can_view:             !!row.can_view,
       limit_to_own_records: !!row.limit_to_own_records,
+      single_record:        !!row.single_record,
     };
     if (existing) await db('view_group_permissions').where({ id: existing.id }).update(data);
     else           await db('view_group_permissions').insert(data);

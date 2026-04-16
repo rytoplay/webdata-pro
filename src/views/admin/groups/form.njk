@@ -313,6 +313,7 @@ document.querySelectorAll('.wdp-insert').forEach(function(btn) {
             <th class="text-start ps-3" style="min-width:180px;">View</th>
             <th title="Can access this view">Can View</th>
             <th title="Members only see records they created">Limit to Own Records</th>
+            <th title="Each member has exactly one record — no list, goes straight to their edit form">Single Record</th>
           </tr>
         </thead>
         <tbody>
@@ -330,13 +331,18 @@ document.querySelectorAll('.wdp-insert').forEach(function(btn) {
               <input type="checkbox" name="vp_{{ row.view_id }}_limit_to_own_records" value="on"
                 class="form-check-input" {% if row.limit_to_own_records %}checked{% endif %}>
             </td>
+            <td>
+              <input type="checkbox" name="vp_{{ row.view_id }}_single_record" value="on"
+                class="form-check-input" {% if row.single_record %}checked{% endif %}>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
     <div class="card-footer text-muted" style="font-size:.8rem;">
-      <strong>Limit to Own Records</strong>: members only see records they created in this view.
+      <strong>Limit to Own Records</strong>: members only see records they created. &nbsp;|&nbsp;
+      <strong>Single Record</strong>: each member has exactly one record — navigating to the view goes straight to their edit form (or create form if they haven't made one yet). Implies own records.
     </div>
   </div>
   {% endif %}

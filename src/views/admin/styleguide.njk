@@ -59,6 +59,7 @@
     <a href="#sg-header">Header Bar</a>
     <a href="#sg-group">Group Divider</a>
     <a href="#sg-rows">Card Rows</a>
+    <a href="#sg-row-flex">Row Flex Layout</a>
     <a href="#sg-table">Table Layout</a>
     <a href="#sg-footer">Footer &amp; Pagination</a>
     <a href="#sg-detail">Detail View</a>
@@ -296,6 +297,146 @@
           Hierarchy: <strong>title</strong> (bold, full size) → <strong>sub</strong> (accent color) → <strong>meta</strong> (muted, small).
           <code>.wdp-arr</code> is a right-aligned chevron/arrow; can be any character or icon.
         </div>
+      </div>
+    </section>
+
+    {# ══ ROW FLEX LAYOUT ══ #}
+    <section id="sg-row-flex" class="sg-section">
+      <h2 class="sg-h2">Row Flex Layout</h2>
+      <p class="sg-desc">
+        <code>.wdp-row</code> is a standard CSS flex container (<code>display:flex; align-items:center; gap:12px</code>).
+        Its direct children become flex items and line up left to right. This means you control what appears on the
+        left, middle, and right of a row purely by the order you write the HTML — no extra CSS needed.
+      </p>
+
+      <div class="sg-callout">
+        <strong>Mental model:</strong> think of a row as a horizontal shelf.
+        Anything you place on the shelf before <code>.wdp-row-body</code> pins to the left.
+        <code>.wdp-row-body</code> has <code>flex:1</code> so it expands to fill the middle.
+        Anything after it pins to the right.
+      </div>
+
+      {# ── Diagram ── #}
+      <h3 class="sg-h3">Anatomy</h3>
+      <div class="sg-block">
+        <div class="sg-block-label">Flex item order inside <code>.wdp-row</code></div>
+        <div class="sg-demo" style="font-family:monospace;font-size:0.8rem;color:#475569;">
+          <div style="display:flex;align-items:stretch;gap:4px;border:2px dashed #cbd5e1;border-radius:6px;padding:8px;">
+            <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:4px;padding:8px 12px;text-align:center;white-space:nowrap;">thumbnail<br><span style="font-size:0.7rem;color:#3b82f6;">flex-shrink:0</span></div>
+            <div style="background:#dcfce7;border:1px solid #86efac;border-radius:4px;padding:8px 12px;flex:1;text-align:center;">.wdp-row-body<br><span style="font-size:0.7rem;color:#16a34a;">flex:1 — fills space</span></div>
+            <div style="background:#fef9c3;border:1px solid #fde047;border-radius:4px;padding:8px 12px;text-align:center;white-space:nowrap;">badge / status<br><span style="font-size:0.7rem;color:#ca8a04;">optional</span></div>
+            <div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:4px;padding:8px 12px;text-align:center;white-space:nowrap;">.wdp-arr<br><span style="font-size:0.7rem;color:#9333ea;">›</span></div>
+          </div>
+        </div>
+      </div>
+
+      {# ── Thumbnail left, text right ── #}
+      <h3 class="sg-h3">Thumbnail left, text right</h3>
+      <div class="sg-block">
+        <div class="sg-block-label">Live example</div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-row" data-wdp-action="detail" data-wdp-id="1">
+              <img src="https://placehold.co/100x100/a3e6cb/1f7a52?text=🐕" width="100" style="border-radius:4px;flex-shrink:0;" alt="">
+              <div class="wdp-row-body">
+                <div class="wdp-row-title">Bella</div>
+                <div class="wdp-row-sub">Dog • Golden Retriever</div>
+                <div class="wdp-row-meta">3 years old &nbsp;·&nbsp; Friendly, energetic</div>
+              </div>
+              <div class="wdp-arr">›</div>
+            </div>
+            <div class="wdp-row" data-wdp-action="detail" data-wdp-id="2">
+              <img src="https://placehold.co/100x100/c7d2fe/3730a3?text=🐈" width="100" style="border-radius:4px;flex-shrink:0;" alt="">
+              <div class="wdp-row-body">
+                <div class="wdp-row-title">Luna</div>
+                <div class="wdp-row-sub">Cat • Domestic Shorthair</div>
+                <div class="wdp-row-meta">2 years old &nbsp;·&nbsp; Calm, independent</div>
+              </div>
+              <div class="wdp-arr">›</div>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-row"</span> data-wdp-action=<span class="str">"detail"</span> data-wdp-id=<span class="str">"${_pk}"</span>&gt;
+  <span class="hl">$thumbnail[pets.picture]</span>              <span style="color:#64748b;">&lt;!-- direct child = pins left --&gt;</span>
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-body"</span>&gt;             <span style="color:#64748b;">&lt;!-- flex:1 = fills middle --&gt;</span>
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-title"</span>&gt;${pets.name}&lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-sub"</span>&gt;${pets.animal_type} • ${pets.breed}&lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-meta"</span>&gt;${pets.years} years old&lt;/<span class="hl">div</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-arr"</span>&gt;›&lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">
+          <code>$thumbnail[table.field]</code> generates a 100×100 <code>&lt;img&gt;</code> tag.
+          The <code>flex-shrink:0</code> style on the image prevents the flex container from squishing it when space is tight — always include it on fixed-size items.
+        </div>
+      </div>
+
+      {# ── Common mistake ── #}
+      <div class="sg-do-dont">
+        <div class="sg-do">
+          <div class="sg-do-hdr">✓ Do — thumbnail outside wdp-row-body</div>
+          <pre class="sg-code" style="font-size:0.72rem;">&lt;div class=<span class="str">"wdp-row"</span>&gt;
+  <span class="hl">$thumbnail[pets.picture]</span>
+  &lt;div class=<span class="str">"wdp-row-body"</span>&gt;
+    &lt;div class=<span class="str">"wdp-row-title"</span>&gt;...&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</pre>
+        </div>
+        <div class="sg-dont">
+          <div class="sg-dont-hdr">✗ Don't — thumbnail inside wdp-row-body</div>
+          <pre class="sg-code" style="font-size:0.72rem;">&lt;div class=<span class="str">"wdp-row"</span>&gt;
+  &lt;div class=<span class="str">"wdp-row-body"</span>&gt;
+    <span class="hl">$thumbnail[pets.picture]</span>  ← stacks above text
+    &lt;div class=<span class="str">"wdp-row-title"</span>&gt;...&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</pre>
+        </div>
+      </div>
+
+      {# ── Badge on right ── #}
+      <h3 class="sg-h3">Badge or status on the right</h3>
+      <div class="sg-block">
+        <div class="sg-block-label">Live example</div>
+        <div class="sg-demo">
+          <div class="wdp">
+            <div class="wdp-row" data-wdp-action="detail" data-wdp-id="1">
+              <div class="wdp-row-body">
+                <div class="wdp-row-title">Bella</div>
+                <div class="wdp-row-sub">Golden Retriever</div>
+              </div>
+              <span class="wdp-badge">Dog</span>
+              <div class="wdp-arr">›</div>
+            </div>
+            <div class="wdp-row" data-wdp-action="detail" data-wdp-id="2">
+              <div class="wdp-row-body">
+                <div class="wdp-row-title">Luna</div>
+                <div class="wdp-row-sub">Domestic Shorthair</div>
+              </div>
+              <span class="wdp-badge" style="background:var(--wdp-accent);">Cat</span>
+              <div class="wdp-arr">›</div>
+            </div>
+          </div>
+        </div>
+        <pre class="sg-code">&lt;<span class="hl">div</span> class=<span class="str">"wdp-row"</span> data-wdp-action=<span class="str">"detail"</span> data-wdp-id=<span class="str">"${_pk}"</span>&gt;
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-body"</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-title"</span>&gt;${pets.name}&lt;/<span class="hl">div</span>&gt;
+    &lt;<span class="hl">div</span> class=<span class="str">"wdp-row-sub"</span>&gt;${pets.breed}&lt;/<span class="hl">div</span>&gt;
+  &lt;/<span class="hl">div</span>&gt;
+  &lt;<span class="hl">span</span> class=<span class="str">"wdp-badge"</span>&gt;${pets.animal_type}&lt;/<span class="hl">span</span>&gt;  <span style="color:#64748b;">&lt;!-- after body = pins right --&gt;</span>
+  &lt;<span class="hl">div</span> class=<span class="str">"wdp-arr"</span>&gt;›&lt;/<span class="hl">div</span>&gt;
+&lt;/<span class="hl">div</span>&gt;</pre>
+        <div class="sg-note">Any element placed after <code>.wdp-row-body</code> and before <code>.wdp-arr</code> naturally pins to the right because the body has already consumed all available space.</div>
+      </div>
+
+      {# ── Custom image size ── #}
+      <h3 class="sg-h3">Custom image size</h3>
+      <p class="sg-desc"><code>$thumbnail[table.field]</code> always renders at 100×100px. To use a different size, use <code>$img[table.field]</code> and add inline styles — or skip the token entirely and write the <code>&lt;img&gt;</code> yourself using <code>${table.field}</code> as the src path prefix.</p>
+      <div class="sg-block">
+        <div class="sg-block-label">Smaller thumbnail (64px)</div>
+        <pre class="sg-code">&lt;<span class="hl">img</span> src=<span class="str">"/files/${pets.picture}"</span>
+     style=<span class="str">"width:64px;height:64px;object-fit:cover;border-radius:6px;flex-shrink:0;"</span>
+     alt=<span class="str">""</span>&gt;</pre>
+        <div class="sg-note"><code>object-fit:cover</code> crops the image to fill the box without distorting it. <code>flex-shrink:0</code> prevents the flex container from squishing it.</div>
       </div>
     </section>
 

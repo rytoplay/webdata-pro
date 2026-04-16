@@ -137,6 +137,39 @@ memberRouter.get('/view/:viewName', async (req, res, next) => {
     const view = await db('views').where({ app_id: app.id, view_name: req.params.viewName }).first();
     if (!view) return res.status(404).send('View not found');
 
+    // Check if this view is single_record for any of the member's groups
+    const singleRecordPerm = member.groupIds.length > 0
+      ? await db('view_group_permissions')
+          .whereIn('group_id', member.groupIds)
+          .where({ view_id: view.id, single_record: true })
+          .first()
+      : null;
+
+    if (singleRecordPerm) {
+      // Find the base table name for this view
+      const baseTable = await db('app_tables').where({ id: view.base_table_id }).first();
+      const baseTableName = baseTable?.table_name ?? null;
+
+      let existingRecordId: string | null = null;
+      if (baseTableName) {
+        const { getAppDb } = await import('../../db/adapters/appDb');
+        const appDb = getAppDb(app);
+        const metaRow = await appDb('_wdpro_metadata')
+          .where({ table_name: baseTableName, created_by_id: member.memberId })
+          .orderBy('created_at', 'desc')
+          .first();
+        existingRecordId = metaRow?.record_id ?? null;
+      }
+
+      return res.render('member/view', {
+        title: `${view.label} — ${app.name}`,
+        app,
+        view,
+        singleRecord: true,
+        existingRecordId,
+      });
+    }
+
     res.render('member/view', { title: `${view.label} — ${app.name}`, app, view });
   } catch (err) { next(err); }
 });

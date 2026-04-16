@@ -124,7 +124,7 @@
             {% elif field.ui_widget == 'image' %}
             {% if fieldVal %}
             <div class="mb-2">
-              <img src="/uploads/{{ fieldVal }}" style="max-height:120px;max-width:240px;border-radius:6px;border:1px solid var(--border);" alt="">
+              <img src="/files/{{ fieldVal }}" style="max-height:120px;max-width:240px;border-radius:6px;border:1px solid var(--border);" alt="">
               <div class="form-text">Current image — upload a new one to replace it.</div>
             </div>
             {% endif %}
@@ -136,7 +136,7 @@
             {% elif field.ui_widget == 'upload' %}
             {% if fieldVal %}
             <div class="mb-2">
-              <a href="/uploads/{{ fieldVal }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+              <a href="/files/{{ fieldVal }}" target="_blank" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-file-earmark me-1"></i>View current file
               </a>
               <span class="text-muted ms-2" style="font-size:0.8rem;">Upload a new file to replace it.</span>

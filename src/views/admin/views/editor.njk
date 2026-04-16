@@ -1,6 +1,20 @@
 {% extends "admin/layout.njk" %}
 
 {% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<style>
+  .CodeMirror { height: auto; font-size: 0.8rem; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; border: 1px solid #dee2e6; border-radius: 0.375rem; }
+  .CodeMirror-scroll { min-height: 580px; }
+  .sql-cm .CodeMirror { border-radius: 0; border: none; }
+  .sql-cm .CodeMirror-scroll { min-height: 200px; max-height: 200px; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js"></script>
 <div class="page-header">
   <h1>{{ view.label }} <span class="text-muted fw-normal fs-6">/ templates</span></h1>
   <div class="d-flex gap-2">
@@ -221,7 +235,7 @@
       </div>
     </div>
     <div id="sql-collapsible" {% if view.query_mode != 'advanced_sql' %}style="display:none"{% endif %}>
-      <div class="card-body p-0">
+      <div class="card-body p-0 sql-cm">
         <textarea id="sql-editor" class="form-control font-monospace border-0 rounded-0"
           rows="8" style="font-size:0.8rem;resize:vertical;border-radius:0 !important;"
           {% if view.query_mode != 'advanced_sql' %}readonly{% endif %}>{{ view.custom_sql if view.query_mode == 'advanced_sql' else generatedSql }}</textarea>
@@ -709,6 +723,38 @@ add_shortcode('wdp_view', function($atts) {
 
 <script>
 (function () {
+  // ── CodeMirror: HTML template editors ────────────────────────────────────
+  const cmEditors = {};
+  let activeEditor = null;
+  let sqlCm = null; // declared early so setSqlExpanded can reference it safely
+
+  document.querySelectorAll('.tpl-textarea').forEach(ta => {
+    const type = ta.dataset.tpl;
+    const raw  = ta.value;
+    const editor = CodeMirror.fromTextArea(ta, {
+      mode: 'htmlmixed',
+      lineNumbers: true,
+      indentUnit: 2,
+      tabSize: 2,
+      indentWithTabs: false,
+      lineWrapping: false,
+      extraKeys: { Tab: 'indentMore', 'Shift-Tab': 'indentLess' }
+    });
+    if (raw.trim() && typeof html_beautify !== 'undefined') {
+      editor.setValue(html_beautify(raw, { indent_size: 2, wrap_line_length: 0, preserve_newlines: false }));
+    }
+    cmEditors[type] = editor;
+    editor.on('focus', () => { activeEditor = editor; });
+    editor.on('change', () => {
+      if (typeof window._wdpSchedulePush === 'function') window._wdpSchedulePush();
+    });
+  });
+
+  // Set initial active editor to whichever template panel is visible on load
+  const _initTpl = document.querySelector('.tpl-panel:not(.d-none)')?.dataset.tpl || Object.keys(cmEditors)[0];
+  if (_initTpl) activeEditor = cmEditors[_initTpl];
+  window._wdpCmEditors = cmEditors;
+
   // ── Template tab switching ────────────────────────────────────────────────
   const panels   = document.querySelectorAll('.tpl-panel');
   const buttons  = document.querySelectorAll('#tpl-selector button[data-tpl]');
@@ -730,6 +776,8 @@ add_shortcode('wdp_view', function($atts) {
       panels.forEach(p => p.classList.add('d-none'));
       btn.classList.add('active');
       document.querySelector(`.tpl-panel[data-tpl="${btn.dataset.tpl}"]`)?.classList.remove('d-none');
+      const tplEditor = cmEditors[btn.dataset.tpl];
+      if (tplEditor) { tplEditor.refresh(); activeEditor = tplEditor; }
       applyTabState(btn.dataset.tpl);
       updateHelp(btn.dataset.tpl);
     });
@@ -917,22 +965,12 @@ add_shortcode('wdp_view', function($atts) {
   });
 
   // ── Token insertion at cursor ─────────────────────────────────────────────
-  let lastFocusedTextarea = document.querySelector('.tpl-textarea');
-
-  document.querySelectorAll('.tpl-textarea').forEach(ta => {
-    ta.addEventListener('focus', () => { lastFocusedTextarea = ta; });
-  });
-
   document.querySelectorAll('.token-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const ta    = lastFocusedTextarea;
       const token = btn.dataset.token;
-      if (!ta || !token) return;
-      const start = ta.selectionStart;
-      const end   = ta.selectionEnd;
-      ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
-      ta.selectionStart = ta.selectionEnd = start + token.length;
-      ta.focus();
+      if (!token || !activeEditor) return;
+      activeEditor.replaceSelection(token);
+      activeEditor.focus();
     });
   });
 
@@ -944,6 +982,7 @@ add_shortcode('wdp_view', function($atts) {
     const chevron = document.getElementById('sql-chevron');
     panel.style.display = expanded ? '' : 'none';
     chevron.className   = (expanded ? 'bi bi-chevron-down' : 'bi bi-chevron-right') + ' me-1 text-muted';
+    if (expanded && sqlCm) setTimeout(() => sqlCm.refresh(), 0);
     try { localStorage.setItem(SQL_PREF_KEY, expanded ? '1' : '0'); } catch(e) {}
   }
 
@@ -969,8 +1008,17 @@ add_shortcode('wdp_view', function($atts) {
   const btnReset     = document.getElementById('btn-reset-sql');
   const hintEl       = document.getElementById('sql-hint');
 
+  // ── CodeMirror: SQL editor ────────────────────────────────────────────────
+  sqlCm = CodeMirror.fromTextArea(sqlEditor, {
+    mode: 'text/x-sql',
+    lineNumbers: true,
+    indentUnit: 2,
+    tabSize: 2,
+    readOnly: {{ 'false' if view.query_mode == 'advanced_sql' else 'true' }}
+  });
+
   function setCustomMode(isCustom) {
-    sqlEditor.readOnly = !isCustom;
+    sqlCm.setOption('readOnly', !isCustom);
     modeInput.value    = isCustom ? 'advanced_sql' : 'automatic';
     badgeEl.textContent = isCustom ? 'Custom SQL' : 'Auto-generated';
     badgeEl.className   = 'badge ms-2 ' + (isCustom ? 'bg-warning text-dark' : 'bg-light text-dark border');
@@ -988,18 +1036,19 @@ add_shortcode('wdp_view', function($atts) {
     setCustomMode(false);
   });
 
-  // Before form submit, sync custom SQL if in custom mode
+  // Before form submit, sync all CM editors back to their hidden textareas
   document.getElementById('editor-form')?.addEventListener('submit', () => {
+    Object.values(cmEditors).forEach(e => e.save());
     if (modeInput.value === 'advanced_sql') {
-      customInput.value = sqlEditor.value;
+      customInput.value = sqlCm.getValue();
     }
   });
 
   // ── Refresh SQL from templates ────────────────────────────────────────────
   async function refreshSql() {
     const templates = {};
-    document.querySelectorAll('.tpl-textarea').forEach(ta => {
-      templates[ta.dataset.tpl] = ta.value;
+    Object.entries(cmEditors).forEach(([type, editor]) => {
+      templates[type] = editor.getValue();
     });
     try {
       const res  = await fetch('/admin/views/{{ view.id }}/generate-sql', {
@@ -1008,13 +1057,9 @@ add_shortcode('wdp_view', function($atts) {
         body:    JSON.stringify(templates)
       });
       const data = await res.json();
-      if (data.error) {
-        sqlEditor.value = '-- Error: ' + data.error;
-      } else {
-        sqlEditor.value = data.sql;
-      }
+      sqlCm.setValue(data.error ? '-- Error: ' + data.error : data.sql);
     } catch (e) {
-      sqlEditor.value = '-- Request failed: ' + e.message;
+      sqlCm.setValue('-- Request failed: ' + e.message);
     }
   }
 
@@ -1063,13 +1108,18 @@ add_shortcode('wdp_view', function($atts) {
       } else {
         let changed = 0;
         for (const [type, content] of Object.entries(data.templates)) {
-          const ta = document.querySelector(`.tpl-textarea[data-tpl="${type}"]`);
-          if (ta && ta.value !== content) { ta.value = content; changed++; }
+          const editor = cmEditors[type];
+          if (editor && editor.getValue() !== content) {
+            const fmt = typeof html_beautify !== 'undefined'
+              ? html_beautify(content, { indent_size: 2, wrap_line_length: 0, preserve_newlines: false })
+              : content;
+            editor.setValue(fmt);
+            changed++;
+          }
         }
         bootstrap.Modal.getInstance(document.getElementById('aiModal'))?.hide();
         await refreshSql();
-        // Notify live preview of the new template content
-        document.querySelector('.tpl-textarea')?.dispatchEvent(new Event('input', { bubbles: true }));
+        if (typeof window._wdpSchedulePush === 'function') window._wdpSchedulePush();
         if (changed === 0) {
           console.info('[AI Design] Templates unchanged — model may need a style hint to produce different output.');
         }
@@ -1170,9 +1220,12 @@ add_shortcode('wdp_view', function($atts) {
 
   function collectTemplates() {
     const data = {};
-    document.querySelectorAll('textarea[name]').forEach(ta => {
-      data[ta.name] = ta.value;
-    });
+    const editors = window._wdpCmEditors;
+    if (editors && Object.keys(editors).length) {
+      Object.entries(editors).forEach(([key, editor]) => { data[key] = editor.getValue(); });
+    } else {
+      document.querySelectorAll('textarea[name]').forEach(ta => { data[ta.name] = ta.value; });
+    }
     return data;
   }
 
@@ -1202,9 +1255,8 @@ add_shortcode('wdp_view', function($atts) {
     debounceTimer = setTimeout(pushPreview, 450);
   }
 
-  document.addEventListener('input', function(e) {
-    if (e.target.matches('textarea.tpl-textarea')) schedulePush();
-  });
+  // CM editors trigger _wdpSchedulePush directly via their change events
+  window._wdpSchedulePush = schedulePush;
 
   document.getElementById('btn-live-preview').addEventListener('click', function() {
     if (!previewWin || previewWin.closed) {
