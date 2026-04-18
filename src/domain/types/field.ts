@@ -42,6 +42,8 @@ export interface AppField {
   default_value: string | null;
   is_searchable_default: boolean;
   is_visible_default: boolean;
+  is_indexed: boolean;
+  is_fulltext_indexed: boolean;
   ui_widget: UIWidget;
   ui_options_json: string | null;
   sort_order: number;
@@ -58,6 +60,8 @@ export interface CreateFieldInput {
   default_value?: string | null;
   is_searchable_default?: boolean;
   is_visible_default?: boolean;
+  is_indexed?: boolean;
+  is_fulltext_indexed?: boolean;
   ui_widget?: UIWidget;
   ui_options_json?: string | null;
   sort_order?: number;
@@ -71,6 +75,8 @@ export interface UpdateFieldInput {
   default_value?: string | null;
   is_searchable_default?: boolean;
   is_visible_default?: boolean;
+  is_indexed?: boolean;
+  is_fulltext_indexed?: boolean;
   ui_widget?: UIWidget;
   ui_options_json?: string | null;
   sort_order?: number;

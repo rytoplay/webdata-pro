@@ -7,6 +7,8 @@ export interface Group {
   default_home_view_id: number | null;
   tfa_required: boolean;
   home_template: string | null;
+  home_header_html: string | null;
+  home_footer_html: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +29,8 @@ export interface UpdateGroupInput {
   default_home_view_id?: number | null;
   tfa_required?: boolean;
   home_template?: string | null;
+  home_header_html?: string | null;
+  home_footer_html?: string | null;
 }
 
 export interface GroupTablePermission {

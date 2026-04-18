@@ -35,7 +35,8 @@ export const TEMPLATE_LABELS: Record<ViewTemplateType, string> = {
 };
 
 export const DEFAULT_TEMPLATES: ViewTemplates = {
-  search_form: `<form data-wdp-form="search" class="wdp-search">
+  search_form: `$portal_header
+<form data-wdp-form="search" class="wdp-search">
   <input type="text" name="q" value="\${_q}" placeholder="Search…" class="wdp-input">
   <button type="submit" class="wdp-btn">Search</button>
   \${_q ? '<a data-wdp-action="clear" class="wdp-btn-link">Clear</a>' : ''}
@@ -48,7 +49,8 @@ export const DEFAULT_TEMPLATES: ViewTemplates = {
   Record #\${_pk}
 </div>`,
   group_footer: '',
-  footer: `<div class="wdp-footer">\${_pagination}</div>`,
+  footer: `<div class="wdp-footer">\${_pagination}</div>
+$portal_footer`,
   detail: `<div class="wdp-detail">
   <button data-wdp-action="back" class="wdp-btn-link">&lsaquo; Back</button>
   <div class="wdp-detail-body" style="margin-top:1rem;">
@@ -505,9 +507,25 @@ function processIfTags(template: string, data: Record<string, unknown>): string 
   return result;
 }
 
+/**
+ * Convert <<<WDP:REVIEW ...>>> markers left by field delete/rename into
+ * visible orange warning boxes in the rendered output.
+ */
+export function renderReviewMarkers(html: string): string {
+  return html.replace(
+    /<<<WDP:REVIEW ([^>]+)>>>/g,
+    '<div class="wdp-review-marker">&#9888; Review needed: $1</div>',
+  );
+}
+
 export function renderTokens(template: string, data: Record<string, unknown>): string {
+  // $portal_header / $portal_footer → pre-rendered portal nav HTML (empty if not in member context)
+  let result = template
+    .replace(/\$portal_header/g, () => String(data['_portal_header'] ?? ''))
+    .replace(/\$portal_footer/g, () => String(data['_portal_footer'] ?? ''));
+
   // $thumbnail[table.field] → <img src="/files/...?thumb=1" width="100"> (thumbnail)
-  let result = template.replace(/\$thumbnail\[([^\]]+)\]/g, (_, ref: string) => {
+  result = result.replace(/\$thumbnail\[([^\]]+)\]/g, (_, ref: string) => {
     const alias = ref.replace('.', '__');
     const val   = String(data[alias] ?? data[ref] ?? '');
     if (!val) return '';
@@ -625,6 +643,8 @@ export interface RenderParams {
   searchOnly?: boolean;
   fieldFilters?: Record<string, string>;  // "table__field" → value
   ownerId?: number;                        // set to filter results to records owned by this member
+  portalHeader?: string;                   // pre-rendered HTML for $portal_header token
+  portalFooter?: string;                   // pre-rendered HTML for $portal_footer token
 }
 
 export async function renderViewList(
@@ -725,11 +745,13 @@ export async function renderViewList(
       groupTagsList.flatMap(g => g.refs.map(r => `${r.table}.${r.field}`))
     );
 
-    const fieldTypes = await db('app_fields')
+    const fieldMeta = await db('app_fields')
       .whereIn('table_id', await db('app_tables').where({ app_id: app.id }).pluck('id'))
-      .select('field_name', 'data_type');
+      .select('field_name', 'data_type', 'is_indexed', 'is_fulltext_indexed');
     const textTypes    = new Set(['text', 'varchar', 'char', 'string', 'json']);
-    const fieldTypeMap = new Map(fieldTypes.map((f: { field_name: string; data_type: string }) => [f.field_name, f.data_type]));
+    const fieldTypeMap    = new Map(fieldMeta.map((f: { field_name: string; data_type: string }) => [f.field_name, f.data_type]));
+    const fieldIndexMap   = new Map(fieldMeta.map((f: { field_name: string; is_indexed: boolean }) => [f.field_name, !!f.is_indexed]));
+    const fieldFtMap      = new Map(fieldMeta.map((f: { field_name: string; is_fulltext_indexed: boolean }) => [f.field_name, !!f.is_fulltext_indexed]));
 
     // In advanced_sql mode, only search columns that are actually aliased in the custom SQL.
     // Template tokens can reference computed/display-only fields that aren't in the SELECT.
@@ -738,19 +760,40 @@ export async function renderViewList(
         ? extractSqlAliases(view.custom_sql)
         : null;
 
-    const regularCols = tokens
+    const regularTokens = tokens
       .filter(t => !groupedColKeys.has(`${t.table}.${t.field}`))
       .filter(t => textTypes.has((fieldTypeMap.get(t.field) ?? 'text').toLowerCase()))
-      .filter(t => !customSqlAliases || customSqlAliases.has(`${t.table}__${t.field}`))
-      .map(t => `"${t.table}__${t.field}"`);
+      .filter(t => !customSqlAliases || customSqlAliases.has(`${t.table}__${t.field}`));
+
+    // Classify tokens: fulltext (MySQL MATCH...AGAINST), exact (indexed), or LIKE
+    const isMysql = app.database_mode === 'mysql';
+    const fulltextTokens = isMysql ? regularTokens.filter(t => fieldFtMap.get(t.field)) : [];
+    const nonFtTokens    = regularTokens.filter(t => !isMysql || !fieldFtMap.get(t.field));
+    const exactCols = nonFtTokens.filter(t =>  fieldIndexMap.get(t.field)).map(t => `"${t.table}__${t.field}"`);
+    const likeCols  = nonFtTokens.filter(t => !fieldIndexMap.get(t.field)).map(t => `"${t.table}__${t.field}"`);
 
     // GROUP_CONCAT aliases are plain text — safe to LIKE search
     const groupAliasCols = groupTagsList.map(g => `"${g.alias}"`);
+    const allLikeCols = [...likeCols, ...groupAliasCols];
 
-    const allSearchCols = [...regularCols, ...groupAliasCols];
-    if (allSearchCols.length > 0) {
-      whereParts.push(`(${allSearchCols.map(c => `${c} LIKE ?`).join(' OR ')})`);
-      bindings.push(...Array(allSearchCols.length).fill(`%${q}%`));
+    const searchParts: string[] = [];
+    if (exactCols.length > 0) {
+      searchParts.push(...exactCols.map(c => `${c} = ?`));
+      bindings.push(...Array(exactCols.length).fill(q));
+    }
+    if (allLikeCols.length > 0) {
+      searchParts.push(...allLikeCols.map(c => `${c} LIKE ?`));
+      bindings.push(...Array(allLikeCols.length).fill(`%${q}%`));
+    }
+    // Fulltext fields: correlated EXISTS so MATCH...AGAINST runs on the original indexed column
+    for (const t of fulltextTokens) {
+      searchParts.push(
+        `EXISTS (SELECT 1 FROM \`${t.table}\` WHERE \`${t.table}\`.\`id\` = _v."${t.table}__id" AND MATCH(\`${t.table}\`.\`${t.field}\`) AGAINST(? IN BOOLEAN MODE))`
+      );
+      bindings.push(q);
+    }
+    if (searchParts.length > 0) {
+      whereParts.push(`(${searchParts.join(' OR ')})`);
     }
   }
 
@@ -779,7 +822,7 @@ export async function renderViewList(
     // Always use table__field alias — custom SQL is built from auto-generated SQL which follows this convention
     const pkAlias = `${baseTableName}__${pkName}`;
     whereParts.push(
-      `EXISTS (SELECT 1 FROM _wdpro_metadata WHERE _wdpro_metadata.record_id = ${castToText(app, `"_v"."${pkAlias}"`)} AND _wdpro_metadata.table_name = ? AND _wdpro_metadata.created_by_id = ?)`
+      `EXISTS (SELECT 1 FROM _wdpro_metadata WHERE ${app.database_mode === 'mysql' ? `CAST(_wdpro_metadata.record_id AS UNSIGNED) = _v."${pkAlias}"` : `_wdpro_metadata.record_id = ${castToText(app, `"_v"."${pkAlias}"`)}`} AND _wdpro_metadata.table_name = ? AND _wdpro_metadata.created_by_id = ?)`
     );
     bindings.push(baseTableName, String(params.ownerId));
   }
@@ -795,7 +838,7 @@ export async function renderViewList(
     const pkAlias = `${baseTableName}__${pkName}`;
     outerSql = `SELECT _v.*, _m.created_at AS "_meta__created_at", _m.updated_at AS "_meta__updated_at", _m.created_by_name AS "_meta__created_by" ` +
       `FROM (${baseSql}) AS _v ` +
-      `LEFT JOIN _wdpro_metadata _m ON ${castToText(app, `_v."${pkAlias}"`)} = _m.record_id AND _m.table_name = '${baseTableName}' ` +
+      `LEFT JOIN _wdpro_metadata _m ON ${app.database_mode === 'mysql' ? `CAST(_m.record_id AS UNSIGNED) = _v."${pkAlias}"` : `${castToText(app, `_v."${pkAlias}"`)} = _m.record_id`} AND _m.table_name = '${baseTableName}' ` +
       whereSql;
   } else {
     outerSql = `SELECT * FROM (${baseSql}) AS _v ${whereSql}`;
@@ -808,34 +851,44 @@ export async function renderViewList(
   }
 
   // Total count
+  // MySQL raw() returns [rows, fields]; SQLite returns rows directly.
+  const isMysql = app.database_mode === 'mysql';
   const countResult = await appDb.raw(
     `SELECT COUNT(*) AS _t FROM (${outerSql}) AS _c`,
     bindings
   );
-  const total      = Number(((countResult as unknown[])[0] as Record<string, unknown>)?.['_t'] ?? 0);
+  const countRows: Record<string, unknown>[] = isMysql
+    ? (countResult as [Record<string, unknown>[], unknown])[0]
+    : (countResult as Record<string, unknown>[]);
+  const total      = Number(countRows[0]?.['_t'] ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Data rows
-  const rows = await appDb.raw(
+  const rowsRaw = await appDb.raw(
     `${outerSql}${sortSql} LIMIT ? OFFSET ?`,
     [...bindings, pageSize, offset]
-  ) as Record<string, unknown>[];
+  );
+  const rows: Record<string, unknown>[] = isMysql
+    ? (rowsRaw as [Record<string, unknown>[], unknown])[0]
+    : (rowsRaw as Record<string, unknown>[]);
 
   // System data
   const sys: Record<string, unknown> = {
-    _q:           q,
-    _page:        page,
-    _total:       total,
-    _total_pages: totalPages,
-    _has_prev:    page > 1 ? 'true' : '',
-    _has_next:    page < totalPages ? 'true' : '',
-    _prev_page:   Math.max(1, page - 1),
-    _next_page:   Math.min(totalPages, page + 1),
-    _sort:        sortField ?? '',
-    _dir:         sortDir.toLowerCase(),
-    _per_page:    pageSize,
-    _page_size:   view.page_size ?? 25,
-    _pagination:  buildPaginationHtml(page, totalPages),
+    _q:              q,
+    _page:           page,
+    _total:          total,
+    _total_pages:    totalPages,
+    _has_prev:       page > 1 ? 'true' : '',
+    _has_next:       page < totalPages ? 'true' : '',
+    _prev_page:      Math.max(1, page - 1),
+    _next_page:      Math.min(totalPages, page + 1),
+    _sort:           sortField ?? '',
+    _dir:            sortDir.toLowerCase(),
+    _per_page:       pageSize,
+    _page_size:      view.page_size ?? 25,
+    _pagination:     buildPaginationHtml(page, totalPages),
+    _portal_header:  params.portalHeader ?? '',
+    _portal_footer:  params.portalFooter ?? '',
   };
 
   const parts: string[] = [];
@@ -877,7 +930,7 @@ export async function renderViewList(
 
   parts.push(renderTokens(tpl.footer, sys));
 
-  return parts.join('\n');
+  return renderReviewMarkers(parts.join('\n'));
 }
 
 export async function renderViewDetail(
@@ -885,7 +938,8 @@ export async function renderViewDetail(
   view: View,
   baseTableName: string,
   templates: ViewTemplates,
-  recordId: string
+  recordId: string,
+  portalContext?: { portalHeader?: string; portalFooter?: string }
 ): Promise<string> {
   const appDb  = getAppDb(app);
   const pkField = await db('app_fields')
@@ -903,21 +957,28 @@ export async function renderViewDetail(
     pkAlias  = `${baseTableName}__${pkName}`;  // auto SQL always aliases as table__field
   }
 
-  const rows = await appDb.raw(
+  const detailRaw = await appDb.raw(
     `SELECT * FROM (${baseSql}) AS _v WHERE "${pkAlias}" = ? LIMIT 1`,
     [recordId]
-  ) as Record<string, unknown>[];
+  );
+  const rows: Record<string, unknown>[] = app.database_mode === 'mysql'
+    ? (detailRaw as [Record<string, unknown>[], unknown])[0]
+    : (detailRaw as Record<string, unknown>[]);
 
   if (!rows.length) return '<p class="wdp-error">Record not found.</p>';
 
   const row     = rows[0];
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
   const meta    = await getRecordMeta(app, baseTableName, pkVal);
-  const rowData = { _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta) };
+  const rowData = {
+    _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta),
+    _portal_header: portalContext?.portalHeader ?? '',
+    _portal_footer: portalContext?.portalFooter ?? '',
+  };
 
   const detailTags = parseGroupTags(templates.detail);
   const detailTpl  = detailTags.length ? applyGroupTags(templates.detail, detailTags) : templates.detail;
-  return renderTokens(detailTpl, rowData);
+  return renderReviewMarkers(renderTokens(detailTpl, rowData));
 }
 
 export async function renderViewEditForm(
@@ -925,7 +986,8 @@ export async function renderViewEditForm(
   view: View,
   baseTableName: string,
   templates: ViewTemplates,
-  recordId: string
+  recordId: string,
+  portalContext?: { portalHeader?: string; portalFooter?: string }
 ): Promise<string> {
   const appDb   = getAppDb(app);
   const pkField = await db('app_fields')
@@ -943,22 +1005,29 @@ export async function renderViewEditForm(
     pkAlias = `${baseTableName}__${pkName}`;
   }
 
-  const rows = await appDb.raw(
+  const editRaw = await appDb.raw(
     `SELECT * FROM (${baseSql}) AS _v WHERE "${pkAlias}" = ? LIMIT 1`,
     [recordId]
-  ) as Record<string, unknown>[];
+  );
+  const rows: Record<string, unknown>[] = app.database_mode === 'mysql'
+    ? (editRaw as [Record<string, unknown>[], unknown])[0]
+    : (editRaw as Record<string, unknown>[]);
 
   if (!rows.length) return '<p class="wdp-error">Record not found.</p>';
 
   const row     = rows[0];
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
   const meta    = await getRecordMeta(app, baseTableName, pkVal);
-  const rowData = { _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta) };
+  const rowData = {
+    _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta),
+    _portal_header: portalContext?.portalHeader ?? '',
+    _portal_footer: portalContext?.portalFooter ?? '',
+  };
 
   const editTags  = parseGroupTags(templates.edit_form);
   const editTpl   = editTags.length ? applyGroupTags(templates.edit_form, editTags) : templates.edit_form;
   const processed = await renderWidgetTokens(editTpl, app.id, rowData, 'update');
-  return renderTokens(autoNameEditInputs(processed), rowData);
+  return renderReviewMarkers(renderTokens(autoNameEditInputs(processed), rowData));
 }
 
 // ── Create form ──────────────────────────────────────────────────────────────
@@ -967,12 +1036,17 @@ export async function renderViewCreateForm(
   app: App,
   view: View,
   baseTableName: string,
-  templates: ViewTemplates
+  templates: ViewTemplates,
+  portalContext?: { portalHeader?: string; portalFooter?: string }
 ): Promise<string> {
   // No existing record — render $update[...] widgets with empty values
   const createTpl  = templates.create_form || DEFAULT_TEMPLATES.create_form;
   const processed  = await renderWidgetTokens(createTpl, app.id, {}, 'update');
-  return renderTokens(autoNameEditInputs(processed), { _pk: '' });
+  return renderReviewMarkers(renderTokens(autoNameEditInputs(processed), {
+    _pk: '',
+    _portal_header: portalContext?.portalHeader ?? '',
+    _portal_footer: portalContext?.portalFooter ?? '',
+  }));
 }
 
 // ── Edit-form helpers ────────────────────────────────────────────────────────
@@ -1027,18 +1101,63 @@ async function injectAdvancedSearch(
   tableId: number,
   tableName: string
 ): Promise<string> {
-  if (html.includes('wdp-sf-adv')) return html; // already present
+  // Eligible widgets for auto-search injection (textarea renders as text input in search mode)
+  const eligibleWidgets = ['text', 'textarea', 'select', 'checkbox'];
+
+  // If .wdp-sf-adv is already present (e.g. blueprint-generated template), check for
+  // missing fields and append them to the existing .wdp-adv-fields div.
+  if (html.includes('wdp-sf-adv')) {
+    const fields = await db('app_fields')
+      .where({ table_id: tableId })
+      .whereIn('ui_widget', eligibleWidgets)
+      .orderBy('sort_order')
+      .select('field_name');
+    if (fields.length === 0) return html;
+
+    const missingFields = fields.filter(
+      (f: { field_name: string }) => !html.includes(`name="${tableName}__${f.field_name}"`)
+    );
+    if (missingFields.length === 0) return html;
+
+    const missingTpl = missingFields
+      .map((f: { field_name: string }) => `$search[${tableName}.${f.field_name}]`)
+      .join('\n');
+    const renderedMissing = await renderWidgetTokens(missingTpl, appId, {}, 'search');
+
+    // Append missing inputs inside the existing .wdp-adv-fields div.
+    // We must track div depth to find the correct closing </div> — a non-greedy
+    // regex would stop at the first </div> inside a nested .wdp-field element.
+    const openMatch = /(<div[^>]*class="wdp-adv-fields"[^>]*>)/.exec(html);
+    if (!openMatch) return html;
+    const afterOpen = openMatch.index + openMatch[0].length;
+    let depth = 1;
+    let pos   = afterOpen;
+    while (pos < html.length && depth > 0) {
+      const nextOpen  = html.indexOf('<div', pos);
+      const nextClose = html.indexOf('</div>', pos);
+      if (nextClose === -1) break;
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        depth++;
+        pos = nextOpen + 4;
+      } else {
+        depth--;
+        if (depth === 0) {
+          return html.slice(0, nextClose) + renderedMissing + html.slice(nextClose);
+        }
+        pos = nextClose + 6;
+      }
+    }
+    return html; // fallback: couldn't find matching close div
+  }
 
   const hasProperForm = html.includes('data-wdp-form="search"') || html.includes("data-wdp-form='search'");
   const hasSfDiv      = /class=["']wdp-sf["']/.test(html);
 
   if (!hasProperForm && !hasSfDiv) return html; // no search form to enhance
 
-  // Auto-inject simple-search inputs for text-like fields only.
-  // date/number/url/textarea need custom treatment (ranges, selects, etc.) — designer handles those manually.
   const fields = await db('app_fields')
     .where({ table_id: tableId })
-    .whereIn('ui_widget', ['text', 'select', 'checkbox'])
+    .whereIn('ui_widget', eligibleWidgets)
     .orderBy('sort_order')
     .select('field_name');
   if (fields.length === 0) return html;
@@ -1122,8 +1241,20 @@ async function renderWidgetTokens(
     // search mode: use full "table__field" alias so the server can locate the column unambiguously
     const n        = mode === 'search' ? alias : fieldName;
 
+    // Parse max_length from ui_options_json; derive input width and maxlength attr
+    let maxLen = 0;
+    try { maxLen = JSON.parse(field.ui_options_json || '{}').max_length ?? 0; } catch { /* */ }
+    // Width: cap at 50ch so long fields don't span the page; min 6ch for readability
+    const szCh     = maxLen > 0 ? Math.max(6, Math.min(maxLen + 2, 50)) : 0;
+    const sizeAttr = szCh > 0 ? ` maxlength="${maxLen}" style="width:${szCh}ch"` : '';
+
     switch (widget) {
       case 'textarea': {
+        // In search mode, render as a single-line text input — a multiline textarea makes no sense for search
+        if (mode === 'search') {
+          return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+               + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input" placeholder="${label}"${sizeAttr}></div>`;
+        }
         const { rows, cols } = parseTextareaOptions(field.ui_options_json);
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
              + `<textarea id="${id}" name="${n}" rows="${rows}" cols="${cols}" class="wdp-input"${req}>${escHtmlAttr(value)}</textarea></div>`;
@@ -1149,8 +1280,8 @@ async function renderWidgetTokens(
         const checked = (value === '1' || value === 'true' || value === 't') ? ' checked' : '';
         return `<div class="wdp-field wdp-field-check">`
              + `<input type="hidden" name="_wdpcb_${n}" value="">`
-             + `<input type="checkbox" id="${id}" name="${n}" value="1"${checked}>`
-             + `<label class="wdp-field-label" for="${id}">${label}</label></div>`;
+             + `<label class="wdp-field-label" for="${id}">${label}</label>`
+             + `<input type="checkbox" id="${id}" name="${n}" value="1"${checked}></div>`;
       }
       case 'date':
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
@@ -1163,21 +1294,41 @@ async function renderWidgetTokens(
              + `<input type="time" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
       case 'number':
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
-             + `<input type="number" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+             + `<input type="number" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}${sizeAttr}></div>`;
       case 'email':
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
-             + `<input type="email" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+             + `<input type="email" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}${sizeAttr}></div>`;
       case 'url':
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
-             + `<input type="url" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+             + `<input type="url" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}${sizeAttr}></div>`;
       case 'password':
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
-             + `<input type="password" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+             + `<input type="password" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}${sizeAttr}></div>`;
       case 'hidden':
         return `<input type="hidden" name="${n}" value="${v}">`;
+      case 'image': {
+        if (mode === 'search') return '';
+        const thumbHtml = value
+          ? `<div class="wdp-img-preview"><img src="/files/${v}?thumb=1" alt=""></div>`
+          : '';
+        return `<div class="wdp-field">`
+             + `<label class="wdp-field-label" for="${id}">${label}</label>`
+             + thumbHtml
+             + `<input type="file" id="${id}" name="${n}" accept="image/*" class="wdp-input"${req}></div>`;
+      }
+      case 'upload': {
+        if (mode === 'search') return '';
+        const fileHtml = value
+          ? `<div class="wdp-file-link"><a href="/files/${v}" target="_blank">View current file</a></div>`
+          : '';
+        return `<div class="wdp-field">`
+             + `<label class="wdp-field-label" for="${id}">${label}</label>`
+             + fileHtml
+             + `<input type="file" id="${id}" name="${n}" class="wdp-input"${req}></div>`;
+      }
       default:
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
-             + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
+             + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}${sizeAttr}></div>`;
     }
   });
 }

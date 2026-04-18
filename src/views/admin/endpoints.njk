@@ -1,0 +1,176 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+<style>
+.ep-section   { margin-bottom: 2rem; }
+.ep-h2        { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+                color: #94a3b8; padding: 0 0 6px; border-bottom: 1px solid #e2e8f0; margin-bottom: 12px; }
+.ep-row       { display: flex; align-items: center; gap: 10px; padding: 7px 0;
+                border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; }
+.ep-row:last-child { border-bottom: none; }
+.ep-label     { min-width: 220px; flex-shrink: 0; color: #374151; font-weight: 600; }
+.ep-label small { font-weight: 400; color: #94a3b8; margin-left: 6px; }
+.ep-url       { flex: 1; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.78rem;
+                color: #1e40af; word-break: break-all; }
+.ep-url a     { color: inherit; text-decoration: none; }
+.ep-url a:hover { text-decoration: underline; }
+.ep-copy      { flex-shrink: 0; background: none; border: 1px solid #cbd5e1; border-radius: 5px;
+                color: #64748b; font-size: 0.7rem; padding: 2px 8px; cursor: pointer;
+                transition: background 0.1s, color 0.1s; white-space: nowrap; }
+.ep-copy:hover  { background: #f1f5f9; color: #0f172a; }
+.ep-copy.copied { background: #dcfce7; color: #166534; border-color: #86efac; }
+.ep-badge     { display: inline-block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em;
+                text-transform: uppercase; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; }
+.ep-badge-pub    { background: #dcfce7; color: #166534; }
+.ep-badge-member { background: #dbeafe; color: #1e40af; }
+.ep-badge-single { background: #fef9c3; color: #713f12; }
+.ep-badge-add    { background: #f3e8ff; color: #6b21a8; }
+.ep-card      { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+                padding: 18px 20px; margin-bottom: 16px; }
+.ep-empty     { color: #94a3b8; font-size: 0.82rem; font-style: italic; }
+</style>
+
+<div class="page-header mb-4">
+  <div>
+    <h1>Endpoint Directory</h1>
+    <p class="text-muted small mb-0">All URLs for <strong>{{ app.name }}</strong> — copy and paste into your member homepage template or share with your team.</p>
+  </div>
+  <a href="/admin" class="btn btn-sm btn-outline-secondary">&larr; Admin</a>
+</div>
+
+<div style="max-width: 900px;">
+
+  {# ── Login ────────────────────────────────────────────────────────────────── #}
+  <div class="ep-card ep-section">
+    <div class="ep-h2">Login</div>
+
+    <div class="ep-row">
+      <span class="ep-label">Member login</span>
+      <span class="ep-url"><a href="{{ base }}/app/{{ app.slug }}/login" target="_blank">{{ base }}/app/{{ app.slug }}/login</a></span>
+      <button class="ep-copy" data-url="{{ base }}/app/{{ app.slug }}/login">Copy</button>
+    </div>
+    <div class="ep-row">
+      <span class="ep-label">Admin panel</span>
+      <span class="ep-url"><a href="{{ base }}/admin" target="_blank">{{ base }}/admin</a></span>
+      <button class="ep-copy" data-url="{{ base }}/admin">Copy</button>
+    </div>
+  </div>
+
+  {# ── Public ───────────────────────────────────────────────────────────────── #}
+  <div class="ep-card ep-section">
+    <div class="ep-h2">Public — no login required</div>
+
+    {% if pubViews.length === 0 and regGroups.length === 0 %}
+    <p class="ep-empty">No public views or self-registration links. Mark a view as Public in its Settings, or enable self-registration on a group.</p>
+    {% endif %}
+
+    {% for v in pubViews %}
+    {% set url = base + '/app/' + app.slug + '/view/' + v.view_name %}
+    <div class="ep-row">
+      <span class="ep-label">
+        {{ v.label }}
+        <span class="ep-badge ep-badge-pub">Public</span>
+      </span>
+      <span class="ep-url"><a href="{{ url }}" target="_blank">{{ url }}</a></span>
+      <button class="ep-copy" data-url="{{ url }}">Copy</button>
+    </div>
+    {% endfor %}
+
+    {% for g in regGroups %}
+    {% set url = base + '/app/' + app.slug + '/register' %}
+    <div class="ep-row">
+      <span class="ep-label">
+        Sign up / Register
+        <small>({{ g.group_name }})</small>
+      </span>
+      <span class="ep-url"><a href="{{ url }}" target="_blank">{{ url }}</a></span>
+      <button class="ep-copy" data-url="{{ url }}">Copy</button>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── Per-group member links ────────────────────────────────────────────────── #}
+  {% if groupData.length === 0 %}
+  <div class="ep-card ep-section">
+    <div class="ep-h2">Member Links</div>
+    <p class="ep-empty">No groups exist yet. Create a group and assign view permissions to see member links here.</p>
+  </div>
+  {% endif %}
+
+  {% for gd in groupData %}
+  <div class="ep-card ep-section">
+    <div class="ep-h2">Members — {{ gd.group.group_name }}</div>
+
+    {# Member home #}
+    {% set homeUrl = base + '/app/' + app.slug + '/' %}
+    <div class="ep-row">
+      <span class="ep-label">
+        Home
+        <span class="ep-badge ep-badge-member">Members</span>
+      </span>
+      <span class="ep-url"><a href="{{ homeUrl }}" target="_blank">{{ homeUrl }}</a></span>
+      <button class="ep-copy" data-url="{{ homeUrl }}">Copy</button>
+    </div>
+
+    {# Views this group can access #}
+    {% for v in gd.memberViews %}
+    {% set url = base + '/app/' + app.slug + '/view/' + v.view_name %}
+    <div class="ep-row">
+      <span class="ep-label">
+        {{ v.label }}
+        {% if v.single_record %}
+        <span class="ep-badge ep-badge-single">Single Record</span>
+        {% else %}
+        <span class="ep-badge ep-badge-member">Members</span>
+        {% endif %}
+      </span>
+      <span class="ep-url"><a href="{{ url }}" target="_blank">{{ url }}</a></span>
+      <button class="ep-copy" data-url="{{ url }}">Copy</button>
+    </div>
+    {% endfor %}
+
+    {% if gd.memberViews.length === 0 %}
+    <p class="ep-empty">No view or table permissions assigned to this group yet.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+</div>
+
+  {# ── Static Assets ────────────────────────────────────────────────────────── #}
+  <div class="ep-card ep-section">
+    <div class="ep-h2">Static Assets</div>
+    <div class="ep-row">
+      <span class="ep-label">
+        CSS / JS / images
+        <small>(public/)</small>
+      </span>
+      <span class="ep-url" style="color:#374151; font-family: inherit; font-size: 0.82rem;">
+        Files placed in <code style="background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:0.78rem;">/public/</code>
+        are served from
+        <code style="background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:0.78rem;">/static/</code><br>
+        <span style="color:#94a3b8; font-size:0.78rem;">
+          Example: <code style="background:#f1f5f9; padding:1px 5px; border-radius:4px;">/public/css/style.css</code>
+          → <code style="background:#f1f5f9; padding:1px 5px; border-radius:4px;">&lt;link rel="stylesheet" href="/static/css/style.css"&gt;</code>
+        </span>
+      </span>
+      <button class="ep-copy" data-url="{{ base }}/static/">Copy base URL</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.querySelectorAll('.ep-copy').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    navigator.clipboard.writeText(btn.dataset.url).then(function() {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function() {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    });
+  });
+});
+</script>
+{% endblock %}

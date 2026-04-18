@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import * as fieldsService from '../../services/fields';
 import * as tablesService from '../../services/tables';
+import { renameFieldInTemplates, deleteFieldFromTemplates } from '../../services/fieldTokens';
 import type { FieldDataType, UIWidget } from '../../domain/types';
 
 export const fieldsRouter = Router();
@@ -210,14 +211,85 @@ fieldsRouter.post('/reorder', async (req, res, next) => {
   }
 });
 
+// ── Redefine field (rename + retype) ──────────────────────────────────────
+
+fieldsRouter.post('/:id/redefine', async (req, res, next) => {
+  try {
+    const field = await fieldsService.getField(Number(req.params.id));
+    if (!field) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Field not found' });
+    if (field.is_primary_key) {
+      req.session.flash = { type: 'danger', message: 'Primary key fields cannot be redefined.' };
+      return res.redirect(`/admin/fields?table_id=${field.table_id}`);
+    }
+
+    const table = await tablesService.getTable(field.table_id);
+    if (!table) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Table not found' });
+
+    const newName    = (req.body.field_name || '').trim().toLowerCase().replace(/\s+/g, '_');
+    const newLabel   = (req.body.label || '').trim();
+    const newType    = (req.body.data_type || field.data_type) as FieldDataType;
+    const newWidget  = resolveWidget(req.body.widget || field.ui_widget, newType);
+
+    // Build ui_options_json from form (select options or text max_length)
+    let newOptions: string | null = field.ui_options_json ?? null;
+    if (req.body.widget === 'select') {
+      const opts = (req.body.options ?? '').split('\n').map((s: string) => s.trim()).filter(Boolean);
+      newOptions = opts.length ? JSON.stringify({ options: opts }) : null;
+    } else if (['text','number','email','url','password'].includes(req.body.widget)) {
+      const maxLen = Number(req.body.max_length);
+      newOptions = maxLen > 0 ? JSON.stringify({ max_length: maxLen }) : null;
+    } else if (req.body.widget === 'textarea') {
+      newOptions = JSON.stringify({
+        rows: Number(req.body.textarea_rows) || 4,
+        cols: Number(req.body.textarea_cols) || 60,
+      });
+    }
+
+    const oldName = field.field_name;
+    const nameChanged = newName && newName !== oldName;
+
+    const updateInput: Record<string, unknown> = {
+      label:           newLabel || field.label,
+      data_type:       newType,
+      ui_widget:       newWidget,
+      ui_options_json: newOptions,
+      is_indexed:          req.body.is_indexed === 'on',
+      is_fulltext_indexed: req.body.is_fulltext_indexed === 'on',
+    };
+    if (newName) updateInput.field_name = newName;
+
+    await fieldsService.updateField(field.id, updateInput as any);
+
+    if (nameChanged) {
+      await renameFieldInTemplates(table.app_id, table.table_name, oldName, newName);
+    }
+
+    req.session.flash = {
+      type: 'success',
+      message: nameChanged
+        ? `Field "${oldName}" renamed to "${newName}" and templates updated.`
+        : `Field "${field.label}" updated.`,
+    };
+    res.redirect(`/admin/fields?table_id=${field.table_id}`);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Delete field ───────────────────────────────────────────────────────────
 
 fieldsRouter.post('/:id/delete', async (req, res, next) => {
   try {
     const field = await fieldsService.getField(Number(req.params.id));
     if (!field) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Field not found' });
+
+    const table = await tablesService.getTable(field.table_id);
+    if (table) {
+      await deleteFieldFromTemplates(table.app_id, table.table_name, field.field_name);
+    }
+
     await fieldsService.deleteField(field.id);
-    req.session.flash = { type: 'success', message: `Field "${field.label}" deleted.` };
+    req.session.flash = { type: 'success', message: `Field "${field.label}" deleted and templates updated.` };
     res.redirect(`/admin/fields?table_id=${field.table_id}`);
   } catch (err) {
     next(err);

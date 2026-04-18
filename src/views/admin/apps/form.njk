@@ -13,7 +13,7 @@
       Think of it like a schema in a database client.
     </p>
 
-    <form method="POST" action="/admin/apps">
+    <form method="POST" action="/admin/apps" id="app-form">
 
       {# ── Identity ──────────────────────────────────────────────── #}
       <div class="mb-3">
@@ -77,6 +77,14 @@
 
       {# ── MySQL / PostgreSQL config ──────────────────────────────── #}
       <div id="config-remote" class="db-config-section mb-4" style="display:none">
+
+        {% if errors.db_name or errors.db_host %}
+        <div class="alert alert-danger py-2 px-3 mb-3" style="font-size:0.875rem;">
+          <i class="bi bi-exclamation-circle me-1"></i>
+          {{ errors.db_name[0] if errors.db_name else errors.db_host[0] }}
+        </div>
+        {% endif %}
+
         <div class="row g-3 mb-3">
           <div class="col-md-8">
             <label class="form-label">Host</label>
@@ -92,29 +100,46 @@
         <div class="row g-3 mb-3">
           <div class="col-md-12">
             <label class="form-label">Database name</label>
-            <input type="text" name="db_name" class="form-control"
+            <input type="text" name="db_name" class="form-control {% if errors.db_name %}is-invalid{% endif %}"
               value="{{ values.db_name if values else '' }}" placeholder="my_database">
+            {% if errors.db_name %}<div class="invalid-feedback">{{ errors.db_name[0] }}</div>{% endif %}
           </div>
         </div>
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">Username</label>
-            <input type="text" name="db_username" class="form-control" autocomplete="off"
+            <input type="text" name="db_username" class="form-control" autocomplete="new-password"
               value="{{ values.db_username if values else '' }}" placeholder="root">
           </div>
           <div class="col-md-6">
             <label class="form-label">Password</label>
             <input type="password" name="db_password" class="form-control" autocomplete="new-password"
-              value="{{ values.db_password if values else '' }}">
+              id="db-password-input">
             <div class="form-text">Stored locally in the control database.</div>
           </div>
         </div>
       </div>
 
+      {% if existingDbWarning %}
+      <div class="alert alert-warning mt-3">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <strong>Database already exists.</strong>
+        The database <code>{{ existingDbWarning.dbName }}</code> already exists and contains
+        {{ existingDbWarning.tableCount }} table{{ 's' if existingDbWarning.tableCount != 1 else '' }}.
+        Connect to this existing database, or go back and choose a different database name.
+        <div class="mt-3 d-flex gap-2">
+          <button type="submit" name="confirm_existing" value="true" class="btn btn-warning">
+            <i class="bi bi-plug me-1"></i>Connect to Existing Database
+          </button>
+          <a href="/admin/apps/new" class="btn btn-outline-secondary">Go Back</a>
+        </div>
+      </div>
+      {% else %}
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">Create App</button>
         <a href="/admin" class="btn btn-outline-secondary">Cancel</a>
       </div>
+      {% endif %}
 
     </form>
   </div>
@@ -191,5 +216,23 @@
   // Init on page load
   const checked = document.querySelector('input[name="database_mode"]:checked');
   if (checked) showDbFields(checked.value);
+
+  // Password relay: keep a hidden field in sync so the password survives
+  // a server-side re-render (browser won't populate password inputs from value attr)
+  const pwInput  = document.getElementById('db-password-input');
+  const pwHidden = document.createElement('input');
+  pwHidden.type = 'hidden';
+  pwHidden.name = '_db_password_relay';
+  document.getElementById('app-form').appendChild(pwHidden);
+
+  // Seed from data attribute if the server passed back a stored value
+  const storedPw = '{{ values.db_password if values else "" }}';
+  if (storedPw) pwInput.value = storedPw;
+
+  pwInput.addEventListener('input', () => { pwHidden.value = pwInput.value; });
+  // Keep hidden in sync on submit too
+  document.getElementById('app-form').addEventListener('submit', () => {
+    pwHidden.value = pwInput.value;
+  });
 </script>
 {% endblock %}

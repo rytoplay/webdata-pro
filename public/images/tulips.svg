@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" width="360" height="220">
+  <defs>
+    <linearGradient id="grassGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a9e3a"/>
+      <stop offset="100%" stop-color="#3d7a25"/>
+    </linearGradient>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87ceeb"/>
+      <stop offset="100%" stop-color="#d0eefa"/>
+    </linearGradient>
+  </defs>
+  <rect width="360" height="220" fill="url(#skyGrad)"/>
+  <rect x="0" y="160" width="360" height="60" fill="url(#grassGrad)"/>
+  <!-- Sun -->
+  <circle cx="310" cy="38" r="26" fill="#ffe566" opacity="0.85"/>
+  <!-- Clouds -->
+  <ellipse cx="80" cy="40" rx="38" ry="16" fill="rgba(255,255,255,0.8)"/>
+  <ellipse cx="60" cy="36" rx="20" ry="13" fill="rgba(255,255,255,0.8)"/>
+  <ellipse cx="200" cy="30" rx="30" ry="13" fill="rgba(255,255,255,0.7)"/>
+
+  <!-- Tulip stems -->
+  <line x1="70"  y1="160" x2="70"  y2="108" stroke="#2d7a1e" stroke-width="4"/>
+  <line x1="110" y1="160" x2="110" y2="95"  stroke="#2d7a1e" stroke-width="4"/>
+  <line x1="150" y1="160" x2="150" y2="100" stroke="#2d7a1e" stroke-width="4"/>
+  <line x1="190" y1="160" x2="190" y2="92"  stroke="#2d7a1e" stroke-width="4"/>
+  <line x1="230" y1="160" x2="230" y2="98"  stroke="#2d7a1e" stroke-width="4"/>
+  <line x1="270" y1="160" x2="270" y2="108" stroke="#2d7a1e" stroke-width="4"/>
+  <line x1="305" y1="160" x2="305" y2="115" stroke="#2d7a1e" stroke-width="4"/>
+
+  <!-- Tulip leaves -->
+  <path d="M70 140 Q50 125 55 112" stroke="#2d7a1e" stroke-width="3" fill="none"/>
+  <path d="M110 135 Q128 120 124 108" stroke="#2d7a1e" stroke-width="3" fill="none"/>
+  <path d="M150 138 Q132 123 136 110" stroke="#2d7a1e" stroke-width="3" fill="none"/>
+  <path d="M190 130 Q208 116 205 104" stroke="#2d7a1e" stroke-width="3" fill="none"/>
+  <path d="M230 136 Q212 122 216 110" stroke="#2d7a1e" stroke-width="3" fill="none"/>
+
+  <!-- Tulip heads (red/pink/orange/purple) -->
+  <!-- T1 red -->
+  <path d="M70 108 Q60 90 70 78 Q80 90 70 108Z" fill="#e03030"/>
+  <path d="M70 108 Q58 95 62 80 Q70 78 70 108Z" fill="#c02020"/>
+  <path d="M70 108 Q82 95 78 80 Q70 78 70 108Z" fill="#c02020"/>
+
+  <!-- T2 pink -->
+  <path d="M110 95 Q100 77 110 65 Q120 77 110 95Z" fill="#e87090"/>
+  <path d="M110 95 Q98 82 102 67 Q110 65 110 95Z" fill="#d05070"/>
+  <path d="M110 95 Q122 82 118 67 Q110 65 110 95Z" fill="#d05070"/>
+
+  <!-- T3 orange -->
+  <path d="M150 100 Q140 82 150 70 Q160 82 150 100Z" fill="#e07b39"/>
+  <path d="M150 100 Q138 87 142 72 Q150 70 150 100Z" fill="#c05a20"/>
+  <path d="M150 100 Q162 87 158 72 Q150 70 150 100Z" fill="#c05a20"/>
+
+  <!-- T4 purple -->
+  <path d="M190 92 Q180 74 190 62 Q200 74 190 92Z" fill="#9060c0"/>
+  <path d="M190 92 Q178 79 182 64 Q190 62 190 92Z" fill="#7040a0"/>
+  <path d="M190 92 Q202 79 198 64 Q190 62 190 92Z" fill="#7040a0"/>
+
+  <!-- T5 yellow -->
+  <path d="M230 98 Q220 80 230 68 Q240 80 230 98Z" fill="#f5d020"/>
+  <path d="M230 98 Q218 85 222 70 Q230 68 230 98Z" fill="#d4b010"/>
+  <path d="M230 98 Q242 85 238 70 Q230 68 230 98Z" fill="#d4b010"/>
+
+  <!-- T6 red -->
+  <path d="M270 108 Q260 90 270 78 Q280 90 270 108Z" fill="#e03030"/>
+  <path d="M270 108 Q258 95 262 80 Q270 78 270 108Z" fill="#c02020"/>
+  <path d="M270 108 Q282 95 278 80 Q270 78 270 108Z" fill="#c02020"/>
+
+  <!-- T7 pink -->
+  <path d="M305 115 Q295 98 305 87 Q315 98 305 115Z" fill="#e87090"/>
+  <path d="M305 115 Q293 102 297 88 Q305 87 305 115Z" fill="#d05070"/>
+  <path d="M305 115 Q317 102 313 88 Q305 87 305 115Z" fill="#d05070"/>
+
+  <text x="180" y="216" text-anchor="middle" font-family="Georgia, serif" font-size="13" fill="#2d5a27" font-style="italic">Spring is in full bloom at Brookside Valley!</text>
+</svg>

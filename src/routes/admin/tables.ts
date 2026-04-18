@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { App } from '../../domain/types';
 import * as tablesService from '../../services/tables';
+import { getAppDb } from '../../db/adapters/appDb';
 
 export const tablesRouter = Router();
 
@@ -12,13 +13,58 @@ const TableBodySchema = z.object({
   is_public_addable: z.coerce.boolean().optional()
 });
 
+const EXCLUDED_TABLES = /^(knex_migrations|knex_migrations_lock|_wdpro_)/;
+
 tablesRouter.get('/', async (req, res, next) => {
   try {
     const app = res.locals.currentApp as App;
     const tables = await tablesService.listTables(app.id);
+
+    // Detect physical tables in the app DB that aren't registered in app_tables
+    let unregisteredTables: string[] = [];
+    try {
+      const appDb = getAppDb(app);
+      const knownNames = new Set(tables.map((t: any) => t.table_name));
+
+      if (app.database_mode === 'mysql') {
+        const result = await appDb.raw('SHOW TABLES') as any[];
+        const rows = Array.isArray(result[0]) ? result[0] : result;
+        unregisteredTables = rows
+          .map((r: any) => Object.values(r)[0] as string)
+          .filter(name => !knownNames.has(name) && !EXCLUDED_TABLES.test(name));
+      } else {
+        const rows = await appDb.raw(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ) as any[];
+        unregisteredTables = rows
+          .map((r: any) => r.name as string)
+          .filter(name => !knownNames.has(name) && !EXCLUDED_TABLES.test(name));
+      }
+    } catch { /* non-fatal — just skip the banner */ }
+
     const flash = req.session.flash;
     delete req.session.flash;
-    res.render('admin/tables/list', { title: 'Tables', tables, flash });
+    res.render('admin/tables/list', { title: 'Tables', tables, unregisteredTables, flash });
+  } catch (err) {
+    next(err);
+  }
+});
+
+tablesRouter.post('/import', async (req, res, next) => {
+  try {
+    const app = res.locals.currentApp as App;
+    const raw = req.body.table_name;
+    const names: string[] = (Array.isArray(raw) ? raw : [raw]).filter(Boolean);
+
+    for (const name of names) {
+      await tablesService.importExistingTable(app.id, name);
+    }
+
+    req.session.flash = {
+      type: 'success',
+      message: `${names.length} table${names.length !== 1 ? 's' : ''} imported.`
+    };
+    res.redirect('/admin/tables');
   } catch (err) {
     next(err);
   }

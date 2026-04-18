@@ -9,6 +9,9 @@ export interface App {
   database_config_json: string | null;
   diagram_json: string | null;
   allowed_origins_json: string | null;
+  member_css_url: string | null;
+  member_header_html: string | null;
+  member_footer_html: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,4 +45,7 @@ export interface UpdateAppInput {
   database_mode?: DatabaseMode;
   database_config_json?: string | null;
   allowed_origins_json?: string | null;
+  member_css_url?: string | null;
+  member_header_html?: string | null;
+  member_footer_html?: string | null;
 }

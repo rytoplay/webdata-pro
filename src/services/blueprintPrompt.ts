@@ -9,6 +9,7 @@ SEARCH BAR:
     .wdp-sf-simple — the div that wraps the simple search row (always present)
     .wdp-sf-adv — advanced search panel (hidden by default, toggled client-side)
     .wdp-adv-fields — CSS grid inside .wdp-sf-adv; holds $search[table.field] inputs
+      CRITICAL: each $search[table.field] token must be on its OWN LINE inside .wdp-adv-fields. Never put multiple tokens on the same line.
     .wdp-adv-link — text-only toggle link/button (accent color, no background)
   CRITICAL: The outer form MUST have data-wdp-form="search". Without it, search will not work.
 

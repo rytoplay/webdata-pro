@@ -19,7 +19,33 @@ const RegisterSchema = z.object({
   path: ['password_confirm'],
 });
 
-function renderHomeTemplate(template: string, app: App, member: object, views: object[]): string {
+function renderBrandingTemplate(template: string, app: App, member: object | null, portalHeader = '', portalFooter = ''): string {
+  try {
+    const resolved = template
+      .replace(/\$portal_header/g, portalHeader)
+      .replace(/\$portal_footer/g, portalFooter);
+    return nunjucks.renderString(resolved, {
+      app,
+      member,
+      logoutUrl: `/app/${app.slug}/logout`,
+    });
+  } catch (err: any) {
+    return `<!-- branding template error: ${err.message} -->`;
+  }
+}
+
+async function getBranding(app: App, memberId: number | null) {
+  const memberData = memberId ? await membersService.getMember(memberId) : null;
+  const headerHtml = app.member_header_html
+    ? renderBrandingTemplate(app.member_header_html, app, memberData ?? null)
+    : null;
+  const footerHtml = app.member_footer_html
+    ? renderBrandingTemplate(app.member_footer_html, app, memberData ?? null)
+    : null;
+  return { headerHtml, footerHtml };
+}
+
+function renderHomeTemplate(template: string, app: App, member: object, views: object[], portalHeader = '', portalFooter = ''): string {
   try {
     let _widgetCount = 0;
 
@@ -33,7 +59,12 @@ function renderHomeTemplate(template: string, app: App, member: object, views: o
     // viewUrl('viewname') — returns the member view page URL
     const viewUrl = (viewName: string) => `/app/${app.slug}/view/${viewName}`;
 
-    return nunjucks.renderString(template, { app, member, views, embedView, viewUrl });
+    // Resolve $portal_header / $portal_footer before Nunjucks so they aren't treated as unknown vars
+    const resolved = template
+      .replace(/\$portal_header/g, portalHeader)
+      .replace(/\$portal_footer/g, portalFooter);
+
+    return nunjucks.renderString(resolved, { app, member, views, embedView, viewUrl });
   } catch (err: any) {
     return `<p style="color:red"><strong>Template error:</strong> ${err.message}</p>`;
   }
@@ -105,22 +136,44 @@ memberRouter.get('/', async (req, res, next) => {
 
     // Use home_template from first matching group that has one
     let groupTemplate: string | null = null;
+    let groupHomeHeader: string | null = null;
+    let groupHomeFooter: string | null = null;
     if (member.groupIds.length > 0) {
       const groupWithTemplate = await db('groups')
         .whereIn('id', member.groupIds)
         .whereNotNull('home_template')
         .first();
-      groupTemplate = groupWithTemplate?.home_template ?? null;
+      groupTemplate   = groupWithTemplate?.home_template    ?? null;
+      groupHomeHeader = groupWithTemplate?.home_header_html ?? null;
+      groupHomeFooter = groupWithTemplate?.home_footer_html ?? null;
     }
+
+    const memberData = await membersService.getMember(member.memberId);
+    const { headerHtml, footerHtml } = await getBranding(freshApp, member.memberId);
+    const logoutUrl = `/app/${app.slug}/logout`;
 
     const template = groupTemplate ?? freshApp.home_template ?? null;
     if (template) {
-      const memberData = await membersService.getMember(member.memberId);
-      const html = renderHomeTemplate(template, freshApp, memberData || member, views);
-      return res.render('member/home', { title: app.name, app: freshApp, renderedHtml: html });
+      const memberCtx = memberData || member;
+      const pH = headerHtml ?? '';
+      const pF = footerHtml ?? '';
+      const bodyHtml = renderHomeTemplate(template, freshApp, memberCtx, views, pH, pF);
+      const homeParts = [
+        groupHomeHeader ? renderBrandingTemplate(groupHomeHeader, freshApp, memberCtx, pH, pF) : '',
+        bodyHtml,
+        groupHomeFooter ? renderBrandingTemplate(groupHomeFooter, freshApp, memberCtx, pH, pF) : '',
+      ].filter(Boolean);
+      // Template handles its own nav via $portal_header/$portal_footer — suppress layout's auto-injection
+      return res.render('member/home', {
+        title: app.name, app: freshApp, renderedHtml: homeParts.join('\n'),
+        suppressPortalNav: true, memberLogoutUrl: logoutUrl,
+      });
     }
 
-    res.render('member/home', { title: app.name, app: freshApp, renderedHtml: null, views });
+    res.render('member/home', {
+      title: app.name, app: freshApp, renderedHtml: null, views,
+      headerHtml, footerHtml, memberLogoutUrl: logoutUrl,
+    });
   } catch (err) { next(err); }
 });
 
@@ -163,14 +216,17 @@ memberRouter.get('/view/:viewName', async (req, res, next) => {
 
       return res.render('member/view', {
         title: `${view.label} — ${app.name}`,
-        app,
-        view,
-        singleRecord: true,
-        existingRecordId,
+        app, view, singleRecord: true, existingRecordId,
+        suppressPortalNav: true,
+        memberLogoutUrl: `/app/${app.slug}/logout`,
       });
     }
 
-    res.render('member/view', { title: `${view.label} — ${app.name}`, app, view });
+    res.render('member/view', {
+      title: `${view.label} — ${app.name}`, app, view,
+      suppressPortalNav: true,
+      memberLogoutUrl: `/app/${app.slug}/logout`,
+    });
   } catch (err) { next(err); }
 });
 
@@ -269,12 +325,16 @@ memberRouter.get('/login', async (req, res, next) => {
     const flash = req.session.flash; delete req.session.flash;
     const selfRegCount = await db('groups')
       .where({ app_id: app.id, self_register_enabled: true }).count('id as n').first();
+    const { headerHtml, footerHtml } = await getBranding(app, null);
     res.render('member/login', {
       title: `Sign in — ${app.name}`,
       app,
-      returnTo:      req.query.returnTo || '',
+      returnTo:        req.query.returnTo || '',
       flash,
-      allowRegister: Number(selfRegCount?.n ?? 0) > 0,
+      allowRegister:   Number(selfRegCount?.n ?? 0) > 0,
+      headerHtml,
+      footerHtml,
+      memberLogoutUrl: null,
     });
   } catch (err) { next(err); }
 });
@@ -288,13 +348,19 @@ memberRouter.post('/login', async (req, res, next) => {
 
     const member = await membersService.getMemberByEmail(app.id, email);
 
-    const invalid = () => res.render('member/login', {
-      title: `Sign in — ${app.name}`,
-      app,
-      returnTo: returnTo || '',
-      flash: { type: 'danger', message: 'Invalid email or password.' },
-      allowRegister: false,
-    });
+    const invalid = async () => {
+      const { headerHtml, footerHtml } = await getBranding(app, null);
+      return res.render('member/login', {
+        title: `Sign in — ${app.name}`,
+        app,
+        returnTo:        returnTo || '',
+        flash:           { type: 'danger', message: 'Invalid email or password.' },
+        allowRegister:   false,
+        headerHtml,
+        footerHtml,
+        memberLogoutUrl: null,
+      });
+    };
 
     if (!member || !member.is_active) return invalid();
 

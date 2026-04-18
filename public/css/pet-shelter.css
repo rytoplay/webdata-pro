@@ -1,0 +1,298 @@
+/* ── Reset & Base ───────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green-dark:  #2d5a27;
+  --green-mid:   #3a6e33;
+  --orange:      #e07b39;
+  --orange-dark: #c4662a;
+  --cream:       #f5f0e8;
+  --cream-dark:  #ede7d9;
+  --text:        #2a2a2a;
+  --text-muted:  #5a5a5a;
+}
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  background: var(--cream);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+a { color: var(--orange-dark); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+img { max-width: 100%; display: block; border-radius: 6px; }
+
+/* ── Header ─────────────────────────────────────────────── */
+.site-header {
+  background: var(--green-dark);
+  padding: 0.9rem 2rem;
+}
+
+.header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.header-logo {
+  width: 70px;
+  height: 70px;
+  flex-shrink: 0;
+}
+
+.header-text {}
+
+.header-text .shelter-name {
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.65);
+  line-height: 1;
+}
+
+.header-text .shelter-title {
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-size: 1.85rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  line-height: 1.05;
+}
+
+.orange-stripe {
+  background: var(--orange);
+  padding: 5px 2rem;
+}
+
+.orange-stripe-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  font-style: italic;
+  font-size: 0.88rem;
+  color: rgba(255,255,255,0.92);
+  letter-spacing: 0.03em;
+}
+
+/* ── Nav ────────────────────────────────────────────────── */
+.site-nav {
+  background: var(--green-mid);
+  padding: 0 2rem;
+}
+
+.site-nav ul {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  list-style: none;
+  gap: 0;
+}
+
+.site-nav a {
+  display: block;
+  padding: 0.65rem 1.1rem;
+  color: rgba(255,255,255,0.8);
+  font-family: Arial, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.site-nav a:hover {
+  background: rgba(0,0,0,0.2);
+  color: #fff;
+  text-decoration: none;
+}
+
+/* ── Page wrapper ───────────────────────────────────────── */
+.page-body {
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+/* ── 3-column intro grid ────────────────────────────────── */
+.intro-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.75rem;
+  margin-bottom: 2.5rem;
+}
+
+.intro-col h2 {
+  font-size: 1.1rem;
+  color: var(--green-dark);
+  margin-bottom: 0.6rem;
+  font-family: Arial, sans-serif;
+  font-weight: 900;
+}
+
+.intro-col p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.intro-col ul {
+  padding-left: 1.2rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.intro-col ul li {
+  margin-bottom: 0.35rem;
+}
+
+.photo-stack { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; }
+
+.btn-donate {
+  display: inline-block;
+  background: var(--orange);
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-weight: 900;
+  font-size: 1.05rem;
+  padding: 0.65rem 1.75rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0.75rem 0 0.5rem;
+  transition: background 0.15s;
+}
+.btn-donate:hover { background: var(--orange-dark); text-decoration: none; color: #fff; }
+
+.donate-subtext {
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+/* ── Success Story ──────────────────────────────────────── */
+.success-story {
+  background: #fff;
+  border: 1px solid #ddd8cc;
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 2.5rem;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 1.75rem;
+  align-items: start;
+}
+
+.success-story h2 {
+  font-size: 1.25rem;
+  color: var(--green-dark);
+  margin-bottom: 0.6rem;
+  font-family: Arial, sans-serif;
+  font-weight: 900;
+}
+
+.success-story p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.btn-learn-more {
+  display: inline-block;
+  background: var(--green-dark);
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: background 0.15s;
+}
+.btn-learn-more:hover { background: #1d3d19; text-decoration: none; color: #fff; }
+
+/* ── Stats strip ────────────────────────────────────────── */
+.stats-strip {
+  background: var(--green-dark);
+  border-radius: 10px;
+  padding: 1.5rem 2rem;
+  margin-bottom: 2.5rem;
+  display: flex;
+  justify-content: space-around;
+  gap: 1rem;
+  text-align: center;
+}
+
+.stat-item {}
+
+.stat-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.35rem;
+  line-height: 1;
+}
+
+.stat-number {
+  font-family: Arial, sans-serif;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.7);
+  margin-top: 0.2rem;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+.site-footer {
+  background: var(--green-dark);
+  color: rgba(255,255,255,0.75);
+  padding: 1.5rem 2rem;
+  text-align: center;
+}
+
+.site-footer nav {
+  margin-bottom: 0.5rem;
+}
+
+.site-footer nav a {
+  color: rgba(255,255,255,0.8);
+  font-size: 0.88rem;
+  font-family: Arial, sans-serif;
+  margin: 0 0.75rem;
+}
+
+.site-footer nav a:hover { color: #fff; text-decoration: underline; }
+
+.site-footer .copyright {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.45);
+  font-family: Arial, sans-serif;
+}
+
+/* ── Template page body ─────────────────────────────────── */
+.template-body {
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 0 1.5rem 3rem;
+  min-height: 500px;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .intro-grid { grid-template-columns: 1fr; }
+  .success-story { grid-template-columns: 1fr; }
+  .stats-strip { flex-direction: column; align-items: center; }
+  .header-text .shelter-title { font-size: 1.3rem; }
+}

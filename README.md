@@ -8,6 +8,15 @@ Webdata Pro is a visual builder for database-powered websites and applications. 
 
 ---
 
+## AI-assisted, designer-controlled
+<!-- TODO: revise this section when closer to release -->
+
+There are plenty of tools that promise to build your app in minutes with AI. The problem is that once the AI is done, you're working inside a black box — locked into their styling system, their embed limitations, their notification pipeline, their platform. Customising anything beyond what the tool anticipated is a fight.
+
+Webdata Pro takes a different approach. The AI handles the tedious structural work — generating your tables, fields, search forms, and starter templates — but everything it produces is plain HTML templates and SQL that you can read, edit, and fully control. There is no magic layer between you and the output. Your public-facing search widget is a single `<script>` tag that inherits whatever CSS your website already uses. Your staff management interface is a template you redesign however you like. Your forms post data to your own database. Your notifications go to your own email. The AI gets you to a working first draft in minutes; the designer takes it the rest of the way on their own terms.
+
+---
+
 ## What you'll need
 
 **Node.js 18 or higher** — this runs the Webdata Pro server.

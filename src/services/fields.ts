@@ -70,6 +70,8 @@ export async function createField(input: CreateFieldInput): Promise<AppField> {
     default_value: input.default_value ?? null,
     is_searchable_default: input.is_searchable_default ?? false,
     is_visible_default: input.is_visible_default ?? true,
+    is_indexed: input.is_indexed ?? false,
+    is_fulltext_indexed: input.is_fulltext_indexed ?? false,
     ui_widget: input.ui_widget ?? 'text',
     ui_options_json: input.ui_options_json ?? null,
     sort_order: input.sort_order ?? nextOrder
@@ -86,6 +88,14 @@ export async function createField(input: CreateFieldInput): Promise<AppField> {
         if (app) {
           const appDb = getAppDb(app);
           await appDb.raw(`ALTER TABLE "${table.table_name}" ADD COLUMN ${buildAddColumnDef(field)}`);
+          if (field.is_indexed) {
+            const idxName = `idx_${table.table_name}_${field.field_name}`;
+            await appDb.raw(`CREATE INDEX IF NOT EXISTS "${idxName}" ON "${table.table_name}"("${field.field_name}")`);
+          }
+          if (field.is_fulltext_indexed && app.database_mode === 'mysql') {
+            const ftIdxName = `idx_ft_${table.table_name}_${field.field_name}`;
+            await appDb.raw(`CREATE FULLTEXT INDEX \`${ftIdxName}\` ON \`${table.table_name}\`(\`${field.field_name}\`)`);
+          }
         }
       }
     } catch (ddlErr) {
@@ -107,20 +117,58 @@ export async function updateField(id: number, input: UpdateFieldInput): Promise<
   const existing = await getField(id);
   await db('app_fields').where({ id }).update(input);
 
-  // If the field name changed, rename the column in the app database
-  if (input.field_name && existing && input.field_name !== existing.field_name && !existing.is_primary_key) {
+  if (existing && !existing.is_primary_key) {
     try {
       const table = await getTable(existing.table_id);
       if (table) {
         const app = await getApp(table.app_id);
         if (app) {
           const appDb = getAppDb(app);
-          await appDb.raw(
-            `ALTER TABLE "${table.table_name}" RENAME COLUMN "${existing.field_name}" TO "${input.field_name}"`
-          );
+
+          // If the field name changed, rename the column
+          const newName = input.field_name && input.field_name !== existing.field_name
+            ? input.field_name : null;
+          if (newName) {
+            await appDb.raw(
+              `ALTER TABLE "${table.table_name}" RENAME COLUMN "${existing.field_name}" TO "${newName}"`
+            );
+          }
+
+          // Sync regular index: use the final field name (post-rename if applicable)
+          const finalName   = newName ?? existing.field_name;
+          const oldIdxName  = `idx_${table.table_name}_${existing.field_name}`;
+          const newIdxName  = `idx_${table.table_name}_${finalName}`;
+          const wasIndexed  = existing.is_indexed;
+          const willIndex   = input.is_indexed ?? wasIndexed;
+
+          if (!wasIndexed && willIndex) {
+            await appDb.raw(`CREATE INDEX IF NOT EXISTS "${newIdxName}" ON "${table.table_name}"("${finalName}")`);
+          } else if (wasIndexed && !willIndex) {
+            await appDb.raw(`DROP INDEX IF EXISTS "${oldIdxName}"`);
+          } else if (wasIndexed && willIndex && newName) {
+            await appDb.raw(`DROP INDEX IF EXISTS "${oldIdxName}"`);
+            await appDb.raw(`CREATE INDEX IF NOT EXISTS "${newIdxName}" ON "${table.table_name}"("${finalName}")`);
+          }
+
+          // Sync fulltext index (MySQL only)
+          if (app.database_mode === 'mysql') {
+            const oldFtName = `idx_ft_${table.table_name}_${existing.field_name}`;
+            const newFtName = `idx_ft_${table.table_name}_${finalName}`;
+            const wasFt  = existing.is_fulltext_indexed;
+            const willFt = input.is_fulltext_indexed ?? wasFt;
+
+            if (!wasFt && willFt) {
+              await appDb.raw(`CREATE FULLTEXT INDEX \`${newFtName}\` ON \`${table.table_name}\`(\`${finalName}\`)`);
+            } else if (wasFt && !willFt) {
+              await appDb.raw(`DROP INDEX \`${oldFtName}\` ON \`${table.table_name}\``);
+            } else if (wasFt && willFt && newName) {
+              await appDb.raw(`DROP INDEX \`${oldFtName}\` ON \`${table.table_name}\``);
+              await appDb.raw(`CREATE FULLTEXT INDEX \`${newFtName}\` ON \`${table.table_name}\`(\`${finalName}\`)`);
+            }
+          }
         }
       }
-    } catch { /* non-fatal — SQLite < 3.25 doesn't support RENAME COLUMN */ }
+    } catch { /* non-fatal */ }
   }
 
   return getField(id);
@@ -136,7 +184,7 @@ export async function deleteField(id: number): Promise<void> {
   const field = await getField(id);
   await db('app_fields').where({ id }).delete();
 
-  // Drop the column from the app database (best-effort — SQLite 3.35+ only)
+  // Drop the column (and index if present) from the app database (best-effort — SQLite 3.35+ only)
   if (field && !field.is_primary_key) {
     try {
       const table = await getTable(field.table_id);
@@ -144,6 +192,14 @@ export async function deleteField(id: number): Promise<void> {
         const app = await getApp(table.app_id);
         if (app) {
           const appDb = getAppDb(app);
+          if (field.is_indexed) {
+            await appDb.raw(`DROP INDEX IF EXISTS "idx_${table.table_name}_${field.field_name}"`);
+          }
+          if (field.is_fulltext_indexed && app.database_mode === 'mysql') {
+            try {
+              await appDb.raw(`DROP INDEX \`idx_ft_${table.table_name}_${field.field_name}\` ON \`${table.table_name}\``);
+            } catch { /* index may not exist */ }
+          }
           await appDb.raw(`ALTER TABLE "${table.table_name}" DROP COLUMN "${field.field_name}"`);
         }
       }

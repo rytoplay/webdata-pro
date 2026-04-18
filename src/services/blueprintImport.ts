@@ -54,6 +54,7 @@ export interface BlueprintGroupTablePerm {
 export interface BlueprintGroupViewPerm {
   can_view?: boolean;
   limit_to_own_records?: boolean;
+  single_record?: boolean;
 }
 
 export interface BlueprintGroup {
@@ -378,6 +379,7 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
           view_id:              viewId,
           can_view:             canView,
           limit_to_own_records: vp.limit_to_own_records ?? false,
+          single_record:        vp.single_record        ?? false,
         }]);
         if (canView && homeViewId === null) homeViewId = viewId;
       }

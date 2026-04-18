@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 280" width="400" height="280">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87ceeb"/>
+      <stop offset="100%" stop-color="#c8e8f5"/>
+    </linearGradient>
+  </defs>
+  <!-- Sky -->
+  <rect width="400" height="280" fill="url(#sky)"/>
+  <!-- Ground -->
+  <rect x="0" y="210" width="400" height="70" fill="#5a8a3a"/>
+  <!-- Barn body -->
+  <rect x="60" y="110" width="200" height="105" fill="#8b2020"/>
+  <!-- Barn roof -->
+  <polygon points="50,115 160,50 270,115" fill="#6a1818"/>
+  <!-- Barn door -->
+  <rect x="130" y="155" width="60" height="60" fill="#5a1010"/>
+  <line x1="160" y1="155" x2="160" y2="215" stroke="#8b2020" stroke-width="3"/>
+  <!-- Barn window -->
+  <rect x="80" y="130" width="40" height="30" rx="2" fill="#c8e8f5"/>
+  <line x1="100" y1="130" x2="100" y2="160" stroke="#fff" stroke-width="2"/>
+  <line x1="80" y1="145" x2="120" y2="145" stroke="#fff" stroke-width="2"/>
+  <!-- Barn window right -->
+  <rect x="200" y="130" width="40" height="30" rx="2" fill="#c8e8f5"/>
+  <line x1="220" y1="130" x2="220" y2="160" stroke="#fff" stroke-width="2"/>
+  <line x1="200" y1="145" x2="240" y2="145" stroke="#fff" stroke-width="2"/>
+  <!-- Silo -->
+  <rect x="270" y="115" width="50" height="100" fill="#d4c5a0"/>
+  <ellipse cx="295" cy="115" rx="25" ry="12" fill="#b8a880"/>
+  <!-- Fence left -->
+  <rect x="10" y="195" width="6" height="30" fill="#d4b896"/>
+  <rect x="40" y="195" width="6" height="30" fill="#d4b896"/>
+  <rect x="10" y="200" width="36" height="5" fill="#d4b896"/>
+  <rect x="10" y="213" width="36" height="5" fill="#d4b896"/>
+  <!-- Fence right -->
+  <rect x="340" y="195" width="6" height="30" fill="#d4b896"/>
+  <rect x="370" y="195" width="6" height="30" fill="#d4b896"/>
+  <rect x="340" y="200" width="36" height="5" fill="#d4b896"/>
+  <rect x="340" y="213" width="36" height="5" fill="#d4b896"/>
+  <!-- Clouds -->
+  <ellipse cx="320" cy="55" rx="35" ry="18" fill="rgba(255,255,255,0.85)"/>
+  <ellipse cx="345" cy="48" rx="22" ry="14" fill="rgba(255,255,255,0.85)"/>
+  <ellipse cx="300" cy="52" rx="18" ry="12" fill="rgba(255,255,255,0.85)"/>
+  <ellipse cx="80" cy="35" rx="28" ry="14" fill="rgba(255,255,255,0.75)"/>
+  <ellipse cx="60" cy="32" rx="16" ry="10" fill="rgba(255,255,255,0.75)"/>
+  <!-- Sun -->
+  <circle cx="360" cy="35" r="22" fill="#ffe082"/>
+  <!-- Trees -->
+  <rect x="345" y="160" width="10" height="55" fill="#6b4c2a"/>
+  <circle cx="350" cy="145" r="28" fill="#2d6e1e"/>
+  <rect x="30" y="175" width="8" height="40" fill="#6b4c2a"/>
+  <circle cx="34" cy="163" r="22" fill="#2d6e1e"/>
+</svg>

@@ -6,6 +6,7 @@ import { requireAdmin } from '../../middleware/adminAuth';
 import { loadCurrentApp, requireApp } from '../../middleware/currentApp';
 import { listApps, updateApp } from '../../services/apps';
 import { getAppDb } from '../../db/adapters/appDb';
+import { db } from '../../db/knex';
 import { appsRouter } from './apps';
 import { tablesRouter } from './tables';
 import { fieldsRouter } from './fields';
@@ -81,6 +82,53 @@ adminRouter.use('/blueprint',  requireApp, blueprintRouter);
 adminRouter.get('/auth',      requireApp, (_req, res) => res.render('admin/stub', { title: 'Auth / SSO' }));
 adminRouter.get('/styleguide', (_req, res) => res.render('admin/styleguide', { title: 'CSS Style Guide' }));
 
+// ── Endpoint Directory ────────────────────────────────────────────────────────
+
+adminRouter.get('/endpoints', requireApp, async (req, res, next) => {
+  try {
+    const app  = res.locals.currentApp;
+    const base = `${req.protocol}://${req.get('host')}`;
+
+    const allViews  = await db('views').where({ app_id: app.id }).orderBy('label');
+    const allGroups = await db('groups').where({ app_id: app.id }).orderBy('group_name');
+
+    const pubViews  = allViews.filter((v: any) => v.is_public);
+    const regGroups = allGroups.filter((g: any) => g.self_register_enabled);
+
+    const groupData = await Promise.all(allGroups.map(async (g: any) => {
+      const viewPerms = await db('view_group_permissions')
+        .where({ group_id: g.id, can_view: true })
+        .select('view_id', 'single_record');
+      const viewIds = new Set(viewPerms.map((p: any) => p.view_id));
+      const srIds   = new Set(viewPerms.filter((p: any) => p.single_record).map((p: any) => p.view_id));
+
+      const memberViews = allViews
+        .filter((v: any) => viewIds.has(v.id) && !v.is_public)
+        .map((v: any) => ({ ...v, single_record: srIds.has(v.id) }));
+
+      const tablePerms = await db('group_table_permissions')
+        .where({ group_id: g.id })
+        .where(function(this: any) { this.where('can_add', true).orWhere('can_edit', true); })
+        .select('table_id', 'can_add', 'can_edit', 'can_delete', 'manage_all');
+
+      const tableIds = tablePerms.map((p: any) => p.table_id);
+      const tables   = tableIds.length
+        ? await db('app_tables').whereIn('id', tableIds).orderBy('label')
+        : [];
+      const tableRows = tables.map((t: any) => ({
+        ...t, ...tablePerms.find((p: any) => p.table_id === t.id),
+      }));
+
+      return { group: g, memberViews, tableRows };
+    }));
+
+    res.render('admin/endpoints', {
+      title: 'Endpoint Directory',
+      app, base, pubViews, regGroups, groupData,
+    });
+  } catch (err) { next(err); }
+});
+
 // ── App Settings ──────────────────────────────────────────────────────────────
 
 adminRouter.get('/app-settings', requireApp, (req, res) => {
@@ -88,11 +136,20 @@ adminRouter.get('/app-settings', requireApp, (req, res) => {
   const origins: string[] = app.allowed_origins_json
     ? (JSON.parse(app.allowed_origins_json) as string[])
     : [];
+  const dbCfg = app.database_config_json
+    ? JSON.parse(app.database_config_json)
+    : {};
   const flash = req.session.flash;
   delete req.session.flash;
   res.render('admin/app-settings', {
     title: 'App Settings',
-    originsText: origins.join('\n'),
+    app,
+    originsText:       origins.join('\n'),
+    memberCssUrl:      app.member_css_url      ?? '',
+    memberHeaderHtml:  app.member_header_html  ?? '',
+    memberFooterHtml:  app.member_footer_html  ?? '',
+    dbMode:            app.database_mode,
+    dbCfg,
     flash,
   });
 });
@@ -100,13 +157,21 @@ adminRouter.get('/app-settings', requireApp, (req, res) => {
 adminRouter.post('/app-settings', requireApp, async (req, res, next) => {
   try {
     const app = res.locals.currentApp;
-    const body = req.body as { allowed_origins?: string };
+    const body = req.body as {
+      allowed_origins?: string;
+      member_css_url?: string;
+      member_header_html?: string;
+      member_footer_html?: string;
+    };
     const lines = (body.allowed_origins ?? '')
       .split('\n')
       .map((l: string) => l.trim())
       .filter(Boolean);
     await updateApp(app.id, {
       allowed_origins_json: lines.length ? JSON.stringify(lines) : null,
+      member_css_url:       (body.member_css_url ?? '').trim() || null,
+      member_header_html:   (body.member_header_html ?? '').trim() || null,
+      member_footer_html:   (body.member_footer_html ?? '').trim() || null,
     });
     req.session.flash = { type: 'success', message: 'App settings saved.' };
     res.redirect('/admin/app-settings');

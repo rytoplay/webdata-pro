@@ -59,12 +59,15 @@
   border-radius: 6px 6px 0 0;
 }
 .wdp-adv-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px 12px;
   margin-bottom: 10px;
+  align-items: flex-start;
 }
-.wdp-adv-fields .wdp-field { margin-bottom: 0; }
+.wdp-adv-fields .wdp-field { margin-bottom: 0; flex: 1 1 140px; min-width: 100px; }
+.wdp-adv-fields .wdp-field:has(input[style*="width"]),
+.wdp-adv-fields .wdp-field:has(input[maxlength]) { flex: 0 0 auto; }
 .wdp-adv-btns { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wdp-adv-link {
   font-size: 0.78rem; color: var(--wdp-accent); text-decoration: none;
@@ -153,6 +156,12 @@
 .wdp-field        { margin-bottom: 8px; }
 .wdp-field-label  { font-size: 0.72rem; font-weight: bold; letter-spacing: 0.05em; text-transform: uppercase; color: var(--wdp-primary); margin-bottom: 2px; }
 .wdp-field-value  { color: var(--wdp-text); font-size: 0.9rem; }
+.wdp-field-check  { display: flex; align-items: center; gap: 6px; }
+.wdp-review-marker { background: #fff3cd; border-left: 4px solid #fd7e14; color: #7c4a00; padding: 6px 10px; margin: 4px 0; font-size: 0.8rem; font-family: monospace; border-radius: 0 4px 4px 0; }
+.wdp-field-check .wdp-field-label { margin-bottom: 0; }
+.wdp-img-preview  { margin-bottom: 6px; }
+.wdp-img-preview img { width: 100px; height: 100px; object-fit: cover; border-radius: 4px; border: 1.5px solid var(--wdp-border); }
+.wdp-file-link    { margin-bottom: 6px; font-size: 0.85rem; }
 
 /* ── Form elements ──────────────────────────────────────────────────────── */
 .wdp-form-group    { margin-bottom: 14px; }
@@ -162,6 +171,7 @@
 .wdp-select        { display: block; width: 100%; padding: 7px 11px; border: 1.5px solid var(--wdp-border); border-radius: 4px; font-size: 0.875rem; background: var(--wdp-surface); color: var(--wdp-text); outline: none; }
 .wdp-select:focus  { border-color: var(--wdp-accent); }
 .wdp-textarea      { display: block; width: 100%; padding: 7px 11px; border: 1.5px solid var(--wdp-border); border-radius: 4px; font-size: 0.875rem; background: var(--wdp-surface); color: var(--wdp-text); outline: none; resize: vertical; min-height: 80px; }
+.wdp-form-group input[type="checkbox"] { border: 1.5px solid rgba(0,0,0,.4); }
 .wdp-textarea:focus { border-color: var(--wdp-accent); }
 .wdp-btn           { display: inline-block; padding: 8px 18px; background: var(--wdp-primary); color: var(--wdp-on-primary); border: none; border-radius: 4px; font-size: 0.875rem; font-weight: bold; cursor: pointer; }
 .wdp-btn:hover     { opacity: 0.88; }

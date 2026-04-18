@@ -58,6 +58,57 @@ export function getAppDb(app: App): Knex.Knex {
   return db;
 }
 
+// ── MySQL database bootstrap ─────────────────────────────────────────────────
+
+export interface MysqlDbCheckResult {
+  created: boolean;
+  existingTables: string[];
+}
+
+/**
+ * For MySQL/Postgres app creation: ensure the target database exists.
+ * - If it doesn't exist, creates it and returns { created: true, existingTables: [] }
+ * - If it exists and is empty, returns { created: false, existingTables: [] }
+ * - If it exists and has tables, returns { created: false, existingTables: [...] }
+ */
+export async function ensureMysqlDatabase(cfg: {
+  host?: string; port?: number; database?: string; username?: string; password?: string;
+}): Promise<MysqlDbCheckResult> {
+  const host     = cfg.host     ?? 'localhost';
+  const port     = cfg.port     ?? 3306;
+  const dbName   = (cfg.database ?? '').trim();
+  const user     = cfg.username ?? '';
+  const password = cfg.password ?? '';
+
+  if (!dbName) return { created: false, existingTables: [] };
+
+  // Connect without selecting a database
+  const init = Knex({
+    client: 'mysql2',
+    connection: { host, port, database: '', user, password },
+    pool: { min: 0, max: 1 },
+  });
+
+  try {
+    // Check if database exists
+    const rows = await init.raw('SHOW DATABASES LIKE ?', [dbName]) as any[];
+    const exists = (Array.isArray(rows[0]) ? rows[0] : rows).length > 0;
+
+    if (!exists) {
+      await init.raw(`CREATE DATABASE \`${dbName}\``);
+      return { created: true, existingTables: [] };
+    }
+
+    // Database exists — check for tables
+    const tableRows = await init.raw(`SHOW TABLES IN \`${dbName}\``) as any[];
+    const tables: string[] = (Array.isArray(tableRows[0]) ? tableRows[0] : tableRows)
+      .map((r: Record<string, string>) => Object.values(r)[0]);
+    return { created: false, existingTables: tables };
+  } finally {
+    await init.destroy();
+  }
+}
+
 // Call when an app is deleted or its DB config changes
 export function releaseAppDb(appId: number): void {
   const db = pool.get(appId);

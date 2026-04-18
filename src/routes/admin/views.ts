@@ -314,6 +314,125 @@ viewsRouter.post('/:id/preview-render', async (req, res, next) => {
   }
 });
 
+// ── POST /admin/views/:id/ai-fix — AI error fixer ────────────────────────────
+
+viewsRouter.post('/:id/ai-fix', async (req, res) => {
+  try {
+    const app  = res.locals.currentApp as App;
+    const view = await viewsService.getView(Number(req.params.id));
+    if (!view || view.app_id !== app.id) return res.json({ error: 'View not found' });
+
+    const errorMsg: string = (req.body.error ?? '').trim();
+    if (!errorMsg) return res.json({ error: 'No error message provided' });
+
+    const { baseFields, joinedFields, baseTable } =
+      await getReachableFields(app.id, view.base_table_id);
+    if (!baseTable) return res.json({ error: 'Base table not found' });
+
+    // Current templates — prefer overrides from request body (what's in the editor right now)
+    const saved = await viewsService.getViewTemplates(app.id, view.id);
+    const overrides: Partial<viewsService.ViewTemplates> = {};
+    for (const type of viewsService.TEMPLATE_TYPES) {
+      if (req.body[type] !== undefined) overrides[type as keyof viewsService.ViewTemplates] = req.body[type];
+    }
+    const templates = { ...saved, ...overrides };
+
+    // Current SQL
+    const customSql: string = (req.body.custom_sql ?? view.custom_sql ?? '').trim();
+    const queryMode: string = req.body.query_mode ?? view.query_mode ?? 'automatic';
+
+    // Build schema context
+    const schemaLines: string[] = [];
+    for (const f of baseFields)   schemaLines.push(`  ${baseTable.table_name}.${f.field_name} (${f.data_type}) — ${f.label || f.field_name}`);
+    for (const f of joinedFields) schemaLines.push(`  ${f.table_name}.${f.field_name} (${f.data_type}) — ${f.label || f.field_name}`);
+
+    // Extract keywords from the error to identify which templates are relevant
+    const errorKeywords = (errorMsg.match(/\b\w+\b/g) ?? [])
+      .filter(w => w.length > 3)
+      .map(w => w.toLowerCase());
+
+    // Build template block — only include templates that mention error keywords,
+    // or all templates if we can't narrow it down. This keeps the AI payload small.
+    const tplLines: string[] = [];
+    for (const type of viewsService.TEMPLATE_TYPES) {
+      const body = templates[type as keyof viewsService.ViewTemplates];
+      if (!body?.trim()) continue;
+      const lower = body.toLowerCase();
+      const relevant = errorKeywords.length === 0 || errorKeywords.some(kw => lower.includes(kw));
+      if (relevant) tplLines.push(`=== ${type} ===\n${body}\n`);
+    }
+    // If nothing matched, include all non-empty templates
+    if (tplLines.length === 0) {
+      for (const type of viewsService.TEMPLATE_TYPES) {
+        const body = templates[type as keyof viewsService.ViewTemplates];
+        if (body?.trim()) tplLines.push(`=== ${type} ===\n${body}\n`);
+      }
+    }
+
+    const systemPrompt = `You are an expert at debugging Webdata Pro view templates and SQL.
+
+Webdata Pro views use two modes:
+- "automatic": templates use \${table.field} tokens, SQL is auto-generated from those tokens
+- "advanced_sql": templates use \${alias} tokens where aliases come from the custom SQL SELECT
+
+Template types: header, row, footer, search_form, detail, edit_form, create_form
+
+Common bugs you fix:
+- Trailing comma before FROM in SQL (a deleted field left a comma behind)
+- \${table.field} token referencing a field that no longer exists in the schema
+- SQL alias mismatch between custom SQL and templates
+- Any other syntax error in SQL or templates
+
+Return ONLY a single valid JSON object — no markdown fences, no explanation outside the JSON:
+{
+  "custom_sql": "<fixed SQL string or null if no change needed>",
+  "templates": { "<type>": "<fixed HTML or null if unchanged>", ... },
+  "explanation": "<one or two sentences describing what was wrong and what you fixed>"
+}
+
+Only change what is necessary to fix the error. Do not redesign or rewrite templates.`;
+
+    const userPrompt = `ERROR MESSAGE:
+${errorMsg}
+
+QUERY MODE: ${queryMode}
+
+ACTUAL TABLE SCHEMA (these are the fields that currently exist):
+${schemaLines.join('\n')}
+
+CURRENT CUSTOM SQL:
+${customSql || '(none — automatic mode)'}
+
+CURRENT TEMPLATES:
+${tplLines.join('\n') || '(none)'}
+
+Fix the error. Return only the JSON object described above.`;
+
+    const aiSettings = await aiService.getAiSettings();
+    const raw = await aiService.callAi(aiSettings, systemPrompt, userPrompt, 4096, 0.1);
+
+    // Extract JSON from response (strip any accidental markdown fences)
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return res.json({ error: 'AI returned no valid JSON. Raw: ' + raw.slice(0, 200) });
+
+    let parsed: { custom_sql?: string | null; templates?: Record<string, string | null>; explanation?: string };
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch {
+      return res.json({ error: 'AI returned invalid JSON. Raw: ' + raw.slice(0, 300) });
+    }
+
+    res.json({
+      custom_sql:  parsed.custom_sql  ?? null,
+      templates:   parsed.templates   ?? {},
+      explanation: parsed.explanation ?? 'Fix applied.',
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.json({ error: msg });
+  }
+});
+
 // ── POST /admin/views/:id/generate-templates — AI template generation ────────
 
 viewsRouter.post('/:id/generate-templates', async (req, res) => {
@@ -341,7 +460,10 @@ viewsRouter.post('/:id/generate-templates', async (req, res) => {
     let sampleRows: Record<string, unknown>[] = [];
     try {
       const sql   = await viewsService.generateViewSql(app.id, baseTable.table_name, dummyTpls);
-      sampleRows  = await appDb.raw(`SELECT * FROM (${sql}) AS _s LIMIT 4`) as Record<string, unknown>[];
+      const sampleRaw = await appDb.raw(`SELECT * FROM (${sql}) AS _s LIMIT 4`);
+      sampleRows = (app.database_mode === 'mysql'
+        ? (sampleRaw as [Record<string, unknown>[], unknown])[0]
+        : sampleRaw) as Record<string, unknown>[];
     } catch { /* ignore — schema may have no data yet */ }
 
     const sampleText = sampleRows.length

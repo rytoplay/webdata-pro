@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" width="360" height="220">
+  <rect width="360" height="220" fill="#e8d5b7"/>
+  <!-- Cat basket hint -->
+  <ellipse cx="180" cy="200" rx="120" ry="30" fill="#c8a06a"/>
+  <!-- Kitten 1 (orange tabby, left) -->
+  <ellipse cx="110" cy="160" rx="48" ry="40" fill="#d4814a"/>
+  <!-- stripes -->
+  <line x1="85" y1="145" x2="95" y2="175" stroke="#b86030" stroke-width="2.5" opacity="0.5"/>
+  <line x1="100" y1="140" x2="108" y2="175" stroke="#b86030" stroke-width="2.5" opacity="0.5"/>
+  <!-- Head -->
+  <circle cx="110" cy="118" r="38" fill="#d4814a"/>
+  <!-- Ears -->
+  <polygon points="85,95 78,68 102,88" fill="#d4814a"/>
+  <polygon points="135,95 142,68 118,88" fill="#d4814a"/>
+  <polygon points="88,92 83,73 101,87" fill="#e8a0a0"/>
+  <polygon points="132,92 137,73 119,87" fill="#e8a0a0"/>
+  <!-- Eyes -->
+  <ellipse cx="97" cy="114" rx="8" ry="9" fill="#fff"/>
+  <ellipse cx="123" cy="114" rx="8" ry="9" fill="#fff"/>
+  <ellipse cx="97" cy="114" rx="4" ry="6" fill="#1a8a1a"/>
+  <ellipse cx="123" cy="114" rx="4" ry="6" fill="#1a8a1a"/>
+  <circle cx="96" cy="112" r="2" fill="#111"/>
+  <circle cx="122" cy="112" r="2" fill="#111"/>
+  <circle cx="99" cy="111" r="1.5" fill="#fff"/>
+  <circle cx="125" cy="111" r="1.5" fill="#fff"/>
+  <!-- Nose + mouth -->
+  <polygon points="110,125 106,121 114,121" fill="#e07090"/>
+  <path d="M110 125 Q104 131 101 130" stroke="#555" stroke-width="1.5" fill="none"/>
+  <path d="M110 125 Q116 131 119 130" stroke="#555" stroke-width="1.5" fill="none"/>
+  <!-- Whiskers -->
+  <line x1="75" y1="121" x2="103" y2="125" stroke="#888" stroke-width="1.2"/>
+  <line x1="75" y1="127" x2="103" y2="127" stroke="#888" stroke-width="1.2"/>
+  <line x1="117" y1="125" x2="145" y2="121" stroke="#888" stroke-width="1.2"/>
+  <line x1="117" y1="127" x2="145" y2="127" stroke="#888" stroke-width="1.2"/>
+
+  <!-- Kitten 2 (grey, right) -->
+  <ellipse cx="248" cy="162" rx="46" ry="38" fill="#9a9aaa"/>
+  <circle cx="248" cy="120" r="36" fill="#9a9aaa"/>
+  <!-- Ears -->
+  <polygon points="224,98 218,72 240,92" fill="#9a9aaa"/>
+  <polygon points="272,98 278,72 256,92" fill="#9a9aaa"/>
+  <polygon points="226,95 222,76 239,90" fill="#e8a0c0"/>
+  <polygon points="270,95 274,76 257,90" fill="#e8a0c0"/>
+  <!-- Eyes closed/sleepy -->
+  <path d="M235 116 Q240 111 245 116" stroke="#444" stroke-width="2.5" fill="none"/>
+  <path d="M251 116 Q256 111 261 116" stroke="#444" stroke-width="2.5" fill="none"/>
+  <!-- Nose -->
+  <polygon points="248,123 244,119 252,119" fill="#e07090"/>
+  <!-- Whiskers -->
+  <line x1="213" y1="121" x2="241" y2="124" stroke="#ccc" stroke-width="1.2"/>
+  <line x1="213" y1="127" x2="241" y2="126" stroke="#ccc" stroke-width="1.2"/>
+  <line x1="255" y1="124" x2="283" y2="121" stroke="#ccc" stroke-width="1.2"/>
+  <line x1="255" y1="126" x2="283" y2="127" stroke="#ccc" stroke-width="1.2"/>
+  <!-- Tail 1 -->
+  <path d="M155 175 Q140 140 160 120" stroke="#d4814a" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <!-- Tail 2 -->
+  <path d="M200 175 Q216 140 208 118" stroke="#9a9aaa" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <!-- Label -->
+  <text x="180" y="218" text-anchor="middle" font-family="Georgia, serif" font-size="13" fill="#6b4c2a" font-style="italic">Shelter kittens looking for homes</text>
+</svg>

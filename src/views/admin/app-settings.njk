@@ -50,6 +50,116 @@
     </div>
   </div>
 
+  <!-- ── Member Branding ─────────────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-bold py-3 px-4">
+        <i class="bi bi-palette me-2 text-primary"></i>Member Portal Branding
+      </div>
+      <div class="card-body p-4">
+        <p class="text-muted small mb-4">
+          Give your member login, home, and view pages a custom look. Enter a CSS URL and
+          paste header/footer HTML that matches your public website. Templates support
+          <a href="https://mozilla.github.io/nunjucks/templating.html" target="_blank">Nunjucks</a>
+          — use <code>{{ "{{" }} app.name {{ "}}" }}</code>, <code>{{ "{{" }} member.first_name {{ "}}" }}</code>,
+          and <code>{{ "{{" }} logoutUrl {{ "}}" }}</code> anywhere in the HTML.
+        </p>
+        <form method="POST" action="/admin/app-settings">
+          <input type="hidden" name="allowed_origins" value="{{ originsText }}">
+
+          <div class="mb-3">
+            <label class="form-label" for="member_css_url">Custom CSS URL</label>
+            <input type="text" id="member_css_url" name="member_css_url"
+              class="form-control font-monospace"
+              placeholder="/static/css/pet-shelter.css"
+              value="{{ memberCssUrl }}">
+            <div class="form-text">
+              Path or full URL to your stylesheet. Leave blank to use the default Bootstrap style.
+              Example: <code>/static/css/pet-shelter.css</code>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="member_header_html">Header HTML</label>
+            <textarea id="member_header_html" name="member_header_html"
+              class="form-control font-monospace" rows="10"
+              placeholder="<header>...</header>&#10;<nav>...</nav>"
+              spellcheck="false">{{ memberHeaderHtml }}</textarea>
+            <div class="form-text">
+              Rendered above the page content on login, home, and view pages.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="member_footer_html">Footer HTML</label>
+            <textarea id="member_footer_html" name="member_footer_html"
+              class="form-control font-monospace" rows="6"
+              placeholder="<footer>...</footer>"
+              spellcheck="false">{{ memberFooterHtml }}</textarea>
+            <div class="form-text">
+              Rendered below the page content.
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Save Branding
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Database Connection (non-SQLite only) ──────────────────────────── -->
+  {% if dbMode !== 'sqlite' %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-bold py-3 px-4">
+        <i class="bi bi-database me-2 text-primary"></i>Database Connection
+      </div>
+      <div class="card-body p-4">
+        <p class="text-muted small mb-4">
+          Update the connection credentials for this app's {{ dbMode }} database.
+          The connection pool will be reset immediately on save.
+        </p>
+        <form method="POST" action="/admin/apps/{{ app.id }}/db-config">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Host</label>
+              <input type="text" name="db_host" class="form-control font-monospace"
+                value="{{ dbCfg.host or 'localhost' }}" placeholder="localhost">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Port</label>
+              <input type="number" name="db_port" class="form-control font-monospace"
+                value="{{ dbCfg.port or (3306 if dbMode == 'mysql' else 5432) }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Database Name</label>
+              <input type="text" name="db_name" class="form-control font-monospace"
+                value="{{ dbCfg.database or '' }}">
+            </div>
+          </div>
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label">Username</label>
+              <input type="text" name="db_username" class="form-control font-monospace"
+                autocomplete="off" value="{{ dbCfg.username or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Password</label>
+              <input type="password" name="db_password" class="form-control"
+                autocomplete="new-password" placeholder="(leave blank to keep existing)">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Save Connection
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- ── Help panel ───────────────────────────────────────────────────────── -->
   <div class="col-12 col-lg-5">
     <div class="card h-100">

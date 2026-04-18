@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300" width="360" height="300">
+  <rect width="360" height="300" fill="#e8d5b7"/>
+  <!-- Background green (outdoor feel) -->
+  <rect x="0" y="200" width="360" height="100" fill="#5a8a3a"/>
+  <rect x="0" y="0" width="360" height="200" fill="#87ceeb"/>
+
+  <!-- Dog body (golden retriever vibes) -->
+  <ellipse cx="180" cy="220" rx="100" ry="75" fill="#c8832a"/>
+  <!-- Fur texture -->
+  <ellipse cx="180" cy="195" rx="85" ry="55" fill="#d4914a"/>
+
+  <!-- Dog head -->
+  <circle cx="180" cy="135" r="72" fill="#c8832a"/>
+  <circle cx="180" cy="135" r="65" fill="#d4914a"/>
+
+  <!-- Snout -->
+  <ellipse cx="180" cy="155" rx="35" ry="25" fill="#c8832a"/>
+
+  <!-- Ears (floppy) -->
+  <path d="M118 105 Q88 85 92 130 Q96 155 118 155Z" fill="#b07020"/>
+  <path d="M242 105 Q272 85 268 130 Q264 155 242 155Z" fill="#b07020"/>
+
+  <!-- Eyes -->
+  <circle cx="158" cy="122" r="13" fill="#fff"/>
+  <circle cx="202" cy="122" r="13" fill="#fff"/>
+  <circle cx="158" cy="122" r="8" fill="#4a2800"/>
+  <circle cx="202" cy="122" r="8" fill="#4a2800"/>
+  <circle cx="154" cy="119" r="3" fill="#fff"/>
+  <circle cx="198" cy="119" r="3" fill="#fff"/>
+  <!-- Eyebrows (expressive!) -->
+  <path d="M148 110 Q158 106 168 110" stroke="#8a5a10" stroke-width="3" fill="none"/>
+  <path d="M192 110 Q202 106 212 110" stroke="#8a5a10" stroke-width="3" fill="none"/>
+
+  <!-- Nose -->
+  <ellipse cx="180" cy="150" rx="18" ry="12" fill="#222"/>
+  <ellipse cx="176" cy="147" rx="5" ry="3" fill="rgba(255,255,255,0.35)"/>
+
+  <!-- Mouth / smile -->
+  <path d="M162 163 Q180 175 198 163" stroke="#8a4010" stroke-width="2.5" fill="none"/>
+
+  <!-- Tongue -->
+  <path d="M172 170 Q180 182 188 170" fill="#e07090"/>
+  <line x1="180" y1="170" x2="180" y2="182" stroke="#c05070" stroke-width="1.5"/>
+
+  <!-- Bandana! -->
+  <path d="M130 172 Q180 195 230 172 Q215 188 180 195 Q145 188 130 172Z" fill="#e03838"/>
+  <!-- Bandana pattern dots -->
+  <circle cx="155" cy="180" r="2.5" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="165" cy="184" r="2.5" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="175" cy="186" r="2.5" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="185" cy="186" r="2.5" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="195" cy="184" r="2.5" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="205" cy="180" r="2.5" fill="rgba(255,255,255,0.5)"/>
+
+  <!-- Front paws -->
+  <ellipse cx="140" cy="275" rx="35" ry="22" fill="#c8832a"/>
+  <ellipse cx="220" cy="275" rx="35" ry="22" fill="#c8832a"/>
+  <!-- Paw toes -->
+  <circle cx="128" cy="278" r="9" fill="#b87020"/>
+  <circle cx="140" cy="282" r="9" fill="#b87020"/>
+  <circle cx="152" cy="278" r="9" fill="#b87020"/>
+  <circle cx="208" cy="278" r="9" fill="#b87020"/>
+  <circle cx="220" cy="282" r="9" fill="#b87020"/>
+  <circle cx="232" cy="278" r="9" fill="#b87020"/>
+
+  <text x="180" y="298" text-anchor="middle" font-family="Georgia, serif" font-size="13" fill="#2d5a27" font-style="italic">Tripod — happy, healthy, and looking for a home!</text>
+</svg>

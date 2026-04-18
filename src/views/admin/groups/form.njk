@@ -127,18 +127,49 @@
 
       <div class="card shadow-sm">
         <div class="card-header d-flex align-items-center gap-2 py-2">
-          <span class="fw-semibold small">Member Home Template</span>
-          <span class="text-muted small ms-2">HTML + Nunjucks</span>
+          <ul class="nav nav-tabs card-header-tabs mb-0" id="tpl-tabs">
+            <li class="nav-item">
+              <button type="button" class="nav-link py-1 px-3" data-tpl-tab="header">Header</button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link active py-1 px-3" data-tpl-tab="body">Content</button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link py-1 px-3" data-tpl-tab="footer">Footer</button>
+            </li>
+          </ul>
           <a href="/admin/groups/{{ group.id }}/preview-home" target="_blank"
             class="btn btn-sm btn-outline-primary ms-auto">Preview</a>
           <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-reset-home">Reset</button>
         </div>
+
         <div class="card-body p-0">
-          <textarea name="home_template" id="home-template-editor"
-            class="form-control font-monospace border-0 rounded-0"
+          <div class="tpl-hint px-3 pt-2 pb-1 text-muted" style="font-size:0.75rem;" id="hint-header">
+            CSS, opening HTML, nav — rendered before the content template.
+          </div>
+          <div class="tpl-hint px-3 pt-2 pb-1 text-muted d-none" style="font-size:0.75rem;" id="hint-body">
+            The main homepage content. Use <code>embedView()</code>, member variables, etc.
+          </div>
+          <div class="tpl-hint px-3 pt-2 pb-1 text-muted d-none" style="font-size:0.75rem;" id="hint-footer">
+            Closing HTML, footer content — rendered after the content template.
+          </div>
+
+          <textarea name="home_header_html" id="tpl-header"
+            class="tpl-editor form-control font-monospace border-0 rounded-0 d-none"
+            rows="16" style="resize:vertical; font-size:0.82rem; tab-size:2;"
+            placeholder="Optional — CSS and opening HTML go here.">{{ group.home_header_html or '' }}</textarea>
+
+          <textarea name="home_template" id="tpl-body"
+            class="tpl-editor form-control font-monospace border-0 rounded-0"
             rows="16" style="resize:vertical; font-size:0.82rem; tab-size:2;"
             placeholder="Leave blank to show the default view list.">{{ group.home_template or '' }}</textarea>
+
+          <textarea name="home_footer_html" id="tpl-footer"
+            class="tpl-editor form-control font-monospace border-0 rounded-0 d-none"
+            rows="16" style="resize:vertical; font-size:0.82rem; tab-size:2;"
+            placeholder="Optional — closing tags and footer content go here.">{{ group.home_footer_html or '' }}</textarea>
         </div>
+
         <div class="card-footer d-flex justify-content-between align-items-center">
           <button type="submit" class="btn btn-primary btn-sm">Save Template</button>
           <span class="text-muted small">Leave blank to show the default view list.</span>
@@ -205,28 +236,57 @@
 </div>
 
 <script>
+// ── Tab switching ────────────────────────────────────────────────────────────
+let _activeEditor = document.getElementById('tpl-body');
+
+document.querySelectorAll('[data-tpl-tab]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const tab = btn.dataset.tplTab;
+
+    // Update tab button states
+    document.querySelectorAll('[data-tpl-tab]').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.tplTab === tab);
+    });
+
+    // Show/hide textareas and hints
+    ['header', 'body', 'footer'].forEach(function(t) {
+      const ta   = document.getElementById('tpl-' + t);
+      const hint = document.getElementById('hint-' + t);
+      ta.classList.toggle('d-none', t !== tab);
+      hint.classList.toggle('d-none', t !== tab);
+    });
+
+    _activeEditor = document.getElementById('tpl-' + tab);
+    _activeEditor.focus();
+  });
+});
+
+// ── Reset button resets only the Content tab ─────────────────────────────────
 document.getElementById('btn-reset-home').addEventListener('click', function() {
-  if (confirm('Reset to the default template?')) {
-    document.getElementById('home-template-editor').value = {{ defaultTemplate | dump | safe }};
+  if (confirm('Reset Content template to the default?')) {
+    document.getElementById('tpl-body').value = {{ defaultTemplate | dump | safe }};
   }
 });
 
-const _editor = document.getElementById('home-template-editor');
-_editor.addEventListener('keydown', function(e) {
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const s = this.selectionStart;
-    this.value = this.value.slice(0, s) + '  ' + this.value.slice(this.selectionEnd);
-    this.selectionStart = this.selectionEnd = s + 2;
-  }
+// ── Tab key indent in all three editors ──────────────────────────────────────
+document.querySelectorAll('.tpl-editor').forEach(function(ta) {
+  ta.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = this.selectionStart;
+      this.value = this.value.slice(0, s) + '  ' + this.value.slice(this.selectionEnd);
+      this.selectionStart = this.selectionEnd = s + 2;
+    }
+  });
 });
 
+// ── Insert snippet into whichever tab is active ───────────────────────────────
 function insertSnippet(text) {
-  _editor.focus();
-  const s = _editor.selectionStart;
-  const e = _editor.selectionEnd;
-  _editor.value = _editor.value.slice(0, s) + text + _editor.value.slice(e);
-  _editor.selectionStart = _editor.selectionEnd = s + text.length;
+  _activeEditor.focus();
+  const s = _activeEditor.selectionStart;
+  const e = _activeEditor.selectionEnd;
+  _activeEditor.value = _activeEditor.value.slice(0, s) + text + _activeEditor.value.slice(e);
+  _activeEditor.selectionStart = _activeEditor.selectionEnd = s + text.length;
 }
 
 document.querySelectorAll('.wdp-insert').forEach(function(btn) {

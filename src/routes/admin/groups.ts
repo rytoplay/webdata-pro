@@ -28,6 +28,8 @@ const GroupSchema = z.object({
   default_home_view_id:  z.preprocess(v => v === '' || v == null ? null : Number(v), z.number().nullable()).optional(),
   tfa_required:          z.preprocess(v => v === 'on' || v === true, z.boolean()),
   home_template:         z.string().optional().nullable(),
+  home_header_html:      z.string().optional().nullable(),
+  home_footer_html:      z.string().optional().nullable(),
 });
 
 // ── GET /admin/groups ────────────────────────────────────────────────────────
@@ -156,20 +158,25 @@ groupsRouter.get('/:id/preview-home', async (req, res, next) => {
     if (!group || group.app_id !== app.id)
       return res.status(404).render('admin/error', { title: 'Not Found', message: 'Group not found' });
 
-    const template = group.home_template || DEFAULT_HOME_TEMPLATE;
+    const bodyTemplate   = group.home_template    || DEFAULT_HOME_TEMPLATE;
+    const headerTemplate = group.home_header_html || '';
+    const footerTemplate = group.home_footer_html || '';
     const views = await db('views').where({ app_id: app.id }).orderBy('label')
       .then((rows: any[]) => rows.map((v: any) => ({
         label: v.label, view_name: v.view_name,
         url: `/app/${app.slug}/view/${v.view_name}`,
       })));
     const dummyMember = { first_name: 'Preview', last_name: 'User', email: 'preview@example.com' };
+    const ctx = { app, member: dummyMember, views };
 
-    let renderedHtml: string;
-    try {
-      renderedHtml = nunjucks.renderString(template, { app, member: dummyMember, views });
-    } catch (err: any) {
-      renderedHtml = `<p class="text-danger"><strong>Template error:</strong> ${err.message}</p>`;
+    function renderPart(tpl: string): string {
+      if (!tpl.trim()) return '';
+      try { return nunjucks.renderString(tpl, ctx); }
+      catch (err: any) { return `<p class="text-danger"><strong>Template error:</strong> ${err.message}</p>`; }
     }
+
+    const renderedHtml = [renderPart(headerTemplate), renderPart(bodyTemplate), renderPart(footerTemplate)]
+      .filter(Boolean).join('\n');
 
     res.render('admin/home/preview', {
       title: `Preview — ${group.group_name} Home`,

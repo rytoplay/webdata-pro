@@ -13,6 +13,27 @@
     return '';
   }());
 
+  // ── Rewrite root-relative URLs to use the configured baseUrl ─────────────────
+  // When the embed is hosted on a different origin than the app server, attributes
+  // like src="/files/..." resolve against the wrong host. This fixes img, source,
+  // and form action attributes after each render.
+  function rebaseUrls(el, base) {
+    if (!base) return;
+    base = base.replace(/\/$/, '');
+    el.querySelectorAll('img[src], source[src], video[src], audio[src]').forEach(function (node) {
+      var src = node.getAttribute('src');
+      if (src && src.charAt(0) === '/' && src.charAt(1) !== '/') {
+        node.setAttribute('src', base + src);
+      }
+    });
+    el.querySelectorAll('form[action]').forEach(function (node) {
+      var action = node.getAttribute('action');
+      if (action && action.charAt(0) === '/' && action.charAt(1) !== '/') {
+        node.setAttribute('action', base + action);
+      }
+    });
+  }
+
   // ── Inject HTML and execute any <script> tags it contains ───────────────────
   // innerHTML is fast but deliberately skips <script> execution — this re-runs them
   // so designers can include helper functions in their templates (e.g. date calculators).
@@ -179,6 +200,7 @@
         html = await fetchFragment(cfg, listPath(cfg, state));
       }
       setHtml(el, html);
+      rebaseUrls(el, cfg.baseUrl);
       // Restore per-field filter values and show advanced panel if any are active
       if (mode === 'list') {
         var advPanel = el.querySelector('.wdp-sf-adv');
@@ -238,8 +260,9 @@
         const id      = form.dataset.wdpId || readHash(instanceId).get('id') || '';
         const base    = (instance.cfg.baseUrl || '').replace(/\/$/, '');
         const url     = base + patchPath(instance.cfg, id);
-        const body    = new URLSearchParams(new FormData(form)).toString();
-        const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        const hasFiles = !!form.querySelector('input[type="file"]');
+        const body    = hasFiles ? new FormData(form) : new URLSearchParams(new FormData(form)).toString();
+        const headers = hasFiles ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' };
         const access  = getAccess(instance.cfg);
         if (access) headers['Authorization'] = 'Bearer ' + access;
 
@@ -268,8 +291,9 @@
       } else if (formType === 'create') {
         const base    = (instance.cfg.baseUrl || '').replace(/\/$/, '');
         const url     = base + postPath(instance.cfg);
-        const body    = new URLSearchParams(new FormData(form)).toString();
-        const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        const hasFiles = !!form.querySelector('input[type="file"]');
+        const body    = hasFiles ? new FormData(form) : new URLSearchParams(new FormData(form)).toString();
+        const headers = hasFiles ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' };
         const access  = getAccess(instance.cfg);
         if (access) headers['Authorization'] = 'Bearer ' + access;
         fetch(url, { method: 'POST', headers, credentials: 'include', body })

@@ -1,8 +1,42 @@
 import { Router, Request, Response } from 'express';
+import nunjucks from 'nunjucks';
 import { db } from '../../db/knex';
 import { appCors } from '../../middleware/cors';
 import type { App } from '../../domain/types';
 import * as viewsService from '../../services/views';
+import { memoryUpload, saveUpload, deleteUpload } from '../../services/uploads';
+
+async function getPortalContext(app: App, req: Request): Promise<{ portalHeader: string; portalFooter: string }> {
+  if (!app.member_header_html && !app.member_footer_html) return { portalHeader: '', portalFooter: '' };
+  const memberSession = (req.session as any)?.member;
+  const memberData = memberSession?.memberId
+    ? await db('members').where({ id: memberSession.memberId }).first()
+    : null;
+  const ctx = { app, member: memberData ?? null, logoutUrl: `/app/${app.slug}/logout` };
+  const render = (tpl: string) => { try { return nunjucks.renderString(tpl, ctx); } catch { return ''; } };
+  return {
+    portalHeader: app.member_header_html ? render(app.member_header_html) : '',
+    portalFooter: app.member_footer_html ? render(app.member_footer_html) : '',
+  };
+}
+
+async function processUploadedFiles(
+  files: Express.Multer.File[],
+  allFields: { field_name: string; data_type: string }[],
+  app: App,
+  tableName: string,
+): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  for (const file of files) {
+    if (!file.size) continue; // skip empty file inputs (no file selected)
+    const field = allFields.find(f => f.field_name === file.fieldname);
+    if (!field || (field.data_type !== 'image' && field.data_type !== 'upload')) continue;
+    result[file.fieldname] = await saveUpload(
+      file.buffer, file.mimetype, app.slug, tableName, file.fieldname, field.data_type === 'image',
+    );
+  }
+  return result;
+}
 
 export const apiViewsRouter = Router({ mergeParams: true });
 
@@ -98,6 +132,7 @@ apiViewsRouter.get('/:viewName', async (req, res, next) => {
     if (!baseTable) return res.status(500).send('<p class="wdp-error">Base table not configured.</p>');
 
     const templates = await viewsService.getViewTemplates(app.id, view.id);
+    const { portalHeader, portalFooter } = await getPortalContext(app, req);
 
     const hasFieldFilters = Object.keys(fieldFilters).length > 0;
     const html = await viewsService.renderViewList(app, view, baseTable.table_name, templates, {
@@ -109,6 +144,8 @@ apiViewsRouter.get('/:viewName', async (req, res, next) => {
       searchOnly:   searchOnly === '1' && !hasFieldFilters,
       fieldFilters,
       ownerId,
+      portalHeader,
+      portalFooter,
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -141,7 +178,8 @@ apiViewsRouter.get('/:viewName/new', async (req, res, next) => {
     if (!baseTable) return res.status(500).send('<p class="wdp-error">Base table not configured.</p>');
 
     const templates = await viewsService.getViewTemplates(app.id, view.id);
-    const html = await viewsService.renderViewCreateForm(app, view, baseTable.table_name, templates);
+    const { portalHeader, portalFooter } = await getPortalContext(app, req);
+    const html = await viewsService.renderViewCreateForm(app, view, baseTable.table_name, templates, { portalHeader, portalFooter });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
@@ -166,7 +204,8 @@ apiViewsRouter.get('/:viewName/:recordId', async (req, res, next) => {
     if (!baseTable) return res.status(500).send('<p class="wdp-error">Base table not configured.</p>');
 
     const templates = await viewsService.getViewTemplates(app.id, view.id);
-    const html      = await viewsService.renderViewDetail(app, view, baseTable.table_name, templates, recordId);
+    const { portalHeader, portalFooter } = await getPortalContext(app, req);
+    const html      = await viewsService.renderViewDetail(app, view, baseTable.table_name, templates, recordId, { portalHeader, portalFooter });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
@@ -191,7 +230,8 @@ apiViewsRouter.get('/:viewName/:recordId/edit', async (req, res, next) => {
     if (!baseTable) return res.status(500).send('<p class="wdp-error">Base table not configured.</p>');
 
     const templates = await viewsService.getViewTemplates(app.id, view.id);
-    const html      = await viewsService.renderViewEditForm(app, view, baseTable.table_name, templates, recordId);
+    const { portalHeader, portalFooter } = await getPortalContext(app, req);
+    const html      = await viewsService.renderViewEditForm(app, view, baseTable.table_name, templates, recordId, { portalHeader, portalFooter });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
@@ -202,7 +242,7 @@ apiViewsRouter.get('/:viewName/:recordId/edit', async (req, res, next) => {
 
 // ── POST /api/v/:appSlug/:viewName — create record ──────────────────────────
 
-apiViewsRouter.post('/:viewName', async (req, res, next) => {
+apiViewsRouter.post('/:viewName', memoryUpload, async (req, res, next) => {
   try {
     const app      = res.locals.apiApp as App;
     const { viewName } = req.params;
@@ -245,6 +285,11 @@ apiViewsRouter.post('/:viewName', async (req, res, next) => {
       data[fieldName] = Array.isArray(val) ? val[val.length - 1] : val;
     }
 
+    // Process any uploaded files (image/upload fields)
+    const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+    const filePaths = await processUploadedFiles(uploadedFiles, allFields, app, baseTable.table_name);
+    Object.assign(data, filePaths);
+
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: 'No valid fields to insert' });
     }
@@ -271,7 +316,7 @@ apiViewsRouter.post('/:viewName', async (req, res, next) => {
 
 // ── PATCH /api/v/:appSlug/:viewName/:recordId — update record ───────────────
 
-apiViewsRouter.patch('/:viewName/:recordId', async (req, res, next) => {
+apiViewsRouter.patch('/:viewName/:recordId', memoryUpload, async (req, res, next) => {
   try {
     const app      = res.locals.apiApp as App;
     const { viewName, recordId } = req.params;
@@ -323,6 +368,19 @@ apiViewsRouter.patch('/:viewName/:recordId', async (req, res, next) => {
       const fieldName = key.includes('__') ? key.split('__').slice(1).join('__') : key;
       if (!allowed.has(fieldName)) continue;
       data[fieldName] = Array.isArray(val) ? val[val.length - 1] : val;
+    }
+
+    // Process any uploaded files, deleting old ones if replaced
+    const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+    if (uploadedFiles.some(f => f.size > 0)) {
+      const { getAppDb: getAppDbForOld } = await import('../../db/adapters/appDb');
+      const oldRecord = await getAppDbForOld(app)(baseTable.table_name).where({ [pkName]: recordId }).first();
+      const filePaths = await processUploadedFiles(uploadedFiles, allFields, app, baseTable.table_name);
+      for (const [fieldName, newPath] of Object.entries(filePaths)) {
+        const oldPath = oldRecord?.[fieldName];
+        if (oldPath) deleteUpload(oldPath);
+        data[fieldName] = newPath;
+      }
     }
 
     if (Object.keys(data).length === 0) {
