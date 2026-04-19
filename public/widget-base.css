@@ -51,6 +51,9 @@
 .wdp-sf-clear { color: var(--wdp-primary); font-size: 0.8rem; cursor: pointer; text-decoration: none; padding: 0 4px; }
 
 /* ── Advanced search panel ───────────────────────────────────────────────── */
+/* .wdp-search-panel: use this in custom search form templates instead of .wdp-sf-adv
+   (which triggers auto-field-injection). Same visual style, no side effects. */
+.wdp-search-panel,
 .wdp-sf-adv {
   background: var(--wdp-bg);
   padding: 10px 12px;

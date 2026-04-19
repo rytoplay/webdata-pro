@@ -1166,6 +1166,10 @@ async function injectAdvancedSearch(
     return html; // fallback: couldn't find matching close div
   }
 
+  // Custom form: has wdp-adv-fields but NOT wdp-sf-adv — leave it completely alone.
+  // (wdp-sf-adv is the marker for blueprint/AI-generated templates that want auto-injection)
+  if (html.includes('wdp-adv-fields') && !html.includes('wdp-sf-adv')) return html;
+
   const hasProperForm = html.includes('data-wdp-form="search"') || html.includes("data-wdp-form='search'");
   const hasSfDiv      = /class=["']wdp-sf["']/.test(html);
 

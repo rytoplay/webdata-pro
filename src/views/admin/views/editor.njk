@@ -86,8 +86,9 @@
       </div>
     </div>
 
-    {# ── Center: editor + right: field picker ── #}
-    <div class="col-lg-7">
+    {# ── Center + drag handle + right panel ── #}
+    <div class="col-lg-10 p-0" id="editor-right-wrap" style="display:flex;align-items:flex-start;gap:0;padding-left:calc(var(--bs-gutter-x)*0.5);">
+    <div id="tpl-editor-col" style="flex:1 1 auto;min-width:200px;overflow:hidden;padding-right:6px;">
       {% for type in templateTypes %}
       <div class="tpl-panel {% if not loop.first %}d-none{% endif %}" data-tpl="{{ type }}">
         <div class="d-flex align-items-center justify-content-between mb-1">
@@ -99,10 +100,15 @@
           style="font-size:0.8rem;resize:vertical;">{{ templates[type] | escape }}</textarea>
       </div>
       {% endfor %}
-    </div>
+    </div>{# /tpl-editor-col #}
 
-    {# ── Right: field picker ── #}
-    <div class="col-lg-3">
+      <div id="editor-drag-handle" title="Drag to resize"
+        style="flex:0 0 10px;align-self:stretch;cursor:col-resize;display:flex;align-items:center;justify-content:center;margin:0 1px;">
+        <div id="editor-drag-pip" style="width:3px;height:48px;background:#cbd5e1;border-radius:2px;pointer-events:none;transition:background 0.15s;"></div>
+      </div>
+
+      {# ── Right: field picker ── #}
+      <div id="tpl-panel-col" style="flex:0 0 280px;min-width:160px;max-width:540px;padding-right:calc(var(--bs-gutter-x)*0.5);">
       <div class="card shadow-sm h-100" style="font-size:0.8rem;">
         <div class="card-header py-2 d-flex justify-content-between align-items-center">
           <strong>Field tokens</strong>
@@ -196,44 +202,52 @@
 
           <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">SYSTEM TOKENS</div>
           {% set sysTokens = [
-            ['_pk',          'Primary key of this row'],
-            ['_row_num',     'Row number in results'],
-            ['_q',           'Current search term'],
-            ['_page',        'Current page number'],
-            ['_total',       'Total record count'],
-            ['_total_pages', 'Total pages'],
-            ['_has_prev',    'Non-empty if prev page exists'],
-            ['_has_next',    'Non-empty if next page exists'],
-            ['_prev_page',   'Previous page number'],
-            ['_next_page',   'Next page number'],
-            ['_pagination',  'Full pagination widget (HTML)'],
-            ['_sort',        'Current sort field'],
-            ['_dir',         'Current sort direction'],
-            ['_group_value', 'Value of grouping field (group templates)']
+            ['_pk',          'Primary key of this row',              'row · detail · edit_form'],
+            ['_row_num',     'Row number (1, 2, 3…)',                'row · header'],
+            ['_q',           'Current search term',                  'search_form · header'],
+            ['_page',        'Current page number',                  'footer · header'],
+            ['_total',       'Total matching records',               'header · footer · search_form'],
+            ['_total_pages', 'Total page count',                     'footer'],
+            ['_has_prev',    'Non-empty if a prev page exists',      'footer'],
+            ['_has_next',    'Non-empty if a next page exists',      'footer'],
+            ['_prev_page',   'Previous page number',                 'footer'],
+            ['_next_page',   'Next page number',                     'footer'],
+            ['_pagination',  'Auto Prev / Page N / Next widget',    'footer'],
+            ['_sort',        'Active sort column name',              'header · row'],
+            ['_dir',         '"asc" or "desc"',                      'header · row'],
+            ['_group_value', 'Value of the current group',          'group_header · group_footer']
           ] %}
           {% for tok in sysTokens %}
           <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn"
             data-token="${{ '{' }}{{ tok[0] }}{{ '}' }}"
-            title="{{ tok[1] }}"
-            style="background:#fff3cd;color:#664d03;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;">
-            ${{ '{' }}{{ tok[0] }}{{ '}' }}
+            style="background:#fff3cd;color:#664d03;border:none;padding:3px 6px;line-height:1.2;">
+            <div style="font-family:monospace;font-size:0.75rem;">${{ '{' }}{{ tok[0] }}{{ '}' }}</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#92400e;opacity:0.85;margin-top:1px;">{{ tok[1] }}</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.6rem;color:#b45309;opacity:0.65;font-style:italic;">{{ tok[2] }}</div>
           </button>
           {% endfor %}
 
           <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">INTERACTION ATTRIBUTES</div>
-          <div style="font-size:0.72rem;color:#6b7280;line-height:1.8;">
-            <code>data-wdp-action="detail"</code><br>
-            <code>data-wdp-id="\${_pk}"</code><br>
-            <code>data-wdp-action="edit"</code><br>
-            <code>data-wdp-action="back"</code><br>
-            <code>data-wdp-action="page"</code><br>
-            <code>data-wdp-page="\${_next_page}"</code><br>
-            <code>data-wdp-action="sort"</code><br>
-            <code>data-wdp-field="title"</code><br>
-            <code>data-wdp-form="search"</code><br>
-            <code>data-wdp-form="edit"</code><br>
-            <code>$update[table.field]</code>
+          {% set iAttrs = [
+            [['data-wdp-action="detail"','data-wdp-id="${_pk}"'], 'Click → open detail view',          'row'],
+            [['data-wdp-action="edit"',  'data-wdp-id="${_pk}"'], 'Click → open edit form',            'row · detail'],
+            [['data-wdp-action="back"'],                          'Click → return to list',            'detail · edit_form'],
+            [['data-wdp-action="clear"'],                         'Click → clear all search filters',  'search_form'],
+            [['data-wdp-action="page"','data-wdp-page="${…}"'],   'Click → navigate to that page',    'footer'],
+            [['data-wdp-action="sort"','data-wdp-field="col"'],   'Click → sort by column (asc/desc)', 'header · row'],
+            [['data-wdp-form="search"  (on form)'],               'Required: marks the search form',   'search_form'],
+            [['data-wdp-form="edit"','data-wdp-id="${_pk}"  (on form)'], 'Required: marks the edit form', 'edit_form'],
+            [['$update[table.field]'],                            'Auto-renders input widget, pre-filled', 'edit_form']
+          ] %}
+          {% for ia in iAttrs %}
+          <div class="mb-1 px-2 py-1 rounded" style="background:#eff6ff;color:#1e3a8a;line-height:1.25;">
+            {% for line in ia[0] %}
+            <div style="font-family:monospace;font-size:0.7rem;">{{ line }}</div>
+            {% endfor %}
+            <div style="font-size:0.62rem;color:#1d4ed8;margin-top:2px;">{{ ia[1] }}</div>
+            <div style="font-size:0.59rem;color:#6b7280;font-style:italic;">{{ ia[2] }}</div>
           </div>
+          {% endfor %}
 
           <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">TEMPLATE TAGS</div>
           <div style="font-size:0.72rem;color:#6b7280;line-height:1.6;">
@@ -250,9 +264,19 @@
               Groups joined rows into a single delimited value via SQL GROUP_CONCAT.
             </div>
           </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-3 mb-1">
+            <span class="text-muted" style="font-size:0.7rem;">CSS CLASSES — CHEAT SHEET</span>
+            <button type="button" id="cheat-expand" title="Open larger view" data-bs-toggle="modal" data-bs-target="#cheatModal"
+              style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.65rem;padding:1px 6px;cursor:pointer;line-height:1.6;">
+              <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+          </div>
+          <pre id="css-cheat" style="font-size:0.64rem;line-height:1.5;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;color:#1e293b;overflow-x:auto;white-space:pre;margin:0;font-family:'SFMono-Regular',Consolas,monospace;min-height:80px;max-height:220px;overflow-y:auto;resize:vertical;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;"></pre>
         </div>
       </div>
-    </div>
+      </div>{# /tpl-panel-col #}
+    </div>{# /editor-right-wrap #}
   </div>
 
   {# ── SQL section ── #}
@@ -744,6 +768,27 @@ add_shortcode('wdp_view', function($atts) {
   </div>
 </div>
 
+{# ── CSS Cheat Sheet pop-out modal ── #}
+<div class="modal fade" id="cheatModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold mb-0" id="cheat-modal-title">CSS Classes — Cheat Sheet</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <pre id="css-cheat-modal" style="font-size:0.82rem;line-height:1.65;background:#f1f5f9;padding:16px 20px;margin:0;overflow-x:auto;white-space:pre;color:#1e293b;font-family:'SFMono-Regular',Consolas,monospace;max-height:72vh;overflow-y:auto;"></pre>
+      </div>
+      <div class="modal-footer py-2 d-flex justify-content-between align-items-center">
+        <a href="/admin/styleguide" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-palette me-1"></i>CSS Style Guide
+        </a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
 .ref-h4 { font-size:1rem; font-weight:700; color:#1e293b; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:14px; }
 .ref-h6 { font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#475569; margin-bottom:6px; }
@@ -1017,13 +1062,187 @@ add_shortcode('wdp_view', function($atts) {
     </div>`,
   };
 
+  // ── CSS class cheat sheets (one per template slot) ────────────────────────
+  const CHEAT = {
+    search_form: `<div class="wdp-search-panel">      ← panel bg + rounded border
+ <form data-wdp-form="search">      ← required: identifies search form
+  <div class="wdp-adv-fields">      ← flex-wrap row of field cells
+   <div class="wdp-field">          ← one label+input cell
+    <label class="wdp-field-label"> ← small-caps uppercase label
+     Keyword
+    </label>
+    <input class="wdp-input"        ← styled text / number input
+     name="q" value="\${_q}">
+    <select class="wdp-select"      ← styled dropdown
+     name="table__bedrooms">
+     <option value="">Any</option>
+     <option value=">=2">2+</option>← operator prefix value
+    </select>
+   </div>
+  </div>
+  <div class="wdp-adv-btns">        ← flex button row
+   <button type="submit"
+    class="wdp-btn">Search</button> ← filled primary button
+   <a data-wdp-action="clear"
+    class="wdp-btn-link">Clear</a>  ← plain link-style button
+  </div>
+ </form>
+</div>`,
+
+    header: `<!-- Dark title bar: -->
+<div class="wdp-hdr">               ← dark primary-colour bar
+ <span class="wdp-hdr-title">       ← bold white title text
+  Results
+ </span>
+ <span class="wdp-hdr-meta">        ← faded right-side meta text
+  \${_total} found
+ </span>
+</div>
+
+<!-- Table with sort buttons: -->
+<table class="wdp-table">           ← full-width bordered table
+ <thead><tr>
+  <th>                              ← auto dark-bg header cell
+   <button class="wdp-sort-btn      ← clickable sort label (no border)
+    \${_sort=='col'?'wdp-sort-active':''}"
+    data-wdp-action="sort"          ← wdp-sort-active → accent colour
+    data-wdp-field="col">Col</button>
+  </th>
+ </tr></thead>`,
+
+    group_header: `<div class="wdp-grp">               ← group divider row
+ <span class="wdp-grp-label">       ← small-caps accent label
+  \${_group_value}
+ </span>
+ <div class="wdp-grp-bar"></div>    ← horizontal rule line
+</div>`,
+
+    row: `<!-- Card-style clickable row: -->
+<div class="wdp-row"                ← bordered card, hover bg
+ data-wdp-action="detail"           ← click → loads detail view
+ data-wdp-id="\${_pk}">
+ <div class="wdp-row-body">         ← flex-fill content area
+  <div class="wdp-row-title">       ← bold primary text (1rem)
+   \${table.name}
+  </div>
+  <div class="wdp-row-sub">         ← accent-coloured subtext
+   \${table.subtitle}
+  </div>
+  <div class="wdp-row-meta">        ← faded small metadata line
+   \${table.notes}
+  </div>
+ </div>
+ <span class="wdp-arr">›</span>    ← right-arrow indicator
+</div>
+
+<!-- Table body row: -->
+<tr data-wdp-action="detail"
+ data-wdp-id="\${_pk}">
+ <td>\${table.name}</td>            ← .wdp-table td auto-styled
+ <td>\${table.value}</td>
+</tr>`,
+
+    group_footer: `<!-- No dedicated wdp class for this slot. -->
+<!-- Often left blank, or use inline styles: -->
+<div style="
+ padding:4px 14px 8px;
+ border:1px solid var(--wdp-border);
+ border-top:none;
+ font-size:0.8rem;
+ color:var(--wdp-text);">
+ End of \${_group_value}
+</div>`,
+
+    footer: `<div class="wdp-footer">            ← bg bar, rounded bottom corners
+ <!-- Built-in pagination widget: -->
+ <div class="wdp-pagination">       ← flex gap button row
+  \${_pagination}                   ← renders full Prev/Pages/Next
+ </div>
+
+ <!-- Manual pagination: -->
+ <div class="wdp-pagination">
+  <button class="wdp-page-btn"      ← outlined page button
+   data-wdp-action="page"
+   data-wdp-page="\${_prev_page}"
+   \${_has_prev?'':'disabled'}>← Prev</button>
+  <button class="wdp-page-btn
+   wdp-page-current">3</button>     ← current page (filled)
+  <span class="wdp-page-ellipsis">…</span>← gap dots between pages
+  <span class="wdp-page-info">      ← faded page counter text
+   \${_page} / \${_total_pages}
+  </span>
+  <button class="wdp-page-btn"
+   data-wdp-page="\${_next_page}"
+   \${_has_next?'':'disabled'}>Next →</button>
+ </div>
+</div>`,
+
+    detail: `<div class="wdp-detail">            ← bg card with border + radius
+ <button class="wdp-back"           ← plain text ← back button
+  data-wdp-action="back">← Back</button>
+ <h2 class="wdp-detail-title">      ← large bold title (1.6rem)
+  \${table.name}
+ </h2>
+ <div class="wdp-detail-sub">       ← accent-colour subtitle line
+  \${table.subtitle}
+ </div>
+ <span class="wdp-badge">Tag</span> ← accent pill badge
+ <div class="wdp-detail-body">      ← top-border padding area
+  <div class="wdp-field">           ← one label + value block
+   <div class="wdp-field-label">    ← small-caps primary label
+    Field name
+   </div>
+   <div class="wdp-field-value">    ← normal body text value
+    \${table.field}
+   </div>
+  </div>
+  <span class="wdp-muted">          ← faded/dim helper text
+   Updated: \${_meta.updated_at}
+  </span>
+ </div>
+ <button data-wdp-action="edit"
+  data-wdp-id="\${_pk}"
+  class="wdp-btn">Edit</button>     ← filled primary button
+</div>`,
+
+    edit_form: `<div class="wdp-detail">            ← same card wrapper as detail
+ <form data-wdp-form="edit"
+  data-wdp-id="\${_pk}">            ← both attrs required
+  <div class="wdp-form-group">      ← label + input block (14px gap)
+   <label class="wdp-label">        ← small-caps uppercase label
+    Field name
+   </label>
+   \$update[table.field]            ← auto-rendered input widget
+   <!-- or hand-write inputs: -->
+   <input class="wdp-input"         ← text / email / url / number
+    name="table__field">
+   <select class="wdp-select"       ← styled dropdown
+    name="table__field">
+    <option value="v">Label</option>
+   </select>
+   <textarea class="wdp-textarea"   ← resizable text area
+    name="table__field"></textarea>
+  </div>
+  <button type="submit"
+   class="wdp-btn">Save</button>    ← filled primary button
+  <button type="button"
+   class="wdp-btn-secondary"        ← outlined secondary button
+   data-wdp-action="back">Cancel</button>
+ </form>
+</div>`,
+  };
+
   let helpVisible = false;
   let currentTpl  = (activeBtn && activeBtn.dataset.tpl) || 'search_form';
+  // Initialise cheat sheet for the active tab on load
+  { const _c = document.getElementById('css-cheat'); if (_c) _c.textContent = CHEAT[currentTpl] || ''; }
 
   function updateHelp(tpl) {
     currentTpl = tpl;
     const panel = document.getElementById('help-panel');
     if (panel && helpVisible) panel.innerHTML = HELP[tpl] || '';
+    const cheat = document.getElementById('css-cheat');
+    if (cheat) cheat.textContent = CHEAT[tpl] || '';
   }
 
   document.getElementById('help-toggle')?.addEventListener('click', () => {
@@ -1041,6 +1260,19 @@ add_shortcode('wdp_view', function($atts) {
       toggle.textContent = '? Help';
       toggle.style.color = '';
     }
+  });
+
+  // ── Cheat sheet pop-out modal ────────────────────────────────────────────
+  const tplLabels = {
+    search_form: 'Search Form', header: 'Header', group_header: 'Group Header',
+    row: 'Row', group_footer: 'Group Footer', footer: 'Footer',
+    detail: 'Detail', edit_form: 'Edit Form'
+  };
+  document.getElementById('cheatModal')?.addEventListener('show.bs.modal', () => {
+    const pre   = document.getElementById('css-cheat-modal');
+    const title = document.getElementById('cheat-modal-title');
+    if (pre)   pre.textContent   = CHEAT[currentTpl] || '';
+    if (title) title.textContent = `CSS Classes — ${tplLabels[currentTpl] || currentTpl}`;
   });
 
   // ── Token insertion at cursor ─────────────────────────────────────────────
@@ -1274,14 +1506,30 @@ add_shortcode('wdp_view', function($atts) {
       '  });',
       '}',
 
+      // Restore form field values from current _st after each re-render
+      'function _restoreForm(){',
+      '  var form=document.querySelector("[data-wdp-form=\'search\']");',
+      '  if(!form)return;',
+      '  _st.forEach(function(val,key){',
+      '    if(key==="mode"||key==="page")return;',
+      '    var fname=key.startsWith("f_")?key.slice(2):key;',
+      '    var el=form.querySelector("[name=\\""+fname+"\\"]");',
+      '    if(!el)return;',
+      '    if(el.tagName==="SELECT"){for(var i=0;i<el.options.length;i++){if(el.options[i].value===val){el.selectedIndex=i;break;}}}',
+      '    else if(el.type==="checkbox"){el.checked=(val==="on"||val==="1");}',
+      '    else{el.value=val;}',
+      '  });',
+      '}',
+
       // Receive rendered HTML pushed back by editor
       'window.addEventListener("message",function(e){',
       '  if(!e.data||e.data.type!=="wdp-preview")return;',
       '  document.getElementById("wdp-status").classList.add("hidden");',
       '  document.getElementById("wdp-content").innerHTML=e.data.html;',
       '  if(e.data.sql!==undefined)_showSql(e.data.sql);',
-      '  _st=new URLSearchParams({mode:"list",page:"1"});',
+      '  if(e.data.resetState)_st=new URLSearchParams({mode:"list",page:"1"});',
       '  _bindForm();',
+      '  _restoreForm();',
       '});',
 
       // Pagination, sort, clear — relay to editor
@@ -1342,8 +1590,8 @@ add_shortcode('wdp_view', function($atts) {
         return;
       }
       hideFixBar();
-      // Pass rendered HTML, raw templates, and debug SQL so popup can re-fetch on interaction
-      previewWin.postMessage({ type: 'wdp-preview', html, sql, templates }, '*');
+      // Pass rendered HTML and debug SQL; resetState clears popup's search state on fresh push
+      previewWin.postMessage({ type: 'wdp-preview', html, sql, resetState: true }, '*');
     } catch (e) {
       previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Request failed: ' + e.message + '</p>' }, '*');
     }
@@ -1491,5 +1739,60 @@ add_shortcode('wdp_view', function($atts) {
     }
   });
 })();
+
+// ── Editor / panel drag resize ────────────────────────────────────────────────
+(function() {
+  const handle    = document.getElementById('editor-drag-handle');
+  const pip       = document.getElementById('editor-drag-pip');
+  const editorCol = document.getElementById('tpl-editor-col');
+  const panelCol  = document.getElementById('tpl-panel-col');
+  const wrap      = document.getElementById('editor-right-wrap');
+  if (!handle || !editorCol || !panelCol || !wrap) return;
+
+  const PREF_KEY = 'wdp_panel_w_{{ view.id }}';
+
+  function setPanelWidth(w) {
+    w = Math.max(160, Math.min(540, w));
+    panelCol.style.flexBasis = w + 'px';
+    // Nudge CM editors to re-measure their width
+    Object.values(window._wdpCmEditors || {}).forEach(cm => cm.refresh());
+  }
+
+  // Restore saved preference
+  try {
+    const saved = localStorage.getItem(PREF_KEY);
+    if (saved) setPanelWidth(parseFloat(saved));
+  } catch(e) {}
+
+  let dragging = false, startX = 0, startW = 0;
+
+  handle.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startW = panelCol.getBoundingClientRect().width;
+    document.body.style.cursor     = 'col-resize';
+    document.body.style.userSelect = 'none';
+    if (pip) pip.style.background  = '#64748b';
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    const dx  = startX - e.clientX;   // drag left → panel gets wider
+    setPanelWidth(startW + dx);
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.cursor     = '';
+    document.body.style.userSelect = '';
+    if (pip) pip.style.background  = '';
+    try { localStorage.setItem(PREF_KEY, panelCol.getBoundingClientRect().width.toFixed(0)); } catch(e) {}
+  });
+
+  handle.addEventListener('mouseenter', function() { if (pip) pip.style.background = '#94a3b8'; });
+  handle.addEventListener('mouseleave', function() { if (!dragging && pip) pip.style.background = ''; });
+}());
 </script>
 {% endblock %}
