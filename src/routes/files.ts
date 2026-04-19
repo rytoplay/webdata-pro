@@ -64,9 +64,19 @@ filesRouter.get('/:appSlug/:tableName/:fieldName/:filename', async (req, res) =>
     .first();
 
   if (table) {
-    // ── 6. Any public view of this table → allow ─────────────────────────
+    // For gallery tables, also check access via the parent table.
+    const tableIdsToCheck = [table.id];
+    if ((table as any).is_gallery && (table as any).gallery_parent_table) {
+      const parentTable = await db('app_tables')
+        .where({ app_id: app.id, table_name: (table as any).gallery_parent_table })
+        .first();
+      if (parentTable) tableIdsToCheck.push(parentTable.id);
+    }
+
+    // ── 6. Any public view of this table (or its gallery parent) → allow ──
     const publicView = await db('views')
-      .where({ app_id: app.id, base_table_id: table.id, is_public: true })
+      .where({ app_id: app.id, is_public: true })
+      .whereIn('base_table_id', tableIdsToCheck)
       .first();
     if (publicView) return serveFile(res, filePath);
 
@@ -80,7 +90,7 @@ filesRouter.get('/:appSlug/:tableName/:fieldName/:filename', async (req, res) =>
       const memberView = await db('views')
         .join('view_group_permissions', 'view_group_permissions.view_id', 'views.id')
         .where('views.app_id', app.id)
-        .where('views.base_table_id', table.id)
+        .whereIn('views.base_table_id', tableIdsToCheck)
         .whereIn('view_group_permissions.group_id', memberSession.groupIds)
         .where('view_group_permissions.can_view', true)
         .first();

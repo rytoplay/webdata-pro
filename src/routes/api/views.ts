@@ -489,7 +489,16 @@ async function resolveGalleryTable(appId: number, param: string): Promise<string
   row = await db('app_tables')
     .where({ app_id: appId, gallery_parent_table: param, is_gallery: true })
     .first();
-  return row ? row.table_name : null;
+  if (row) return row.table_name;
+  // Try dot notation: "products.photos" → look for table named "products_photos"
+  if (param.includes('.')) {
+    const candidate = param.replace('.', '_');
+    row = await db('app_tables')
+      .where({ app_id: appId, table_name: candidate, is_gallery: true })
+      .first();
+    if (row) return row.table_name;
+  }
+  return null;
 }
 
 // GET — list photos for a record

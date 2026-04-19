@@ -341,6 +341,14 @@ export async function generateViewSql(
     return seen.has(k) ? false : (seen.add(k), true);
   });
 
+  // Filter out any refs that correspond to gallery tables (e.g. $thumbnail[products.photos]
+  // where products_photos is a gallery table — the field is not a real column).
+  const galleryTableNames = await db('app_tables')
+    .where({ app_id: appId, is_gallery: true })
+    .pluck('table_name') as string[];
+  const galleryTableSet = new Set(galleryTableNames);
+  const filteredTokens = allTokens.filter(t => !galleryTableSet.has(`${t.table}_${t.field}`));
+
   // Always include the base table's PK
   const pkField = await db('app_fields')
     .join('app_tables', 'app_fields.table_id', 'app_tables.id')
@@ -348,13 +356,14 @@ export async function generateViewSql(
     .select('app_fields.field_name')
     .first();
 
+  const tokensForQuery = filteredTokens;
   if (pkField) {
     const pkRef = { table: baseTableName, field: pkField.field_name as string };
-    if (!allTokens.some(t => t.table === pkRef.table && t.field === pkRef.field))
-      allTokens.unshift(pkRef);
+    if (!tokensForQuery.some(t => t.table === pkRef.table && t.field === pkRef.field))
+      tokensForQuery.unshift(pkRef);
   }
 
-  if (allTokens.length === 0) return `SELECT *\nFROM "${baseTableName}"`;
+  if (tokensForQuery.length === 0) return `SELECT *\nFROM "${baseTableName}"`;
 
   // Build GROUP_CONCAT specs from <group> tags
   const groupConcatSpecs: GroupConcatSpec[] = groupTags.map(tag => ({
@@ -367,7 +376,7 @@ export async function generateViewSql(
 
   try {
     const result = await buildJoinQuery(
-      appId, baseTableName, allTokens,
+      appId, baseTableName, tokensForQuery,
       groupConcatSpecs.length ? groupConcatSpecs : undefined
     );
     return result.sql;
@@ -658,6 +667,73 @@ function buildPaginationHtml(page: number, totalPages: number, perPage?: number,
   return `<div class="wdp-pagination">${pageBtns}${perPageHtml ? ' ' + perPageHtml : ''}</div>`;
 }
 
+// ── Gallery thumbnail pre-fetch ─────────────────────────────────────────────
+
+/**
+ * For any $thumbnail[table.field] tokens in `templateText` where the referenced
+ * field is actually a gallery table (not a direct column), batch-fetch the first
+ * photo file_path for each record ID and return a map of:
+ *   alias (e.g. "products__photos") → Map<recordId, file_path>
+ *
+ * Uses a LEFT JOIN anti-pattern to pick the row with the lowest (sort_order, id)
+ * per record, which works in both SQLite and MySQL without window functions.
+ */
+async function prefetchGalleryThumbnails(
+  app: { id: number; database_mode?: string },
+  appDb: ReturnType<typeof getAppDb>,
+  templateText: string,
+  recordIds: string[],
+  existingKeys: Set<string>,
+): Promise<Map<string, Map<string, string>>> {
+  const result = new Map<string, Map<string, string>>();
+  if (!recordIds.length || !templateText) return result;
+
+  const thumbnailRefs = [...templateText.matchAll(/\$thumbnail\[([^\]]+)\]/g)].map(m => m[1].trim());
+
+  for (const ref of thumbnailRefs) {
+    const alias = ref.replace('.', '__');
+    if (existingKeys.has(alias) || existingKeys.has(ref)) continue; // direct column exists
+
+    const dotIdx = ref.indexOf('.');
+    if (dotIdx === -1) continue;
+    const refTable = ref.slice(0, dotIdx);
+    const refField = ref.slice(dotIdx + 1);
+    const galleryTableName = `${refTable}_${refField}`;
+
+    const galleryMeta = await db('app_tables')
+      .where({ app_id: app.id, table_name: galleryTableName, is_gallery: true })
+      .first();
+    if (!galleryMeta) continue;
+
+    try {
+      const placeholders = recordIds.map(() => '?').join(',');
+      const sql =
+        `SELECT p1.record_id, p1.file_path` +
+        ` FROM "${galleryTableName}" AS p1` +
+        ` LEFT JOIN "${galleryTableName}" AS p2` +
+        `   ON p2.record_id = p1.record_id` +
+        `   AND (p2.sort_order < p1.sort_order OR (p2.sort_order = p1.sort_order AND p2.id < p1.id))` +
+        ` WHERE p1.record_id IN (${placeholders}) AND p2.id IS NULL`;
+
+      const raw = await appDb.raw(sql, recordIds);
+      const photoRows: Array<{ record_id: string | number; file_path: string }> =
+        app.database_mode === 'mysql'
+          ? (raw as [Array<{ record_id: string | number; file_path: string }>, unknown])[0]
+          : (raw as Array<{ record_id: string | number; file_path: string }>);
+
+      const photoMap = new Map<string, string>();
+      for (const pr of photoRows) {
+        photoMap.set(String(pr.record_id), pr.file_path);
+      }
+      result.set(alias, photoMap);
+    } catch {
+      /* non-fatal: gallery table may be empty or temporarily unavailable */
+    }
+  }
+
+  return result;
+}
+
 // ── View rendering ──────────────────────────────────────────────────────────
 
 export interface RenderParams {
@@ -942,11 +1018,24 @@ export async function renderViewList(
 
   const hasDetail = !!tpl.detail?.trim();
 
+  // Pre-fetch gallery first-photos for $thumbnail[table.field] tokens that reference
+  // gallery tables rather than direct columns in the query result.
+  const existingKeys = rows.length ? new Set(Object.keys(rows[0])) : new Set<string>();
+  const recordIdsForGallery = rows.map(r => String(r[pkName] ?? r[`${baseTableName}__${pkName}`] ?? '')).filter(Boolean);
+  const galleryThumbs = await prefetchGalleryThumbnails(app, appDb, tpl.row ?? '', recordIdsForGallery, existingKeys);
+
   let lastGroup: unknown = Symbol('none');
   for (let i = 0; i < rows.length; i++) {
     const row    = rows[i];
     const pkVal  = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? '');
-    const rowData = { ...sys, ...row, _pk: pkVal, _row_num: offset + i + 1 };
+
+    // Inject gallery first-photo values so $thumbnail[table.field] resolves them.
+    const galleryExtras: Record<string, string> = {};
+    for (const [alias, photoMap] of galleryThumbs) {
+      galleryExtras[alias] = photoMap.get(pkVal) ?? '';
+    }
+
+    const rowData = { ...sys, ...row, ...galleryExtras, _pk: pkVal, _row_num: offset + i + 1 };
 
     if (groupField) {
       const gv = row[groupField];
@@ -1013,8 +1102,19 @@ export async function renderViewDetail(
   const row     = rows[0];
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
   const meta    = await getRecordMeta(app, baseTableName, pkVal);
+
+  // Pre-fetch gallery first-photos for $thumbnail[table.field] tokens in the detail template.
+  const existingKeysDetail = new Set(Object.keys(row));
+  const galleryThumbsDetail = await prefetchGalleryThumbnails(
+    app, appDb, templates.detail ?? '', [pkVal], existingKeysDetail
+  );
+  const galleryExtrasDetail: Record<string, string> = {};
+  for (const [alias, photoMap] of galleryThumbsDetail) {
+    galleryExtrasDetail[alias] = photoMap.get(pkVal) ?? '';
+  }
+
   const rowData = {
-    _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta),
+    _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta), ...galleryExtrasDetail,
     _portal_header: portalContext?.portalHeader ?? '',
     _portal_footer: portalContext?.portalFooter ?? '',
     _app_slug: app.slug,
