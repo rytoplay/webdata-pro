@@ -4,7 +4,7 @@ import { db } from '../../db/knex';
 import { appCors } from '../../middleware/cors';
 import type { App } from '../../domain/types';
 import * as viewsService from '../../services/views';
-import { memoryUpload, saveUpload, deleteUpload } from '../../services/uploads';
+import { memoryUpload, saveUpload, deleteUpload, validateUpload, type UploadRestrictions } from '../../services/uploads';
 
 async function getPortalContext(app: App, req: Request): Promise<{ portalHeader: string; portalFooter: string }> {
   if (!app.member_header_html && !app.member_footer_html) return { portalHeader: '', portalFooter: '' };
@@ -22,20 +22,28 @@ async function getPortalContext(app: App, req: Request): Promise<{ portalHeader:
 
 async function processUploadedFiles(
   files: Express.Multer.File[],
-  allFields: { field_name: string; data_type: string }[],
+  allFields: { field_name: string; data_type: string; ui_options_json?: string | null }[],
   app: App,
   tableName: string,
-): Promise<Record<string, string>> {
-  const result: Record<string, string> = {};
+): Promise<{ paths: Record<string, string>; errors: string[] }> {
+  const paths: Record<string, string> = {};
+  const errors: string[] = [];
   for (const file of files) {
-    if (!file.size) continue; // skip empty file inputs (no file selected)
+    if (!file.size) continue;
     const field = allFields.find(f => f.field_name === file.fieldname);
     if (!field || (field.data_type !== 'image' && field.data_type !== 'upload')) continue;
-    result[file.fieldname] = await saveUpload(
+
+    // Validate against per-field restrictions
+    let restrictions: UploadRestrictions = {};
+    try { restrictions = JSON.parse(field.ui_options_json ?? '{}'); } catch {}
+    const err = validateUpload(file, restrictions);
+    if (err) { errors.push(`${file.fieldname}: ${err}`); continue; }
+
+    paths[file.fieldname] = await saveUpload(
       file.buffer, file.mimetype, app.slug, tableName, file.fieldname, field.data_type === 'image',
     );
   }
-  return result;
+  return { paths, errors };
 }
 
 export const apiViewsRouter = Router({ mergeParams: true });
@@ -287,7 +295,8 @@ apiViewsRouter.post('/:viewName', memoryUpload, async (req, res, next) => {
 
     // Process any uploaded files (image/upload fields)
     const uploadedFiles = (req.files as Express.Multer.File[]) || [];
-    const filePaths = await processUploadedFiles(uploadedFiles, allFields, app, baseTable.table_name);
+    const { paths: filePaths, errors: uploadErrors } = await processUploadedFiles(uploadedFiles, allFields, app, baseTable.table_name);
+    if (uploadErrors.length) return res.status(400).json({ error: uploadErrors.join('; ') });
     Object.assign(data, filePaths);
 
     if (Object.keys(data).length === 0) {
@@ -373,9 +382,10 @@ apiViewsRouter.patch('/:viewName/:recordId', memoryUpload, async (req, res, next
     // Process any uploaded files, deleting old ones if replaced
     const uploadedFiles = (req.files as Express.Multer.File[]) || [];
     if (uploadedFiles.some(f => f.size > 0)) {
+      const { paths: filePaths, errors: uploadErrors } = await processUploadedFiles(uploadedFiles, allFields, app, baseTable.table_name);
+      if (uploadErrors.length) return res.status(400).json({ error: uploadErrors.join('; ') });
       const { getAppDb: getAppDbForOld } = await import('../../db/adapters/appDb');
       const oldRecord = await getAppDbForOld(app)(baseTable.table_name).where({ [pkName]: recordId }).first();
-      const filePaths = await processUploadedFiles(uploadedFiles, allFields, app, baseTable.table_name);
       for (const [fieldName, newPath] of Object.entries(filePaths)) {
         const oldPath = oldRecord?.[fieldName];
         if (oldPath) deleteUpload(oldPath);
@@ -524,6 +534,13 @@ apiViewsRouter.post('/gallery/:galleryTable/:recordId', memoryUpload, async (req
     const files: Express.Multer.File[] = Array.isArray(req.files) ? req.files : [];
     if (!files.length) return res.status(400).json({ error: 'No files uploaded' });
 
+    // Load per-gallery upload restrictions from app_tables.ui_options_json
+    const galleryTableRow = await db('app_tables')
+      .where({ app_id: app.id, table_name: galleryTable })
+      .first();
+    let galleryRestrictions: UploadRestrictions = {};
+    try { galleryRestrictions = JSON.parse(galleryTableRow?.ui_options_json ?? '{}'); } catch {}
+
     const { getAppDb } = await import('../../db/adapters/appDb');
     const appDb = getAppDb(app);
 
@@ -535,8 +552,11 @@ apiViewsRouter.post('/gallery/:galleryTable/:recordId', memoryUpload, async (req
     let nextSort = (maxRow?.maxSort ?? -1) + 1;
 
     const inserted: unknown[] = [];
+    const skipped: string[]   = [];
     for (const file of files) {
       if (!file.size) continue;
+      const validErr = validateUpload(file, galleryRestrictions);
+      if (validErr) { skipped.push(`${file.originalname}: ${validErr}`); continue; }
       const filePath = await saveUpload(
         file.buffer, file.mimetype, app.slug, galleryTable, 'photo', true
       );
@@ -551,7 +571,10 @@ apiViewsRouter.post('/gallery/:galleryTable/:recordId', memoryUpload, async (req
       inserted.push({ id, file_path: filePath });
     }
 
-    res.json({ ok: true, inserted });
+    if (!inserted.length && skipped.length) {
+      return res.status(400).json({ error: skipped.join('; ') });
+    }
+    res.json({ ok: true, inserted, ...(skipped.length ? { skipped } : {}) });
   } catch (err) {
     next(err);
   }

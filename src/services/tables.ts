@@ -197,31 +197,39 @@ export async function importExistingTable(appId: number, tableName: string): Pro
 }
 
 /**
- * Create a gallery (photos) table for the given parent table.
- * The gallery table is named `{parentTableName}_photos` and stores one row per photo.
- * Returns the newly created AppTable record for the gallery table.
+ * Create a gallery table for the given parent table.
+ * The gallery table is named `{parentTableName}_{fieldName}` and stores one row per file.
+ * `restrictions` (allowed_extensions, max_file_size_kb) are stored in ui_options_json.
  */
-export async function createGalleryTable(appId: number, parentTableName: string): Promise<AppTable> {
-  const galleryTableName = `${parentTableName}_photos`;
-  const label = `${parentTableName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Photos`;
+export async function createGalleryTable(
+  appId: number,
+  parentTableName: string,
+  fieldName = 'photos',
+  restrictions: { allowed_extensions?: string; max_file_size_kb?: number } = {},
+): Promise<AppTable> {
+  const galleryTableName = `${parentTableName}_${fieldName}`;
+  const label = fieldName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-  // Check if a gallery table already exists for this parent
+  // Check if this specific gallery table already exists
   const existing = await db('app_tables')
-    .where({ app_id: appId, gallery_parent_table: parentTableName, is_gallery: true })
+    .where({ app_id: appId, table_name: galleryTableName, is_gallery: true })
     .first();
-  if (existing) {
-    return existing as AppTable;
-  }
+  if (existing) return existing as AppTable;
+
+  const uiOptionsJson = (restrictions.allowed_extensions || restrictions.max_file_size_kb)
+    ? JSON.stringify(restrictions)
+    : null;
 
   const [tableId] = await db('app_tables').insert({
     app_id: appId,
     table_name: galleryTableName,
     label,
-    description: `Photo gallery for ${parentTableName}`,
+    description: `Gallery for ${parentTableName}`,
     is_public_addable: false,
     is_member_editable: false,
     is_gallery: true,
     gallery_parent_table: parentTableName,
+    ui_options_json: uiOptionsJson,
   });
 
   // Create the physical table in the app database

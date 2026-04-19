@@ -284,14 +284,25 @@ function buildParamsHtml(idx, widget, maxLen, options, taRows, taCols) {
     <div class="params-group" data-widget="checkbox">
       <span class="params-label" style="font-style:italic;">—</span>
     </div>
-    <div class="params-group" data-widget="image">
+    <div class="params-group" data-widget="image" style="flex-direction:column;align-items:flex-start;gap:0.4rem;">
       <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.82rem;">
         <input type="checkbox" data-field="allow_gallery" style="width:14px;height:14px;margin:0;accent-color:var(--accent);">
-        <span>Photo gallery <span style="color:var(--text-muted)">(allow multiple — creates a linked photos table)</span></span>
+        <span>Allow multiple <span style="color:var(--text-muted)">(creates a linked gallery table)</span></span>
       </label>
+      <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+        <span class="params-label">Allowed extensions</span>
+        <input type="text" data-field="allowed_extensions" placeholder=".jpg,.png,.gif,.webp (blank = any)" style="width:210px;">
+        <span class="params-label">Max size (KB)</span>
+        <input type="number" data-field="max_file_size_kb" min="1" placeholder="none" style="width:80px;">
+      </div>
     </div>
-    <div class="params-group" data-widget="upload">
-      <span class="params-label" style="font-style:italic;">—</span>
+    <div class="params-group" data-widget="upload" style="flex-direction:column;align-items:flex-start;gap:0.4rem;">
+      <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+        <span class="params-label">Allowed extensions</span>
+        <input type="text" data-field="allowed_extensions" placeholder=".pdf,.docx,.xlsx (blank = any)" style="width:210px;">
+        <span class="params-label">Max size (KB)</span>
+        <input type="number" data-field="max_file_size_kb" min="1" placeholder="none" style="width:80px;">
+      </div>
     </div>
   </div>`;
 }
@@ -484,6 +495,12 @@ function prepareSubmit() {
     if (dataType === 'image') {
       const ag = wrapper.querySelector('[data-field="allow_gallery"]');
       if (ag) row.allow_gallery = ag.checked;
+    }
+    if (dataType === 'image' || dataType === 'upload') {
+      const ext = wrapper.querySelector('[data-field="allowed_extensions"]');
+      const sz  = wrapper.querySelector('[data-field="max_file_size_kb"]');
+      if (ext && ext.value.trim()) row.allowed_extensions = ext.value.trim();
+      if (sz  && sz.value)         row.max_file_size_kb   = Number(sz.value);
     }
     rows.push(row);
   });

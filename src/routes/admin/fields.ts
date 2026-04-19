@@ -44,6 +44,8 @@ interface BatchRow {
   textarea_rows?: string;
   textarea_cols?: string;
   allow_gallery?: boolean | string;
+  allowed_extensions?: string;
+  max_file_size_kb?: string | number;
 }
 
 // ── List fields ────────────────────────────────────────────────────────────
@@ -114,10 +116,16 @@ fieldsRouter.post('/batch', async (req, res, next) => {
       const widget   = row.widget ?? 'text';
       const isGallery = dataType === 'image' && Boolean(row.allow_gallery);
 
-      // Gallery field: create a linked photos table instead of a regular column
+      // Normalise upload restrictions present on image/upload/gallery fields
+      const restrictions = {
+        allowed_extensions: (row.allowed_extensions ?? '').trim() || undefined,
+        max_file_size_kb:   row.max_file_size_kb ? Number(row.max_file_size_kb) : undefined,
+      };
+
+      // Gallery field: create a linked table instead of a regular column
       if (isGallery) {
         try {
-          await createGalleryTable(table.app_id, table.table_name);
+          await createGalleryTable(table.app_id, table.table_name, name, restrictions);
           created++;
         } catch (err) {
           fieldErrors.push(`"${name}" (gallery): ${err instanceof Error ? err.message : String(err)}`);
@@ -138,6 +146,11 @@ fieldsRouter.post('/batch', async (req, res, next) => {
           rows: Number(row.textarea_rows) || 4,
           cols: Number(row.textarea_cols) || 60
         });
+      } else if (dataType === 'image' || dataType === 'upload') {
+        const opts: Record<string, unknown> = {};
+        if (restrictions.allowed_extensions) opts.allowed_extensions = restrictions.allowed_extensions;
+        if (restrictions.max_file_size_kb)   opts.max_file_size_kb   = restrictions.max_file_size_kb;
+        if (Object.keys(opts).length) uiOptionsJson = JSON.stringify(opts);
       }
 
       try {

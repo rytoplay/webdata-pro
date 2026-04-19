@@ -4,6 +4,45 @@ import crypto from 'crypto';
 import multer from 'multer';
 import sharp from 'sharp';
 
+// ── Upload restrictions (stored in ui_options_json on app_fields / app_tables) ──
+
+export interface UploadRestrictions {
+  allowed_extensions?: string;  // comma-separated: ".jpg,.png,.pdf"
+  max_file_size_kb?:   number;
+}
+
+/**
+ * Validate a file against per-field restrictions.
+ * Returns an error message string, or null if the file is acceptable.
+ */
+export function validateUpload(
+  file: { originalname: string; size: number },
+  restrictions: UploadRestrictions,
+): string | null {
+  if (restrictions.max_file_size_kb && restrictions.max_file_size_kb > 0) {
+    if (file.size > restrictions.max_file_size_kb * 1024) {
+      const display = restrictions.max_file_size_kb >= 1024
+        ? `${(restrictions.max_file_size_kb / 1024).toFixed(1)} MB`
+        : `${restrictions.max_file_size_kb} KB`;
+      return `File too large — maximum is ${display}`;
+    }
+  }
+  if (restrictions.allowed_extensions?.trim()) {
+    const allowed = restrictions.allowed_extensions
+      .split(',')
+      .map(e => e.trim().toLowerCase())
+      .filter(Boolean)
+      .map(e => e.startsWith('.') ? e : `.${e}`);
+    if (allowed.length) {
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (!allowed.includes(ext)) {
+        return `File type "${ext || '(no extension)'}" is not allowed — permitted: ${allowed.join(', ')}`;
+      }
+    }
+  }
+  return null;
+}
+
 // Root uploads directory (project root / uploads)
 export const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 export const THUMB_SIZE = 100;
