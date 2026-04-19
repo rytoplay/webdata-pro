@@ -645,6 +645,7 @@ export interface RenderParams {
   ownerId?: number;                        // set to filter results to records owned by this member
   portalHeader?: string;                   // pre-rendered HTML for $portal_header token
   portalFooter?: string;                   // pre-rendered HTML for $portal_footer token
+  sqlCapture?: string[];                   // if provided, the final data SQL (with values interpolated) is pushed here
 }
 
 export async function renderViewList(
@@ -848,6 +849,21 @@ export async function renderViewList(
   if (sortField) {
     sortSql = ` ORDER BY "${sortField}" ${sortDir}`;
     if (secondarySort) sortSql += `, "${secondarySort}" ASC`;
+  }
+
+  // Capture debug SQL before executing (interpolate ? placeholders for readability)
+  if (params.sqlCapture) {
+    const interpolate = (sql: string, vals: unknown[]) => {
+      let i = 0;
+      return sql.replace(/\?/g, () => {
+        const v = vals[i++];
+        if (v === null || v === undefined) return 'NULL';
+        if (typeof v === 'number') return String(v);
+        return `'${String(v).replace(/'/g, "''")}'`;
+      });
+    };
+    const dataBindings = [...bindings, pageSize, offset];
+    params.sqlCapture.push(interpolate(`${outerSql}${sortSql} LIMIT ? OFFSET ?`, dataBindings));
   }
 
   // Total count

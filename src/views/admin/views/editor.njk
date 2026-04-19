@@ -1240,55 +1240,58 @@ add_shortcode('wdp_view', function($atts) {
       'body{margin:0;padding:12px;font-family:system-ui,sans-serif;background:#f8fafc;}',
       '#wdp-status{font-size:.75rem;color:#94a3b8;text-align:center;padding:8px;}',
       '#wdp-status.hidden{display:none;}',
+      '#wdp-sql-box{margin-bottom:10px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;font-size:.72rem;}',
+      '#wdp-sql-box summary{padding:4px 10px;background:#1e293b;color:#94a3b8;cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;}',
+      '#wdp-sql-box summary::-webkit-details-marker{display:none;}',
+      '#wdp-sql-box summary::before{content:"▶";font-size:.6rem;transition:transform .15s;}',
+      '#wdp-sql-box[open] summary::before{transform:rotate(90deg);}',
+      '#wdp-sql-box pre{margin:0;padding:10px 12px;background:#0f172a;color:#7dd3fc;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow-y:auto;line-height:1.5;}',
       '</style>',
       '</head><body>',
       '<div id="wdp-status">Waiting for preview\u2026</div>',
+      '<details id="wdp-sql-box"><summary><span style="color:#475569;font-family:monospace">SQL</span></summary><pre id="wdp-sql-pre"></pre></details>',
       '<div id="wdp-content"></div>',
       '<script>',
-      'var _url=' + JSON.stringify(renderUrl) + ';',
-      'var _tpl=null;',
       'var _st=new URLSearchParams({mode:"list",page:"1"});',
+      'function _showSql(s){var p=document.getElementById("wdp-sql-pre");if(p)p.textContent=s||"";}',
 
-      // Receive rendered HTML + templates from editor
+      // Relay search/page/sort state to the editor window — editor does the fetch (has credentials)
+      'function _relay(){if(window.opener&&!window.opener.closed)window.opener.postMessage({type:"wdp-search",st:_st.toString()},"*");}',
+
+      // Bind submit handler directly to search forms after each innerHTML update
+      'function _bindForm(){',
+      '  document.querySelectorAll("[data-wdp-form=\'search\']").forEach(function(form){',
+      '    if(form._wdpBound)return;',
+      '    form._wdpBound=true;',
+      '    form.addEventListener("submit",function(e){',
+      '      e.preventDefault();',
+      '      _st=new URLSearchParams({mode:"list",page:"1"});',
+      '      var q=form.querySelector("[name=q]");',
+      '      if(q&&q.value)_st.set("q",q.value);',
+      '      new FormData(form).forEach(function(v,k){if(k!=="q"&&String(v).trim())_st.set("f_"+k,String(v));});',
+      '      _relay();',
+      '    });',
+      '  });',
+      '}',
+
+      // Receive rendered HTML pushed back by editor
       'window.addEventListener("message",function(e){',
       '  if(!e.data||e.data.type!=="wdp-preview")return;',
       '  document.getElementById("wdp-status").classList.add("hidden");',
       '  document.getElementById("wdp-content").innerHTML=e.data.html;',
-      '  if(e.data.templates)_tpl=e.data.templates;',
+      '  if(e.data.sql!==undefined)_showSql(e.data.sql);',
       '  _st=new URLSearchParams({mode:"list",page:"1"});',
+      '  _bindForm();',
       '});',
 
-      // Re-fetch with current templates + query state
-      'function _fetch(){',
-      '  if(!_tpl)return;',
-      '  fetch(_url+"?"+_st.toString(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(_tpl)})',
-      '  .then(function(r){return r.json();})',
-      '  .then(function(d){',
-      '    if(d.html)document.getElementById("wdp-content").innerHTML=d.html;',
-      '    else if(d.error)document.getElementById("wdp-content").innerHTML=\'<p style="color:red;padding:12px;font-family:monospace">\'+d.error+\'</p>\';',
-      '  });',
-      '}',
-
-      // Search form submit
-      'document.addEventListener("submit",function(e){',
-      '  var form=e.target.closest("[data-wdp-form=\\"search\\"]");',
-      '  if(!form)return;',
-      '  e.preventDefault();',
-      '  _st=new URLSearchParams({mode:"list",page:"1"});',
-      '  var q=form.querySelector("[name=q]");',
-      '  if(q&&q.value)_st.set("q",q.value);',
-      '  new FormData(form).forEach(function(v,k){if(k!=="q"&&String(v).trim())_st.set("f_"+k,String(v));});',
-      '  _fetch();',
-      '});',
-
-      // Pagination, sort, clear
+      // Pagination, sort, clear — relay to editor
       'document.addEventListener("click",function(e){',
       '  var el=e.target.closest("[data-wdp-action]");',
       '  if(!el)return;',
       '  var act=el.dataset.wdpAction;',
-      '  if(act==="page"){e.preventDefault();_st.set("page",el.dataset.wdpPage||"1");_fetch();}',
-      '  else if(act==="clear"){e.preventDefault();_st=new URLSearchParams({mode:"list",page:"1"});_fetch();}',
-      '  else if(act==="sort"){e.preventDefault();var f=el.dataset.wdpField,d=(_st.get("sort")===f&&_st.get("dir")==="asc")?"desc":"asc";_st.set("sort",f);_st.set("dir",d);_st.set("page","1");_fetch();}',
+      '  if(act==="page"){e.preventDefault();_st.set("page",el.dataset.wdpPage||"1");_relay();}',
+      '  else if(act==="clear"){e.preventDefault();_st=new URLSearchParams({mode:"list",page:"1"});_relay();}',
+      '  else if(act==="sort"){e.preventDefault();var f=el.dataset.wdpField,d=(_st.get("sort")===f&&_st.get("dir")==="asc")?"desc":"asc";_st.set("sort",f);_st.set("dir",d);_st.set("page","1");_relay();}',
       '});',
       '<\/script>',
       '</body></html>'
@@ -1332,15 +1335,15 @@ add_shortcode('wdp_view', function($atts) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(templates),
       });
-      const { html, error } = await res.json();
+      const { html, sql, error } = await res.json();
       if (error) {
         showFixBar(error);
-        previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Error: ' + error + '</p>' }, '*');
+        previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Error: ' + error + '</p>', sql: '' }, '*');
         return;
       }
       hideFixBar();
-      // Pass both rendered HTML and raw templates so popup can re-fetch on interaction
-      previewWin.postMessage({ type: 'wdp-preview', html, templates }, '*');
+      // Pass rendered HTML, raw templates, and debug SQL so popup can re-fetch on interaction
+      previewWin.postMessage({ type: 'wdp-preview', html, sql, templates }, '*');
     } catch (e) {
       previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Request failed: ' + e.message + '</p>' }, '*');
     }
@@ -1353,6 +1356,28 @@ add_shortcode('wdp_view', function($atts) {
 
   // CM editors trigger _wdpSchedulePush directly via their change events
   window._wdpSchedulePush = schedulePush;
+
+  // Handle search/page/sort relayed from the preview popup
+  // The popup can't make authenticated fetches from a blob URL, so it sends us the state
+  // and we do the fetch (with full session credentials) then push the result back.
+  window.addEventListener('message', async function(e) {
+    if (!e.data || e.data.type !== 'wdp-search') return;
+    if (!previewWin || previewWin.closed) return;
+    try {
+      const sqlCaptureSt = e.data.st;
+      const res  = await fetch(RENDER_URL + '?' + sqlCaptureSt, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(collectTemplates()),
+      });
+      const { html, sql, error } = await res.json();
+      if (error) showFixBar(error);
+      else hideFixBar();
+      previewWin.postMessage({ type: 'wdp-preview', html: html || '', sql: sql ?? '' }, '*');
+    } catch (err) {
+      previewWin.postMessage({ type: 'wdp-preview', html: '<p style="color:red;padding:12px;font-family:monospace">Request failed: ' + err.message + '</p>', sql: '' }, '*');
+    }
+  });
 
   document.getElementById('btn-live-preview').addEventListener('click', function() {
     if (!previewWin || previewWin.closed) {

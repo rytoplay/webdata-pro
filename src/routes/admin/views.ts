@@ -305,9 +305,10 @@ viewsRouter.post('/:id/preview-render', async (req, res, next) => {
       if (k.startsWith('f_') && typeof v === 'string' && v) fieldFilters[k.slice(2)] = v;
     }
 
+    const sqlCapture: string[] = [];
     const html = await viewsService.renderViewList(app, view, baseTable.table_name, templates,
-      { q, page, sort, dir, fieldFilters });
-    res.json({ html });
+      { q, page, sort, dir, fieldFilters, sqlCapture });
+    res.json({ html, sql: sqlCapture[0] ?? '' });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
