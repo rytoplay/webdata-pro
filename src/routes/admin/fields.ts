@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import * as fieldsService from '../../services/fields';
 import * as tablesService from '../../services/tables';
+import { createGalleryTable } from '../../services/tables';
 import { renameFieldInTemplates, deleteFieldFromTemplates } from '../../services/fieldTokens';
 import type { FieldDataType, UIWidget } from '../../domain/types';
 
@@ -42,6 +43,7 @@ interface BatchRow {
   options?: string;
   textarea_rows?: string;
   textarea_cols?: string;
+  allow_gallery?: boolean | string;
 }
 
 // ── List fields ────────────────────────────────────────────────────────────
@@ -110,6 +112,18 @@ fieldsRouter.post('/batch', async (req, res, next) => {
 
       const dataType = (row.data_type ?? 'string') as FieldDataType;
       const widget   = row.widget ?? 'text';
+      const isGallery = dataType === 'image' && Boolean(row.allow_gallery);
+
+      // Gallery field: create a linked photos table instead of a regular column
+      if (isGallery) {
+        try {
+          await createGalleryTable(table.app_id, table.table_name);
+          created++;
+        } catch (err) {
+          fieldErrors.push(`"${name}" (gallery): ${err instanceof Error ? err.message : String(err)}`);
+        }
+        continue;
+      }
 
       // Build ui_options_json
       let uiOptionsJson: string | null = null;

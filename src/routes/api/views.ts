@@ -463,3 +463,157 @@ apiViewsRouter.post('/:viewName/:recordId/delete', async (req, res, next) => {
     next(err);
   }
 });
+
+// ── Gallery photo endpoints ────────────────────────────────────────────────────
+// These operate on `{parent}_photos` tables created by the gallery field type.
+// The URL param can be either the gallery table name OR the parent table name —
+// resolveGalleryTable() handles both so $gallery[properties] and $gallery[properties_photos] both work.
+
+async function resolveGalleryTable(appId: number, param: string): Promise<string | null> {
+  // Try direct match (gallery table name)
+  let row = await db('app_tables')
+    .where({ app_id: appId, table_name: param, is_gallery: true })
+    .first();
+  if (row) return row.table_name;
+  // Try as parent table name → find its gallery child
+  row = await db('app_tables')
+    .where({ app_id: appId, gallery_parent_table: param, is_gallery: true })
+    .first();
+  return row ? row.table_name : null;
+}
+
+// GET — list photos for a record
+apiViewsRouter.get('/gallery/:galleryTable/:recordId', async (req, res, next) => {
+  try {
+    const app = res.locals.apiApp as App;
+    const { galleryTable: param, recordId } = req.params;
+
+    const galleryTable = await resolveGalleryTable(app.id, param);
+    if (!galleryTable) return res.status(404).json({ error: 'Gallery table not found' });
+
+    const { getAppDb } = await import('../../db/adapters/appDb');
+    const appDb = getAppDb(app);
+    const photos = await appDb(galleryTable)
+      .where({ record_id: recordId })
+      .orderBy('sort_order', 'asc')
+      .orderBy('id', 'asc')
+      .select('id', 'record_id', 'file_path', 'original_name', 'sort_order', 'caption');
+
+    res.json({ photos });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST — upload one or more photos for a record
+apiViewsRouter.post('/gallery/:galleryTable/:recordId', memoryUpload, async (req, res, next) => {
+  try {
+    const app = res.locals.apiApp as App;
+    const { galleryTable: param, recordId } = req.params;
+
+    // Require authentication (admin or member session)
+    const isAdmin = (req.session as any)?.admin?.isAdmin === true;
+    const memberSession = (req.session as any)?.member;
+    if (!isAdmin && !(memberSession?.appId === app.id)) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const galleryTable = await resolveGalleryTable(app.id, param);
+    if (!galleryTable) return res.status(404).json({ error: 'Gallery table not found' });
+
+    const files: Express.Multer.File[] = Array.isArray(req.files) ? req.files : [];
+    if (!files.length) return res.status(400).json({ error: 'No files uploaded' });
+
+    const { getAppDb } = await import('../../db/adapters/appDb');
+    const appDb = getAppDb(app);
+
+    // Get current max sort_order for this record
+    const maxRow = await appDb(galleryTable)
+      .where({ record_id: recordId })
+      .max('sort_order as maxSort')
+      .first() as any;
+    let nextSort = (maxRow?.maxSort ?? -1) + 1;
+
+    const inserted: unknown[] = [];
+    for (const file of files) {
+      if (!file.size) continue;
+      const filePath = await saveUpload(
+        file.buffer, file.mimetype, app.slug, galleryTable, 'photo', true
+      );
+      const [id] = await appDb(galleryTable).insert({
+        record_id: recordId,
+        file_path: filePath,
+        original_name: file.originalname ?? null,
+        sort_order: nextSort++,
+        caption: null,
+        created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      });
+      inserted.push({ id, file_path: filePath });
+    }
+
+    res.json({ ok: true, inserted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST — remove a single photo
+apiViewsRouter.post('/gallery/:galleryTable/photo/:photoId/delete', async (req, res, next) => {
+  try {
+    const app = res.locals.apiApp as App;
+    const { galleryTable: param, photoId } = req.params;
+
+    const isAdmin = (req.session as any)?.admin?.isAdmin === true;
+    const memberSession = (req.session as any)?.member;
+    if (!isAdmin && !(memberSession?.appId === app.id)) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const galleryTable = await resolveGalleryTable(app.id, param);
+    if (!galleryTable) return res.status(404).json({ error: 'Gallery table not found' });
+
+    const { getAppDb } = await import('../../db/adapters/appDb');
+    const appDb = getAppDb(app);
+    const photo = await appDb(galleryTable).where({ id: photoId }).first();
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+
+    const { deleteUpload } = await import('../../services/uploads');
+    deleteUpload(photo.file_path);
+    await appDb(galleryTable).where({ id: photoId }).delete();
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST — reorder photos
+apiViewsRouter.post('/gallery/:galleryTable/:recordId/reorder', async (req, res, next) => {
+  try {
+    const app = res.locals.apiApp as App;
+    const { galleryTable: param, recordId } = req.params;
+
+    const isAdmin = (req.session as any)?.admin?.isAdmin === true;
+    const memberSession = (req.session as any)?.member;
+    if (!isAdmin && !(memberSession?.appId === app.id)) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const galleryTable = await resolveGalleryTable(app.id, param);
+    if (!galleryTable) return res.status(404).json({ error: 'Gallery table not found' });
+
+    const order: { id: number; sort_order: number }[] = req.body.order || [];
+    const { getAppDb } = await import('../../db/adapters/appDb');
+    const appDb = getAppDb(app);
+
+    for (const item of order) {
+      await appDb(galleryTable)
+        .where({ id: item.id, record_id: recordId })
+        .update({ sort_order: item.sort_order });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});

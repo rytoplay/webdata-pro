@@ -196,6 +196,74 @@ export async function importExistingTable(appId: number, tableName: string): Pro
   return db('app_tables').where({ id: tableId }).first() as Promise<AppTable>;
 }
 
+/**
+ * Create a gallery (photos) table for the given parent table.
+ * The gallery table is named `{parentTableName}_photos` and stores one row per photo.
+ * Returns the newly created AppTable record for the gallery table.
+ */
+export async function createGalleryTable(appId: number, parentTableName: string): Promise<AppTable> {
+  const galleryTableName = `${parentTableName}_photos`;
+  const label = `${parentTableName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Photos`;
+
+  // Check if a gallery table already exists for this parent
+  const existing = await db('app_tables')
+    .where({ app_id: appId, gallery_parent_table: parentTableName, is_gallery: true })
+    .first();
+  if (existing) {
+    return existing as AppTable;
+  }
+
+  const [tableId] = await db('app_tables').insert({
+    app_id: appId,
+    table_name: galleryTableName,
+    label,
+    description: `Photo gallery for ${parentTableName}`,
+    is_public_addable: false,
+    is_member_editable: false,
+    is_gallery: true,
+    gallery_parent_table: parentTableName,
+  });
+
+  // Create the physical table in the app database
+  try {
+    const app = await getApp(appId);
+    if (app) {
+      const appDb = getAppDb(app);
+      if (app.database_mode === 'mysql') {
+        await appDb.raw(`
+          CREATE TABLE \`${galleryTableName}\` (
+            \`id\` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            \`record_id\` INT NOT NULL,
+            \`file_path\` VARCHAR(500) NOT NULL,
+            \`original_name\` VARCHAR(255),
+            \`sort_order\` INT NOT NULL DEFAULT 0,
+            \`caption\` TEXT,
+            \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX \`idx_record_id\` (\`record_id\`)
+          )
+        `);
+      } else {
+        await appDb.raw(`
+          CREATE TABLE "${galleryTableName}" (
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+            "record_id" INTEGER NOT NULL,
+            "file_path" TEXT NOT NULL,
+            "original_name" TEXT,
+            "sort_order" INTEGER NOT NULL DEFAULT 0,
+            "caption" TEXT,
+            "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+      }
+    }
+  } catch (ddlErr) {
+    await db('app_tables').where({ id: tableId }).delete();
+    throw ddlErr;
+  }
+
+  return db('app_tables').where({ id: tableId }).first() as Promise<AppTable>;
+}
+
 export async function getTableWithFields(id: number): Promise<(AppTable & { fields: AppField[] }) | undefined> {
   const table = await getTable(id);
   if (!table) return undefined;

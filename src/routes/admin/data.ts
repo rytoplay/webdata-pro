@@ -374,13 +374,20 @@ dataRouter.get('/:tableName/:id/edit', async (req, res, next) => {
     const record = await appDb(tableName).where({ [pkField.field_name]: id }).first();
     if (!record) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Record not found' });
 
+    // Check for a gallery child table
+    const galleryTable = await controlDb('app_tables')
+      .where({ app_id: app.id, gallery_parent_table: tableName, is_gallery: true })
+      .first() ?? null;
+
     res.render('admin/data/form', {
       title: `Edit ${table.label}`,
       table,
       fields,
       pkField,
       record,
-      errors: null
+      errors: null,
+      galleryTable,
+      appSlug: app.slug,
     });
   } catch (err) {
     next(err);

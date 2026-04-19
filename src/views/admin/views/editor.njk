@@ -237,7 +237,8 @@
             [['data-wdp-action="sort"','data-wdp-field="col"'],   'Click → sort by column (asc/desc)', 'header · row'],
             [['data-wdp-form="search"  (on form)'],               'Required: marks the search form',   'search_form'],
             [['data-wdp-form="edit"','data-wdp-id="${_pk}"  (on form)'], 'Required: marks the edit form', 'edit_form'],
-            [['$update[table.field]'],                            'Auto-renders input widget, pre-filled', 'edit_form']
+            [['$update[table.field]'],                            'Auto-renders input widget, pre-filled', 'edit_form'],
+            [['$gallery[table_photos]'],                          'Photo gallery widget (view + upload)',  'detail · edit_form']
           ] %}
           {% for ia in iAttrs %}
           <div class="mb-1 px-2 py-1 rounded" style="background:#eff6ff;color:#1e3a8a;line-height:1.25;">
@@ -1203,6 +1204,7 @@ add_shortcode('wdp_view', function($atts) {
  <button data-wdp-action="edit"
   data-wdp-id="\${_pk}"
   class="wdp-btn">Edit</button>     ← filled primary button
+ $gallery[table_photos]             ← photo gallery widget
 </div>`,
 
     edit_form: `<div class="wdp-detail">            ← same card wrapper as detail
@@ -1228,6 +1230,7 @@ add_shortcode('wdp_view', function($atts) {
   <button type="button"
    class="wdp-btn-secondary"        ← outlined secondary button
    data-wdp-action="back">Cancel</button>
+  $gallery[table_photos]             ← photo gallery (upload zone)
  </form>
 </div>`,
   };

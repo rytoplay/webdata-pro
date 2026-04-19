@@ -1,4 +1,5 @@
 import * as tablesService from './tables';
+import { createGalleryTable } from './tables';
 import * as fieldsService from './fields';
 import * as viewsService from './views';
 import * as groupsService from './groups';
@@ -20,6 +21,7 @@ export interface BlueprintField {
   is_required?: boolean;
   options?: string[];         // for select widget
   default_value?: string;
+  allow_gallery?: boolean;    // when true + data_type=image: create a linked photos table
 }
 
 export interface BlueprintTable {
@@ -171,7 +173,23 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
       for (const bf of (bt.fields ?? [])) {
         // Skip reserved field names
         if (['id', 'created_at', 'updated_at'].includes(bf.field_name)) continue;
-        // Skip fields that already exist
+
+        // Gallery field: create a linked photos table instead of a regular column
+        if (bf.data_type === 'image' && bf.allow_gallery) {
+          const galleryTableName = `${bt.table_name}_photos`;
+          if (!existingNames.has(galleryTableName + '_gallery_marker')) {
+            try {
+              await createGalleryTable(app.id, bt.table_name);
+              result.fieldsCreated++;
+              result.tablesCreated.push(galleryTableName);
+            } catch (err) {
+              result.errors.push(`Gallery "${bt.table_name}_photos": ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+          continue;
+        }
+
+        // Skip regular fields that already exist
         if (existingNames.has(bf.field_name)) continue;
 
         try {

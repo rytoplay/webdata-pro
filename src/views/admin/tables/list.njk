@@ -27,7 +27,12 @@
     <tbody>
       {% for table in tables %}
       <tr>
-        <td><code>{{ table.table_name }}</code></td>
+        <td>
+          <code>{{ table.table_name }}</code>
+          {% if table.is_gallery %}
+          <span class="badge bg-secondary ms-1" style="font-size:0.6rem;">gallery</span>
+          {% endif %}
+        </td>
         <td>{{ table.label }}</td>
         <td>
           {% if table.is_public_addable %}

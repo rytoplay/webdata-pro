@@ -524,6 +524,22 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
     .replace(/\$portal_header/g, () => String(data['_portal_header'] ?? ''))
     .replace(/\$portal_footer/g, () => String(data['_portal_footer'] ?? ''));
 
+  // $gallery[tableName] → photo gallery widget (self-initializing)
+  result = result.replace(/\$gallery\[([^\]]+)\]/g, (_, tableName: string) => {
+    tableName = tableName.trim();
+    const appSlug = String(data['_app_slug'] ?? '');
+    const recordId = String(data['_pk'] ?? '');
+    // Use a stable ID so the inline script can find the div reliably regardless
+    // of whether document.currentScript is available (it may be null in dynamic contexts).
+    const galleryId = `wdpg-${appSlug}-${tableName}-${recordId}`.replace(/[^a-z0-9-_]/gi, '-');
+    const init = `(function(){` +
+      `function tryInit(){var el=document.getElementById(${JSON.stringify(galleryId)});` +
+      `if(el&&!el.dataset.wdpGalleryInit&&window.WDPGallery)window.WDPGallery.init(el.parentNode);}` +
+      `tryInit();setTimeout(tryInit,250);})()`;
+    return `<div id="${galleryId}" class="wdp-gallery" data-wdp-gallery="${tableName}" data-app="${appSlug}" data-record="${recordId}"></div>` +
+      `<scr` + `ipt>${init}</scr` + `ipt>`;
+  });
+
   // $thumbnail[table.field] → <img src="/files/...?thumb=1" width="100"> (thumbnail)
   result = result.replace(/\$thumbnail\[([^\]]+)\]/g, (_, ref: string) => {
     const alias = ref.replace('.', '__');
@@ -905,6 +921,7 @@ export async function renderViewList(
     _pagination:     buildPaginationHtml(page, totalPages),
     _portal_header:  params.portalHeader ?? '',
     _portal_footer:  params.portalFooter ?? '',
+    _app_slug:       app.slug,
   };
 
   const parts: string[] = [];
@@ -990,6 +1007,7 @@ export async function renderViewDetail(
     _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta),
     _portal_header: portalContext?.portalHeader ?? '',
     _portal_footer: portalContext?.portalFooter ?? '',
+    _app_slug: app.slug,
   };
 
   const detailTags = parseGroupTags(templates.detail);
@@ -1038,6 +1056,7 @@ export async function renderViewEditForm(
     _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta),
     _portal_header: portalContext?.portalHeader ?? '',
     _portal_footer: portalContext?.portalFooter ?? '',
+    _app_slug: app.slug,
   };
 
   const editTags  = parseGroupTags(templates.edit_form);

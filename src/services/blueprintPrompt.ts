@@ -85,6 +85,9 @@ Field properties:
 - is_required: true | false
 - options: string[] — only for select widgets
 - default_value: optional string
+- allow_gallery: true — use ONLY when data_type is "image" AND the user needs multiple photos per record.
+  This creates a dedicated photos table ({table_name}_photos) automatically. Do NOT create a separate photos table.
+  Example: for a real estate listing that needs multiple property photos, add field { "field_name": "photos", "data_type": "image", "allow_gallery": true }
 
 ## Views
 For each main table generate TWO views:

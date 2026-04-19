@@ -201,6 +201,8 @@
       }
       setHtml(el, html);
       rebaseUrls(el, cfg.baseUrl);
+      // Initialize any gallery widgets rendered in this HTML
+      if (window.WDPGallery) window.WDPGallery.init(el);
       // Restore per-field filter values and show advanced panel if any are active
       if (mode === 'list') {
         var advPanel = el.querySelector('.wdp-sf-adv');
@@ -517,3 +519,206 @@
   global.WDP = WDP;
 
 })(typeof window !== 'undefined' ? window : this);
+
+// ── WDP Gallery Widget ────────────────────────────────────────────────────────
+// Auto-initializes any <div class="wdp-gallery" data-wdp-gallery="tableName"
+// data-app="appSlug" data-record="recordId"> elements in the page.
+// In view mode: shows photo thumbnails.
+// In edit mode (inside data-wdp-form="edit" or "create"): adds upload zone + delete buttons.
+(function () {
+  'use strict';
+
+  // ── Shared lightbox (one instance for the whole page) ────────────────────
+  var _lb        = null;   // overlay element
+  var _lbPhotos  = [];
+  var _lbIndex   = 0;
+
+  function _lbKeydown(e) {
+    if (e.key === 'ArrowLeft')  { _lbIndex = (_lbIndex - 1 + _lbPhotos.length) % _lbPhotos.length; _lbShow(); }
+    else if (e.key === 'ArrowRight') { _lbIndex = (_lbIndex + 1) % _lbPhotos.length; _lbShow(); }
+    else if (e.key === 'Escape') { _lbClose(); }
+  }
+
+  function _lbShow() {
+    var p = _lbPhotos[_lbIndex];
+    _lb.querySelector('.wdp-lb-img').src = '/files/' + p.file_path;
+    var vis = _lbPhotos.length > 1 ? 'visible' : 'hidden';
+    _lb.querySelector('.wdp-lb-prev').style.visibility = vis;
+    _lb.querySelector('.wdp-lb-next').style.visibility = vis;
+  }
+
+  function _lbClose() {
+    if (_lb) _lb.style.display = 'none';
+    document.removeEventListener('keydown', _lbKeydown);
+  }
+
+  function _lbOpen(photos, idx) {
+    _lbPhotos = photos;
+    _lbIndex  = idx;
+    if (!_lb) {
+      _lb = document.createElement('div');
+      _lb.className = 'wdp-lightbox';
+      _lb.innerHTML =
+        '<button class="wdp-lb-prev">&#8249;</button>' +
+        '<div class="wdp-lb-img-wrap"><img class="wdp-lb-img" src="" alt=""></div>' +
+        '<button class="wdp-lb-next">&#8250;</button>' +
+        '<button class="wdp-lb-close">&times;</button>';
+      document.body.appendChild(_lb);
+      _lb.querySelector('.wdp-lb-prev').addEventListener('click', function (e) {
+        e.stopPropagation();
+        _lbIndex = (_lbIndex - 1 + _lbPhotos.length) % _lbPhotos.length; _lbShow();
+      });
+      _lb.querySelector('.wdp-lb-next').addEventListener('click', function (e) {
+        e.stopPropagation();
+        _lbIndex = (_lbIndex + 1) % _lbPhotos.length; _lbShow();
+      });
+      _lb.querySelector('.wdp-lb-close').addEventListener('click', function (e) {
+        e.stopPropagation(); _lbClose();
+      });
+      _lb.addEventListener('click', function (e) {
+        if (e.target === _lb || e.target.classList.contains('wdp-lb-img-wrap')) _lbClose();
+      });
+    }
+    _lbShow();
+    _lb.style.display = 'flex';
+    document.addEventListener('keydown', _lbKeydown);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  function initGallery(el) {
+    var galleryTable = el.getAttribute('data-wdp-gallery');
+    var appSlug      = el.getAttribute('data-app');
+    var recordId     = el.getAttribute('data-record');
+    if (!galleryTable || !appSlug || !recordId) return;
+
+    var isEditCtx = !!el.closest('[data-wdp-form]');
+    var baseUrl   = '/api/v/' + appSlug + '/gallery/' + galleryTable;
+
+    el.classList.add('wdp-gallery');
+
+    // Build DOM
+    var grid = document.createElement('div');
+    grid.className = 'wdp-gallery-grid';
+    el.appendChild(grid);
+
+    var statusEl = null;
+    var fileInput = null;
+
+    if (isEditCtx) {
+      var drop = document.createElement('div');
+      drop.className = 'wdp-gallery-drop';
+      drop.innerHTML = '<span>&#43; Add photos — click or drag &amp; drop</span>';
+      fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.multiple = true;
+      fileInput.accept = 'image/*';
+      drop.appendChild(fileInput);
+      el.appendChild(drop);
+
+      statusEl = document.createElement('div');
+      statusEl.className = 'wdp-gallery-uploading';
+      el.appendChild(statusEl);
+
+      drop.addEventListener('click', function () { fileInput.click(); });
+      drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('wdp-gallery-dragover'); });
+      drop.addEventListener('dragleave', function () { drop.classList.remove('wdp-gallery-dragover'); });
+      drop.addEventListener('drop', function (e) {
+        e.preventDefault();
+        drop.classList.remove('wdp-gallery-dragover');
+        if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+      });
+      fileInput.addEventListener('change', function () {
+        if (fileInput.files.length) uploadFiles(fileInput.files);
+      });
+    }
+
+    function uploadFiles(files) {
+      var fd = new FormData();
+      for (var i = 0; i < files.length; i++) fd.append('photo', files[i]);
+      if (statusEl) statusEl.textContent = 'Uploading\u2026';
+      fetch(baseUrl + '/' + recordId, { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function () { if (statusEl) statusEl.textContent = ''; loadPhotos(); })
+        .catch(function () { if (statusEl) statusEl.textContent = 'Upload failed.'; });
+    }
+
+    function deletePhoto(photoId) {
+      fetch(baseUrl + '/photo/' + photoId + '/delete', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+        .then(function (r) { return r.json(); })
+        .then(function () { loadPhotos(); })
+        .catch(function () {});
+    }
+
+    function loadPhotos() {
+      fetch(baseUrl + '/' + recordId, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { renderPhotos(data.photos || []); })
+        .catch(function () {});
+    }
+
+    function renderPhotos(photos) {
+      grid.innerHTML = '';
+      if (!photos.length) {
+        var empty = document.createElement('div');
+        empty.className = 'wdp-gallery-empty';
+        empty.textContent = 'No photos yet.';
+        grid.appendChild(empty);
+        return;
+      }
+      photos.forEach(function (photo, idx) {
+        var thumb = document.createElement('div');
+        thumb.className = 'wdp-gallery-thumb';
+        var img = document.createElement('img');
+        img.src = '/files/' + photo.file_path + '?thumb=1';
+        img.alt = photo.original_name || '';
+        img.loading = 'lazy';
+        thumb.appendChild(img);
+        if (isEditCtx) {
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'wdp-gallery-thumb-del';
+          del.title = 'Remove photo';
+          del.innerHTML = '&times;';
+          del.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (confirm('Remove this photo?')) deletePhoto(photo.id);
+          });
+          thumb.appendChild(del);
+        } else {
+          // Click to open lightbox
+          thumb.style.cursor = 'pointer';
+          thumb.addEventListener('click', (function (i) {
+            return function () { _lbOpen(photos, i); };
+          }(idx)));
+        }
+        grid.appendChild(thumb);
+      });
+    }
+
+    loadPhotos();
+  }
+
+  function scanAndInit(root) {
+    var els = (root || document).querySelectorAll('.wdp-gallery[data-wdp-gallery]');
+    els.forEach(function (el) {
+      if (!el.dataset.wdpGalleryInit) {
+        el.dataset.wdpGalleryInit = '1';
+        initGallery(el);
+      }
+    });
+  }
+
+  // Run on DOM ready and also expose for embed.js to call after render
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { scanAndInit(document); });
+  } else {
+    scanAndInit(document);
+  }
+
+  // Expose so embed.js rendered HTML can trigger it after dynamic inserts
+  window.WDPGallery = { init: scanAndInit };
+}());

@@ -284,6 +284,15 @@ function buildParamsHtml(idx, widget, maxLen, options, taRows, taCols) {
     <div class="params-group" data-widget="checkbox">
       <span class="params-label" style="font-style:italic;">—</span>
     </div>
+    <div class="params-group" data-widget="image">
+      <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.82rem;">
+        <input type="checkbox" data-field="allow_gallery" style="width:14px;height:14px;margin:0;accent-color:var(--accent);">
+        <span>Photo gallery <span style="color:var(--text-muted)">(allow multiple — creates a linked photos table)</span></span>
+      </label>
+    </div>
+    <div class="params-group" data-widget="upload">
+      <span class="params-label" style="font-style:italic;">—</span>
+    </div>
   </div>`;
 }
 
@@ -414,8 +423,15 @@ function updateRowNums() {
 
 // ── Widget / type change handlers ─────────────────────────────────────────
 function onDataTypeChange(sel, idx) {
-  const widget = WIDGET_DEFAULTS[sel.value] || 'text';
-  sel.closest('tr').querySelector('[data-field="widget"]').value = widget;
+  const dataType = sel.value;
+  const widget = WIDGET_DEFAULTS[dataType] || 'text';
+  const tr = sel.closest('tr');
+  const widgetSel = tr.querySelector('[data-field="widget"]');
+  widgetSel.value = widget;
+
+  // Image and upload types: disable the widget select (it's fixed)
+  widgetSel.disabled = (dataType === 'image' || dataType === 'upload');
+
   activateParams(idx, widget);
 }
 
@@ -464,6 +480,10 @@ function prepareSubmit() {
       const c = wrapper.querySelector('[data-field="textarea_cols"]');
       if (r) row.textarea_rows = r.value;
       if (c) row.textarea_cols = c.value;
+    }
+    if (dataType === 'image') {
+      const ag = wrapper.querySelector('[data-field="allow_gallery"]');
+      if (ag) row.allow_gallery = ag.checked;
     }
     rows.push(row);
   });

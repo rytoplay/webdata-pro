@@ -6,6 +6,8 @@ export interface AppTable {
   description: string | null;
   is_public_addable: boolean;
   is_member_editable: boolean;
+  is_gallery: boolean;
+  gallery_parent_table: string | null;
   created_at: string;
   updated_at: string;
 }
