@@ -541,10 +541,20 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
   });
 
   // $thumbnail[table.field] → <img src="/files/...?thumb=1" width="100"> (thumbnail)
+  // When the field is empty, renders a "No Image" placeholder with a subtle diagonal-stripe pattern.
   result = result.replace(/\$thumbnail\[([^\]]+)\]/g, (_, ref: string) => {
     const alias = ref.replace('.', '__');
     const val   = String(data[alias] ?? data[ref] ?? '');
-    if (!val) return '';
+    if (!val) return (
+      `<div style="width:100px;height:100px;border-radius:4px;display:inline-flex;` +
+      `align-items:center;justify-content:center;` +
+      `background:#d8d8d8;` +
+      `background-image:repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(0,0,0,0.06) 8px,rgba(0,0,0,0.06) 9px);` +
+      `vertical-align:middle;">` +
+      `<span style="font-family:sans-serif;font-size:10px;color:#bcbcbc;letter-spacing:0.06em;` +
+      `user-select:none;pointer-events:none;">No Image</span>` +
+      `</div>`
+    );
     return `<img src="/files/${val}?thumb=1" width="100" style="border-radius:4px;" alt="">`;
   });
 
