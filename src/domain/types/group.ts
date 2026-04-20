@@ -9,6 +9,7 @@ export interface Group {
   home_template: string | null;
   home_header_html: string | null;
   home_footer_html: string | null;
+  post_logout_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +32,7 @@ export interface UpdateGroupInput {
   home_template?: string | null;
   home_header_html?: string | null;
   home_footer_html?: string | null;
+  post_logout_url?: string | null;
 }
 
 export interface GroupTablePermission {

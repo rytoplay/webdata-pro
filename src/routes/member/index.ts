@@ -64,7 +64,7 @@ function renderHomeTemplate(template: string, app: App, member: object, views: o
       .replace(/\$portal_header/g, portalHeader)
       .replace(/\$portal_footer/g, portalFooter);
 
-    return nunjucks.renderString(resolved, { app, member, views, embedView, viewUrl });
+    return nunjucks.renderString(resolved, { app, member, views, embedView, viewUrl, logoutUrl: `/app/${app.slug}/logout` });
   } catch (err: any) {
     return `<p style="color:red"><strong>Template error:</strong> ${err.message}</p>`;
   }
@@ -84,6 +84,40 @@ async function totpStatus(
   const secret = await membersService.getTfaSecret(memberId);
   return secret ? 'verify' : 'setup';
 }
+
+// Default home template used when no group or app template has been configured.
+const DEFAULT_HOME_TEMPLATE = `
+$portal_header
+<div style="max-width:680px;margin:2rem auto;padding:0 1rem;font-family:sans-serif;">
+  <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.25rem;">
+    Welcome{% if member.first_name %}, {{ member.first_name }}{% endif %}!
+  </h2>
+  <p style="color:#6b7280;margin-bottom:2rem;">You are signed in to <strong>{{ app.name }}</strong>.</p>
+
+  {% if views.length %}
+  <div style="display:grid;gap:0.75rem;">
+    {% for v in views %}
+    <a href="{{ v.url }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.9rem 1.1rem;
+        background:#fff;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;
+        box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow 0.15s;"
+       onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'"
+       onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
+      <span style="font-size:1.25rem;line-height:1;">&#128196;</span>
+      <span style="font-weight:600;font-size:0.95rem;">{{ v.label }}</span>
+      <span style="margin-left:auto;color:#9ca3af;font-size:0.85rem;">&#8250;</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color:#9ca3af;">You don't have access to any views yet. Contact your administrator.</p>
+  {% endif %}
+
+  <div style="margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid #e5e7eb;text-align:right;">
+    <a href="{{ logoutUrl }}" style="font-size:0.85rem;color:#6b7280;text-decoration:none;">Sign out</a>
+  </div>
+</div>
+$portal_footer
+`.trim();
 
 export const memberRouter = Router({ mergeParams: true });
 
@@ -152,27 +186,19 @@ memberRouter.get('/', async (req, res, next) => {
     const { headerHtml, footerHtml } = await getBranding(freshApp, member.memberId);
     const logoutUrl = `/app/${app.slug}/logout`;
 
-    const template = groupTemplate ?? freshApp.home_template ?? null;
-    if (template) {
-      const memberCtx = memberData || member;
-      const pH = headerHtml ?? '';
-      const pF = footerHtml ?? '';
-      const bodyHtml = renderHomeTemplate(template, freshApp, memberCtx, views, pH, pF);
-      const homeParts = [
-        groupHomeHeader ? renderBrandingTemplate(groupHomeHeader, freshApp, memberCtx, pH, pF) : '',
-        bodyHtml,
-        groupHomeFooter ? renderBrandingTemplate(groupHomeFooter, freshApp, memberCtx, pH, pF) : '',
-      ].filter(Boolean);
-      // Template handles its own nav via $portal_header/$portal_footer — suppress layout's auto-injection
-      return res.render('member/home', {
-        title: app.name, app: freshApp, renderedHtml: homeParts.join('\n'),
-        suppressPortalNav: true, memberLogoutUrl: logoutUrl,
-      });
-    }
-
-    res.render('member/home', {
-      title: app.name, app: freshApp, renderedHtml: null, views,
-      headerHtml, footerHtml, memberLogoutUrl: logoutUrl,
+    const template = groupTemplate ?? freshApp.home_template ?? DEFAULT_HOME_TEMPLATE;
+    const memberCtx = memberData || member;
+    const pH = headerHtml ?? '';
+    const pF = footerHtml ?? '';
+    const bodyHtml = renderHomeTemplate(template, freshApp, memberCtx, views, pH, pF);
+    const homeParts = [
+      groupHomeHeader ? renderBrandingTemplate(groupHomeHeader, freshApp, memberCtx, pH, pF) : '',
+      bodyHtml,
+      groupHomeFooter ? renderBrandingTemplate(groupHomeFooter, freshApp, memberCtx, pH, pF) : '',
+    ].filter(Boolean);
+    return res.render('member/home', {
+      title: app.name, app: freshApp, renderedHtml: homeParts.join('\n'),
+      suppressPortalNav: true, memberLogoutUrl: logoutUrl,
     });
   } catch (err) { next(err); }
 });
@@ -636,12 +662,68 @@ memberRouter.post('/reset', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /app/:appSlug/sitemap ────────────────────────────────────────────────
+
+memberRouter.get('/sitemap', async (req, res, next) => {
+  try {
+    const app = res.locals.memberApp as App;
+    const member = req.session.member;
+    if (!member || member.appId !== app.id) {
+      return res.redirect(`/app/${app.slug}/login?returnTo=${encodeURIComponent(req.originalUrl)}`);
+    }
+
+    // All views this member can access, with their permissions
+    let views: any[] = [];
+    if (member.groupIds.length > 0) {
+      const rows = await db('views')
+        .join('view_group_permissions', 'view_group_permissions.view_id', 'views.id')
+        .whereIn('view_group_permissions.group_id', member.groupIds)
+        .where('view_group_permissions.can_view', true)
+        .where('views.app_id', app.id)
+        .distinct(
+          'views.id', 'views.label', 'views.view_name', 'views.description',
+          'view_group_permissions.can_add',
+          'view_group_permissions.single_record',
+        )
+        .orderBy('views.label');
+      views = rows.map((v: any) => ({
+        ...v,
+        url:       `/app/${app.slug}/view/${v.view_name}`,
+        createUrl: `/app/${app.slug}/view/${v.view_name}?action=new`,
+      }));
+    }
+
+    const { headerHtml, footerHtml } = await getBranding(app, member.memberId);
+    res.render('member/sitemap', {
+      title: `Site Map — ${app.name}`,
+      app,
+      views,
+      headerHtml,
+      footerHtml,
+      memberLogoutUrl: `/app/${app.slug}/logout`,
+    });
+  } catch (err) { next(err); }
+});
+
 // ── GET /app/:appSlug/logout ─────────────────────────────────────────────────
 
-memberRouter.get('/logout', (req, res) => {
+memberRouter.get('/logout', async (req, res) => {
   const app = res.locals.memberApp as App;
+  const member = req.session.member;
+
+  // Check if any of the member's groups has a post_logout_url configured
+  let postLogoutUrl: string | null = null;
+  if (member?.groupIds?.length) {
+    const group = await db('groups')
+      .whereIn('id', member.groupIds)
+      .whereNotNull('post_logout_url')
+      .where('post_logout_url', '!=', '')
+      .first();
+    postLogoutUrl = group?.post_logout_url ?? null;
+  }
+
   delete req.session.member;
   delete req.session.pendingMember;
   delete req.session.pendingTotpSetup;
-  res.redirect(`/app/${app.slug}/login`);
+  res.redirect(postLogoutUrl ?? `/app/${app.slug}/login`);
 });

@@ -30,6 +30,7 @@ const GroupSchema = z.object({
   home_template:         z.string().optional().nullable(),
   home_header_html:      z.string().optional().nullable(),
   home_footer_html:      z.string().optional().nullable(),
+  post_logout_url:       z.preprocess(v => (v === '' ? null : v), z.string().url('Must be a valid URL').nullable().optional()),
 });
 
 // ── GET /admin/groups ────────────────────────────────────────────────────────

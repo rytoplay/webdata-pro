@@ -1,0 +1,47 @@
+{% extends "member/layout.njk" %}
+
+{% block content %}
+<div class="container py-4" style="max-width:680px">
+  <div class="d-flex align-items-center gap-2 mb-4">
+    <a href="/app/{{ app.slug }}/" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Home
+    </a>
+    <h1 class="h4 mb-0 fw-bold">Site Map</h1>
+  </div>
+
+  {% if views.length === 0 %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-map fs-1 d-block mb-2"></i>
+    <p>You don't have access to any views yet.</p>
+  </div>
+  {% else %}
+  <div class="d-flex flex-column gap-3">
+    {% for v in views %}
+    <div class="card border shadow-sm" style="border-radius:12px;overflow:hidden;">
+      <div class="card-body pb-2">
+        <div class="d-flex align-items-start gap-2">
+          <i class="bi bi-table text-primary mt-1"></i>
+          <div class="flex-grow-1">
+            <div class="fw-bold">{{ v.label }}</div>
+            {% if v.description %}
+            <div class="text-muted small mt-1">{{ v.description }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-top d-flex gap-2 flex-wrap py-2">
+        <a href="{{ v.url }}" class="btn btn-sm btn-primary">
+          <i class="bi bi-search me-1"></i>Browse
+        </a>
+        {% if v.can_add and not v.single_record %}
+        <a href="{{ v.createUrl }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-plus-circle me-1"></i>Add new
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

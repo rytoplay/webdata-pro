@@ -64,6 +64,14 @@
         </div>
       </div>
 
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="post_logout_url">Post-logout URL <span class="text-muted fw-normal">(optional)</span></label>
+        <input type="url" class="form-control" name="post_logout_url" id="post_logout_url"
+          placeholder="https://yourwebsite.com"
+          value="{{ group.post_logout_url or '' }}">
+        <div class="form-text">Where to send members after they sign out. Leave blank to redirect to this app's login page.</div>
+      </div>
+
       <div class="d-flex gap-2 pt-2">
         <button type="submit" class="btn btn-primary">
           {% if group and group.id %}Save Settings{% else %}Create Group{% endif %}
@@ -124,6 +132,7 @@
       {% if group.self_register_enabled %}<input type="hidden" name="self_register_enabled" value="on">{% endif %}
       {% if group.tfa_required %}<input type="hidden" name="tfa_required" value="on">{% endif %}
       <input type="hidden" name="default_home_view_id" value="{{ group.default_home_view_id or '' }}">
+      <input type="hidden" name="post_logout_url" value="{{ group.post_logout_url or '' }}">
 
       <div class="card shadow-sm">
         <div class="card-header d-flex align-items-center gap-2 py-2">
