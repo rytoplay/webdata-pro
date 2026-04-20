@@ -19,11 +19,20 @@
   {% if headerHtml %}
     {{ headerHtml | safe }}
   {% else %}
-    <nav class="navbar navbar-dark bg-dark px-3">
-      <span class="navbar-brand fw-semibold">{{ app.name }}</span>
-      {% if memberLogoutUrl %}
-      <a href="{{ memberLogoutUrl }}" class="btn btn-sm btn-outline-light">Sign out</a>
-      {% endif %}
+    <nav class="navbar navbar-dark bg-dark px-3 gap-2">
+      <a href="{{ homeUrl or ('/app/' + app.slug + '/') }}" class="navbar-brand fw-semibold text-decoration-none">
+        {{ app.name }}
+      </a>
+      <div class="d-flex align-items-center gap-2 ms-auto">
+        {% if sitemapUrl %}
+        <a href="{{ sitemapUrl }}" class="btn btn-sm btn-outline-light">
+          <i class="bi bi-map me-1"></i>Site Map
+        </a>
+        {% endif %}
+        {% if memberLogoutUrl %}
+        <a href="{{ memberLogoutUrl }}" class="btn btn-sm btn-outline-light">Sign out</a>
+        {% endif %}
+      </div>
     </nav>
   {% endif %}
 {% endif %}

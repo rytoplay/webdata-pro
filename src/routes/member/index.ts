@@ -240,18 +240,26 @@ memberRouter.get('/view/:viewName', async (req, res, next) => {
         existingRecordId = metaRow?.record_id ?? null;
       }
 
+      const { headerHtml, footerHtml } = await getBranding(app, member.memberId);
       return res.render('member/view', {
         title: `${view.label} — ${app.name}`,
         app, view, singleRecord: true, existingRecordId,
-        suppressPortalNav: true,
+        headerHtml, footerHtml,
+        suppressPortalNav: !!headerHtml,
         memberLogoutUrl: `/app/${app.slug}/logout`,
+        homeUrl:    `/app/${app.slug}/`,
+        sitemapUrl: `/app/${app.slug}/sitemap`,
       });
     }
 
+    const { headerHtml, footerHtml } = await getBranding(app, member.memberId);
     res.render('member/view', {
       title: `${view.label} — ${app.name}`, app, view,
-      suppressPortalNav: true,
+      headerHtml, footerHtml,
+      suppressPortalNav: !!headerHtml,
       memberLogoutUrl: `/app/${app.slug}/logout`,
+      homeUrl:    `/app/${app.slug}/`,
+      sitemapUrl: `/app/${app.slug}/sitemap`,
     });
   } catch (err) { next(err); }
 });
@@ -700,7 +708,10 @@ memberRouter.get('/sitemap', async (req, res, next) => {
       views,
       headerHtml,
       footerHtml,
+      suppressPortalNav: !!headerHtml,
       memberLogoutUrl: `/app/${app.slug}/logout`,
+      homeUrl:    `/app/${app.slug}/`,
+      sitemapUrl: `/app/${app.slug}/sitemap`,
     });
   } catch (err) { next(err); }
 });
