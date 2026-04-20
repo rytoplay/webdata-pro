@@ -690,7 +690,6 @@ memberRouter.get('/sitemap', async (req, res, next) => {
         .where('views.app_id', app.id)
         .distinct(
           'views.id', 'views.label', 'views.view_name',
-          'view_group_permissions.can_add',
           'view_group_permissions.single_record',
         )
         .orderBy('views.label');

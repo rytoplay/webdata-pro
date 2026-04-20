@@ -30,7 +30,7 @@
         <a href="{{ v.url }}" class="btn btn-sm btn-primary">
           <i class="bi bi-search me-1"></i>Browse
         </a>
-        {% if v.can_add and not v.single_record %}
+        {% if not v.single_record %}
         <a href="{{ v.createUrl }}" class="btn btn-sm btn-outline-secondary">
           <i class="bi bi-plus-circle me-1"></i>Add new
         </a>
