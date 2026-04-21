@@ -110,22 +110,33 @@
       {# ── Right: field picker ── #}
       <div id="tpl-panel-col" style="flex:0 0 280px;min-width:160px;max-width:540px;padding-right:calc(var(--bs-gutter-x)*0.5);">
       <div class="card shadow-sm h-100" style="font-size:0.8rem;">
-        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-          <strong>Field tokens</strong>
-          <div class="d-flex gap-1">
-            <button type="button" id="help-toggle" title="Show / hide quick help"
-              style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.72rem;padding:1px 7px;cursor:pointer;line-height:1.6;">
-              ? Help
-            </button>
-            <button type="button" id="help-fullscreen" title="Open full designer reference"
-              data-bs-toggle="modal" data-bs-target="#designerRefModal"
-              style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.72rem;padding:1px 7px;cursor:pointer;line-height:1.6;">
-              <i class="bi bi-arrows-fullscreen"></i>
-            </button>
+        <div class="card-header p-0" style="border-bottom:1px solid #e2e8f0;">
+          <div class="d-flex align-items-center justify-content-between ps-1 pe-2" style="padding-top:5px;">
+            <div class="d-flex" style="gap:0;">
+              <button type="button" class="panel-tab-btn" data-panel="tags"
+                style="background:none;border:none;border-bottom:2px solid var(--accent);color:var(--accent);font-weight:600;font-size:0.78rem;cursor:pointer;padding:2px 12px 5px;">
+                Tags
+              </button>
+              <button type="button" class="panel-tab-btn" data-panel="blocks"
+                style="background:none;border:none;border-bottom:2px solid transparent;color:#64748b;font-weight:400;font-size:0.78rem;cursor:pointer;padding:2px 12px 5px;">
+                Blocks
+              </button>
+            </div>
+            <div class="d-flex gap-1">
+              <button type="button" id="help-toggle" title="Show / hide quick help"
+                style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.72rem;padding:1px 7px;cursor:pointer;line-height:1.6;">
+                ? Help
+              </button>
+              <button type="button" id="help-fullscreen" title="Open full designer reference"
+                data-bs-toggle="modal" data-bs-target="#designerRefModal"
+                style="background:none;border:1px solid #cbd5e1;border-radius:4px;color:#64748b;font-size:0.72rem;padding:1px 7px;cursor:pointer;line-height:1.6;">
+                <i class="bi bi-arrows-fullscreen"></i>
+              </button>
+            </div>
           </div>
         </div>
         <div id="help-panel" class="d-none" style="font-size:0.78rem;line-height:1.55;max-height:400px;overflow-y:auto;background:#f8fafc;border-bottom:1px solid #e2e8f0;"></div>
-        <div class="card-body p-2" style="overflow-y:scroll;max-height:560px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;">
+        <div id="panel-tags" class="card-body p-2" style="overflow-y:scroll;max-height:560px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;">
 
           <div id="search-hint" class="d-none mb-2 p-2 rounded" style="font-size:0.7rem;background:#dcfce7;color:#166534;line-height:1.4;">
             Click <code>$search[…]</code> to insert an auto-rendered search input based on the field type defined in Fields.
@@ -274,7 +285,77 @@
             </button>
           </div>
           <pre id="css-cheat" style="font-size:0.64rem;line-height:1.5;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;color:#1e293b;overflow-x:auto;white-space:pre;margin:0;font-family:'SFMono-Regular',Consolas,monospace;min-height:80px;max-height:220px;overflow-y:auto;resize:vertical;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;"></pre>
-        </div>
+        </div>{# /panel-tags #}
+
+        {# ── Blocks pane ───────────────────────────────────────────────── #}
+        <div id="panel-blocks" class="card-body p-2 d-none" style="overflow-y:auto;max-height:560px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;">
+
+          <div class="text-muted mb-2" style="font-size:0.7rem;">A — COMPLETE SCAFFOLDS</div>
+
+          <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="search-form"
+            style="background:#f0fdf4;border:1px solid #86efac;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#166534;">Search Form</div>
+            <div style="font-size:0.67rem;color:#4b7c59;margin-top:2px;">form · dropdowns · keyword input · Search / Clear</div>
+          </button>
+
+          <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="results-row"
+            style="background:#f0fdf4;border:1px solid #86efac;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#166534;">Results Row</div>
+            <div style="font-size:0.67rem;color:#4b7c59;margin-top:2px;">clickable wdp-row · title / sub / meta + arrow</div>
+          </button>
+
+          <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="detail-view"
+            style="background:#f0fdf4;border:1px solid #86efac;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#166534;">Detail View</div>
+            <div style="font-size:0.67rem;color:#4b7c59;margin-top:2px;">back button · title · sub · field list</div>
+          </button>
+
+          <div class="text-muted mt-3 mb-2" style="font-size:0.7rem;">C — COMPOUND SNIPPETS</div>
+
+          <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="field-label-value"
+            style="background:#eff6ff;border:1px solid #93c5fd;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#1e40af;">Field: label + value</div>
+            <div style="font-size:0.67rem;color:#3b5fa0;margin-top:2px;">wdp-field · wdp-field-label · wdp-field-value</div>
+          </button>
+
+          <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="image-info-card"
+            style="background:#eff6ff;border:1px solid #93c5fd;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#1e40af;">Image + Info Card</div>
+            <div style="font-size:0.67rem;color:#3b5fa0;margin-top:2px;">thumbnail · title · subtext side by side</div>
+          </button>
+
+          <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="section-heading"
+            style="background:#eff6ff;border:1px solid #93c5fd;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#1e40af;">Section Heading</div>
+            <div style="font-size:0.67rem;color:#3b5fa0;margin-top:2px;">styled uppercase divider label</div>
+          </button>
+
+          <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="pagination"
+            style="background:#eff6ff;border:1px solid #93c5fd;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#1e40af;">Pagination Footer</div>
+            <div style="font-size:0.67rem;color:#3b5fa0;margin-top:2px;">wdp-footer · ${_pagination}</div>
+          </button>
+
+          <div class="text-muted mt-3 mb-2" style="font-size:0.7rem;">B — INDIVIDUAL ELEMENTS</div>
+
+          {% set indivBlocks = [
+            ['search-form-tag', '&lt;form data-wdp-form="search"&gt;', 'marks the search form'],
+            ['adv-fields',      'wdp-adv-fields',                       'search fields container'],
+            ['adv-btns',        'wdp-adv-btns',                         'Search + Clear buttons'],
+            ['wdp-field-div',   'wdp-field',                            'field wrapper div'],
+            ['wdp-row-div',     'wdp-row',                              'list row wrapper'],
+            ['wdp-surface-div', 'wdp-surface',                          'card / panel surface'],
+            ['wdp-detail-div',  'wdp-detail',                           'detail view wrapper']
+          ] %}
+          {% for b in indivBlocks %}
+          <button type="button" class="block-btn w-100 text-start mb-1 p-2 rounded" data-block="{{ b[0] }}"
+            style="background:#f8fafc;border:1px solid #e2e8f0;cursor:pointer;">
+            <div style="font-family:monospace;font-size:0.75rem;color:#374151;">{{ b[1] }}</div>
+            <div style="font-size:0.65rem;color:#9ca3af;margin-top:1px;">{{ b[2] }}</div>
+          </button>
+          {% endfor %}
+
+        </div>{# /panel-blocks #}
       </div>
       </div>{# /tpl-panel-col #}
     </div>{# /editor-right-wrap #}
@@ -1285,6 +1366,119 @@ add_shortcode('wdp_view', function($atts) {
       if (!token || !activeEditor) return;
       activeEditor.replaceSelection(token);
       activeEditor.focus();
+    });
+  });
+
+  // ── Block snippets ────────────────────────────────────────────────────────
+  const BLOCKS = {
+    'search-form': [
+      '<form data-wdp-form="search">',
+      '  <div class="wdp-adv-fields">',
+      '    <div class="wdp-field">',
+      '      <label class="wdp-field-label">Label</label>',
+      '      <select class="wdp-select" name="table__field">',
+      '        <option value="">Any</option>',
+      '        <option value="value">Option</option>',
+      '      </select>',
+      '    </div>',
+      '    <div class="wdp-field">',
+      '      <label class="wdp-field-label">Keywords</label>',
+      '      <input type="text" class="wdp-input" name="q" placeholder="keyword...">',
+      '    </div>',
+      '  </div>',
+      '  <div class="wdp-adv-btns">',
+      '    <button type="submit" class="wdp-btn">Search</button>',
+      '    <a data-wdp-action="clear" class="wdp-btn-link">Clear</a>',
+      '  </div>',
+      '</form>'
+    ].join('\n'),
+
+    'results-row': [
+      '<div class="wdp-row" data-wdp-action="detail" data-wdp-id="${_pk}">',
+      '  <div class="wdp-row-body">',
+      '    <div class="wdp-row-title">${table.field}</div>',
+      '    <div class="wdp-row-sub">${table.field}</div>',
+      '    <div class="wdp-row-meta">${table.field}</div>',
+      '  </div>',
+      '  <span class="wdp-arr">&#8250;</span>',
+      '</div>'
+    ].join('\n'),
+
+    'detail-view': [
+      '<div class="wdp-detail">',
+      '  <button class="wdp-back" data-wdp-action="back">&#8249; Back</button>',
+      '  <h2 class="wdp-detail-title">${table.field}</h2>',
+      '  <div class="wdp-detail-sub">${table.field}</div>',
+      '  <div class="wdp-detail-body">',
+      '    <div class="wdp-field">',
+      '      <div class="wdp-field-label">Label</div>',
+      '      <div class="wdp-field-value">${table.field}</div>',
+      '    </div>',
+      '  </div>',
+      '</div>'
+    ].join('\n'),
+
+    'field-label-value': [
+      '<div class="wdp-field">',
+      '  <div class="wdp-field-label">Label</div>',
+      '  <div class="wdp-field-value">${table.field}</div>',
+      '</div>'
+    ].join('\n'),
+
+    'image-info-card': [
+      '<div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:var(--wdp-surface);border:1px solid var(--wdp-border);border-radius:8px;margin-bottom:1rem;">',
+      '  <img src="/files/${table.image_field}?thumb=1" style="width:100px;height:100px;object-fit:cover;border-radius:6px;flex-shrink:0;" alt="">',
+      '  <div>',
+      '    <div style="font-weight:700;font-size:1rem;">${table.name}</div>',
+      '    <div style="color:#6b7280;font-size:0.9rem;">${table.subtitle}</div>',
+      '  </div>',
+      '</div>'
+    ].join('\n'),
+
+    'section-heading': [
+      '<div style="font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin:1.5rem 0 0.75rem;">',
+      '  Section Title',
+      '</div>'
+    ].join('\n'),
+
+    'pagination': [
+      '<div class="wdp-footer">',
+      '  ${_pagination}',
+      '</div>'
+    ].join('\n'),
+
+    'search-form-tag':  '<form data-wdp-form="search">\n\n</form>',
+    'adv-fields':       '<div class="wdp-adv-fields">\n\n</div>',
+    'adv-btns':         '<div class="wdp-adv-btns">\n  <button type="submit" class="wdp-btn">Search</button>\n  <a data-wdp-action="clear" class="wdp-btn-link">Clear</a>\n</div>',
+    'wdp-field-div':    '<div class="wdp-field">\n\n</div>',
+    'wdp-row-div':      '<div class="wdp-row" data-wdp-action="detail" data-wdp-id="${_pk}">\n\n</div>',
+    'wdp-surface-div':  '<div class="wdp-surface">\n\n</div>',
+    'wdp-detail-div':   '<div class="wdp-detail">\n\n</div>',
+  };
+
+  document.querySelectorAll('.block-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.block;
+      if (!key || !activeEditor) return;
+      const text = BLOCKS[key];
+      if (text === undefined) return;
+      activeEditor.replaceSelection(text);
+      activeEditor.focus();
+    });
+  });
+
+  // ── Panel tab switcher (Tags / Blocks) ────────────────────────────────────
+  document.querySelectorAll('.panel-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.panel;
+      document.querySelectorAll('.panel-tab-btn').forEach(b => {
+        const active = b.dataset.panel === target;
+        b.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+        b.style.color             = active ? 'var(--accent)' : '#64748b';
+        b.style.fontWeight        = active ? '600' : '400';
+      });
+      document.getElementById('panel-tags').classList.toggle('d-none',   target !== 'tags');
+      document.getElementById('panel-blocks').classList.toggle('d-none', target !== 'blocks');
     });
   });
 
