@@ -347,7 +347,22 @@ export async function generateViewSql(
     .where({ app_id: appId, is_gallery: true })
     .pluck('table_name') as string[];
   const galleryTableSet = new Set(galleryTableNames);
-  const filteredTokens = allTokens.filter(t => !galleryTableSet.has(`${t.table}_${t.field}`));
+
+  // Filter out any refs whose table is declared as an owner table via $owner[table.field].
+  // Those are pre-fetched via _wdpro_metadata linkage in prefetchOwnerFields() — they do NOT
+  // need a SQL JOIN and will throw "No join path found" if included.
+  const ownerTableSet = new Set<string>();
+  const ownerPat = /\$owner\[([^\]]+)\]/g;
+  let ownerM: RegExpExecArray | null;
+  while ((ownerM = ownerPat.exec(combined)) !== null) {
+    const ref = ownerM[1].trim();
+    const dot = ref.lastIndexOf('.');
+    if (dot !== -1) ownerTableSet.add(ref.slice(0, dot));
+  }
+
+  const filteredTokens = allTokens.filter(
+    t => !galleryTableSet.has(`${t.table}_${t.field}`) && !ownerTableSet.has(t.table)
+  );
 
   // Always include the base table's PK
   const pkField = await db('app_fields')
@@ -533,6 +548,17 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
     .replace(/\$portal_header/g, () => String(data['_portal_header'] ?? ''))
     .replace(/\$portal_footer/g, () => String(data['_portal_footer'] ?? ''));
 
+  // $owner[table.field] → value from the record owner's profile in another table
+  // (pre-fetched via _wdpro_metadata created_by_id linkage into _owner__table__field keys)
+  result = result.replace(/\$owner\[([^\]]+)\]/g, (_, ref: string) => {
+    ref = ref.trim();
+    const dot = ref.lastIndexOf('.');
+    if (dot === -1) return '';
+    const tbl = ref.slice(0, dot);
+    const fld = ref.slice(dot + 1);
+    return String(data[`_owner__${tbl}__${fld}`] ?? '');
+  });
+
   // $gallery[tableName] → photo gallery widget (self-initializing)
   result = result.replace(/\$gallery\[([^\]]+)\]/g, (_, tableName: string) => {
     tableName = tableName.trim();
@@ -553,7 +579,7 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
   // When the field is empty, renders a "No Image" placeholder with a subtle diagonal-stripe pattern.
   result = result.replace(/\$thumbnail\[([^\]]+)\]/g, (_, ref: string) => {
     const alias = ref.replace('.', '__');
-    const val   = String(data[alias] ?? data[ref] ?? '');
+    const val   = String(data[alias] ?? data[ref] ?? data[`_owner__${alias}`] ?? '');
     if (!val) return (
       `<div style="width:100px;height:100px;border-radius:4px;display:inline-flex;` +
       `align-items:center;justify-content:center;` +
@@ -570,7 +596,7 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
   // $img[table.field] → <img src="/files/..."> (full image)
   result = result.replace(/\$img\[([^\]]+)\]/g, (_, ref: string) => {
     const alias = ref.replace('.', '__');
-    const val   = String(data[alias] ?? data[ref] ?? '');
+    const val   = String(data[alias] ?? data[ref] ?? data[`_owner__${alias}`] ?? '');
     if (!val) return '';
     return `<img src="/files/${val}" style="max-width:100%;" alt="">`;
   });
@@ -728,6 +754,111 @@ async function prefetchGalleryThumbnails(
       result.set(alias, photoMap);
     } catch {
       /* non-fatal: gallery table may be empty or temporarily unavailable */
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Pre-fetches fields from "owner" tables linked via _wdpro_metadata.created_by_id.
+ *
+ * Join path: source record → _wdpro_metadata (source) → created_by_id
+ *            → _wdpro_metadata (owner table) → record_id → owner table row
+ *
+ * Triggered by $owner[ownerTable.field] tokens in the template.
+ * $thumbnail[ownerTable.field] and $img[ownerTable.field] are also fetched
+ * for tables already declared as owner tables by a $owner[...] token.
+ *
+ * Returns Map<sourceRecordId, { _owner__table__field: value, ... }>
+ */
+async function prefetchOwnerFields(
+  app: App,
+  appDb: ReturnType<typeof getAppDb>,
+  templateText: string,
+  baseTableName: string,
+  recordIds: string[],
+): Promise<Map<string, Record<string, string>>> {
+  const result = new Map<string, Record<string, string>>();
+  if (!recordIds.length) return result;
+
+  // Collect $owner[table.field] refs — these declare which tables are "owner tables"
+  const refsByTable = new Map<string, Set<string>>();
+  const ownerPat = /\$owner\[([^\]]+)\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = ownerPat.exec(templateText)) !== null) {
+    const ref = m[1].trim();
+    const dot = ref.lastIndexOf('.');
+    if (dot === -1) continue;
+    const tbl = ref.slice(0, dot);
+    const fld = ref.slice(dot + 1);
+    if (!refsByTable.has(tbl)) refsByTable.set(tbl, new Set());
+    refsByTable.get(tbl)!.add(fld);
+  }
+  if (!refsByTable.size) return result;
+
+  // Also pull in $thumbnail[ownerTable.field] / $img[ownerTable.field] for declared owner tables
+  const thumbImgPat = /\$(?:thumbnail|img)\[([^\]]+)\]/g;
+  while ((m = thumbImgPat.exec(templateText)) !== null) {
+    const ref = m[1].trim().split(',')[0].trim();
+    const dot = ref.lastIndexOf('.');
+    if (dot === -1) continue;
+    const tbl = ref.slice(0, dot);
+    const fld = ref.slice(dot + 1);
+    if (refsByTable.has(tbl)) refsByTable.get(tbl)!.add(fld);
+  }
+
+  for (const [ownerTable, fields] of refsByTable) {
+    const ownerTableMeta = await db('app_tables')
+      .where({ app_id: app.id, table_name: ownerTable })
+      .first();
+    if (!ownerTableMeta) continue;
+
+    const ownerPkRow = await db('app_fields')
+      .where({ table_id: ownerTableMeta.id, is_primary_key: true })
+      .first();
+    const ownerPk = ownerPkRow?.field_name ?? 'id';
+
+    const isMysql = app.database_mode === 'mysql';
+    const q = isMysql ? '`' : '"'; // identifier quote char
+    // For MySQL: compare as unsigned int to avoid collation mismatches between
+    // the integer PK and the varchar record_id column in _wdpro_metadata.
+    // For SQLite: CAST to TEXT for string comparison (record_id is TEXT).
+    const castPk = isMysql
+      ? `ot.${q}${ownerPk}${q}`
+      : `CAST(ot.${q}${ownerPk}${q} AS TEXT)`;
+
+    const fieldList = [...fields]
+      .map(f => `ot.${q}${f}${q} AS ${q}${ownerTable}__${f}${q}`)
+      .join(', ');
+    const placeholders = recordIds.map(() => '?').join(',');
+
+    try {
+      const sql =
+        `SELECT pm.record_id AS _src_id, ${fieldList}` +
+        ` FROM ${q}_wdpro_metadata${q} AS pm` +
+        ` INNER JOIN ${q}_wdpro_metadata${q} AS rm` +
+        `   ON rm.created_by_id = pm.created_by_id AND rm.table_name = ?` +
+        ` INNER JOIN ${q}${ownerTable}${q} AS ot` +
+        `   ON ${castPk} = ${isMysql ? 'CAST(rm.record_id AS UNSIGNED)' : 'rm.record_id'}` +
+        ` WHERE pm.table_name = ? AND pm.record_id IN (${placeholders})`;
+
+      const raw = await appDb.raw(sql, [ownerTable, baseTableName, ...recordIds]);
+      const rows: Record<string, unknown>[] = app.database_mode === 'mysql'
+        ? (raw as [Record<string, unknown>[], unknown])[0]
+        : (raw as Record<string, unknown>[]);
+
+      for (const row of rows) {
+        const srcId = String(row['_src_id'] ?? '');
+        if (!srcId) continue;
+        if (!result.has(srcId)) result.set(srcId, {});
+        const entry = result.get(srcId)!;
+        for (const fld of fields) {
+          entry[`_owner__${ownerTable}__${fld}`] = String(row[`${ownerTable}__${fld}`] ?? '');
+        }
+      }
+    } catch {
+      // _wdpro_metadata or owner table may not exist yet — silently skip
     }
   }
 
@@ -1018,24 +1149,26 @@ export async function renderViewList(
 
   const hasDetail = !!tpl.detail?.trim();
 
-  // Pre-fetch gallery first-photos for $thumbnail[table.field] tokens that reference
-  // gallery tables rather than direct columns in the query result.
+  // Pre-fetch gallery first-photos and owner fields for the row template.
   const existingKeys = rows.length ? new Set(Object.keys(rows[0])) : new Set<string>();
   const recordIdsForGallery = rows.map(r => String(r[pkName] ?? r[`${baseTableName}__${pkName}`] ?? '')).filter(Boolean);
-  const galleryThumbs = await prefetchGalleryThumbnails(app, appDb, tpl.row ?? '', recordIdsForGallery, existingKeys);
+  const [galleryThumbs, ownerExtrasMap] = await Promise.all([
+    prefetchGalleryThumbnails(app, appDb, tpl.row ?? '', recordIdsForGallery, existingKeys),
+    prefetchOwnerFields(app, appDb, tpl.row ?? '', baseTableName, recordIdsForGallery),
+  ]);
 
   let lastGroup: unknown = Symbol('none');
   for (let i = 0; i < rows.length; i++) {
     const row    = rows[i];
     const pkVal  = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? '');
 
-    // Inject gallery first-photo values so $thumbnail[table.field] resolves them.
     const galleryExtras: Record<string, string> = {};
     for (const [alias, photoMap] of galleryThumbs) {
       galleryExtras[alias] = photoMap.get(pkVal) ?? '';
     }
+    const ownerExtras = ownerExtrasMap.get(pkVal) ?? {};
 
-    const rowData = { ...sys, ...row, ...galleryExtras, _pk: pkVal, _row_num: offset + i + 1 };
+    const rowData = { ...sys, ...row, ...galleryExtras, ...ownerExtras, _pk: pkVal, _row_num: offset + i + 1 };
 
     if (groupField) {
       const gv = row[groupField];
@@ -1103,26 +1236,29 @@ export async function renderViewDetail(
   const pkVal   = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? recordId);
   const meta    = await getRecordMeta(app, baseTableName, pkVal);
 
-  // Pre-fetch gallery first-photos for $thumbnail[table.field] tokens in the detail template.
+  // Pre-fetch gallery thumbnails and owner fields for the detail template.
   const existingKeysDetail = new Set(Object.keys(row));
-  const galleryThumbsDetail = await prefetchGalleryThumbnails(
-    app, appDb, templates.detail ?? '', [pkVal], existingKeysDetail
-  );
+  const detailTpl = templates.detail ?? '';
+  const [galleryThumbsDetail, ownerFieldsDetail] = await Promise.all([
+    prefetchGalleryThumbnails(app, appDb, detailTpl, [pkVal], existingKeysDetail),
+    prefetchOwnerFields(app, appDb, detailTpl, baseTableName, [pkVal]),
+  ]);
   const galleryExtrasDetail: Record<string, string> = {};
   for (const [alias, photoMap] of galleryThumbsDetail) {
     galleryExtrasDetail[alias] = photoMap.get(pkVal) ?? '';
   }
+  const ownerExtrasDetail = ownerFieldsDetail.get(pkVal) ?? {};
 
   const rowData = {
-    _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta), ...galleryExtrasDetail,
+    _pk: pkVal, _row_num: 1, ...row, ...metaToRowKeys(meta), ...galleryExtrasDetail, ...ownerExtrasDetail,
     _portal_header: portalContext?.portalHeader ?? '',
     _portal_footer: portalContext?.portalFooter ?? '',
     _app_slug: app.slug,
   };
 
   const detailTags = parseGroupTags(templates.detail);
-  const detailTpl  = detailTags.length ? applyGroupTags(templates.detail, detailTags) : templates.detail;
-  return renderReviewMarkers(renderTokens(detailTpl, rowData));
+  const detailTplFinal = detailTags.length ? applyGroupTags(templates.detail, detailTags) : templates.detail;
+  return renderReviewMarkers(renderTokens(detailTplFinal, rowData));
 }
 
 export async function renderViewEditForm(

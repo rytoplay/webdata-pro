@@ -62,6 +62,8 @@ export async function touchRecordMeta(
 ): Promise<void> {
   await ensureMetaTable(app);
   const appDb = getAppDb(app);
+  // MySQL DATETIME requires "YYYY-MM-DD HH:MM:SS" — strip the T and fractional seconds/Z
+  const ts = now.slice(0, 19).replace('T', ' ');
   const key = { table_name: tableName, record_id: String(recordId) };
   const existing = await appDb('_wdpro_metadata').where(key).first();
 
@@ -70,16 +72,16 @@ export async function touchRecordMeta(
       ...key,
       created_by_id:   memberId,
       created_by_name: memberName,
-      created_at:      now,
+      created_at:      ts,
       updated_by_id:   memberId,
       updated_by_name: memberName,
-      updated_at:      now,
+      updated_at:      ts,
     });
   } else {
     await appDb('_wdpro_metadata').where(key).update({
       updated_by_id:   memberId,
       updated_by_name: memberName,
-      updated_at:      now,
+      updated_at:      ts,
     });
   }
 }

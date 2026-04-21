@@ -43,6 +43,7 @@ export interface GroupTablePermission {
   can_edit: boolean;
   can_delete: boolean;
   manage_all: boolean;
+  single_record: boolean;
   // legacy columns kept in DB for migration safety
   can_view?: boolean;
   can_edit_all_records?: boolean;
@@ -58,4 +59,5 @@ export interface UpsertGroupTablePermissionInput {
   can_edit?: boolean;
   can_delete?: boolean;
   manage_all?: boolean;
+  single_record?: boolean;
 }

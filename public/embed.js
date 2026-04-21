@@ -268,6 +268,7 @@
         const access  = getAccess(instance.cfg);
         if (access) headers['Authorization'] = 'Bearer ' + access;
 
+        headers['Accept'] = 'application/json';
         fetch(url, { method: 'PATCH', headers, credentials: 'include', body })
           .then(function (res) {
             if (res.ok) {
@@ -279,6 +280,11 @@
                 const errEl = document.createElement('p');
                 errEl.className = 'wdp-error';
                 errEl.textContent = data.error || 'Save failed.';
+                form.prepend(errEl);
+              }).catch(function () {
+                const errEl = document.createElement('p');
+                errEl.className = 'wdp-error';
+                errEl.textContent = 'Save failed (server error).';
                 form.prepend(errEl);
               });
             }
@@ -298,6 +304,7 @@
         const headers = hasFiles ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' };
         const access  = getAccess(instance.cfg);
         if (access) headers['Authorization'] = 'Bearer ' + access;
+        headers['Accept'] = 'application/json';
         fetch(url, { method: 'POST', headers, credentials: 'include', body })
           .then(function (res) {
             if (res.ok) {
@@ -315,6 +322,11 @@
                 const errEl = document.createElement('p');
                 errEl.className = 'wdp-error';
                 errEl.textContent = data.error || 'Create failed.';
+                form.prepend(errEl);
+              }).catch(function () {
+                const errEl = document.createElement('p');
+                errEl.className = 'wdp-error';
+                errEl.textContent = 'Create failed (server error).';
                 form.prepend(errEl);
               });
             }
@@ -403,7 +415,7 @@
       if (!window.confirm('Delete this record?')) return;
       const base    = (instance.cfg.baseUrl || '').replace(/\/$/, '');
       const url     = base + deletePath(instance.cfg, id);
-      const headers = {};
+      const headers = { 'Accept': 'application/json' };
       const access  = getAccess(instance.cfg);
       if (access) headers['Authorization'] = 'Bearer ' + access;
       fetch(url, { method: 'POST', headers, credentials: 'include' })
@@ -414,7 +426,7 @@
           } else {
             res.json().then(function (data) {
               alert(data.error || 'Delete failed.');
-            });
+            }).catch(function () { alert('Delete failed (server error).'); });
           }
         })
         .catch(function (err) { alert('Delete failed: ' + String(err)); });

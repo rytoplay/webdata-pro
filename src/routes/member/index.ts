@@ -7,6 +7,9 @@ import { db } from '../../db/knex';
 import * as membersService from '../../services/members';
 import * as emailService from '../../services/email';
 import type { App } from '../../domain/types';
+import { getAppDb } from '../../db/adapters/appDb';
+import { renderBrandingTemplate, getBranding } from './branding';
+import { memberTableRouter } from './table';
 
 const RegisterSchema = z.object({
   first_name:       z.string().optional(),
@@ -19,33 +22,16 @@ const RegisterSchema = z.object({
   path: ['password_confirm'],
 });
 
-function renderBrandingTemplate(template: string, app: App, member: object | null, portalHeader = '', portalFooter = ''): string {
-  try {
-    const resolved = template
-      .replace(/\$portal_header/g, portalHeader)
-      .replace(/\$portal_footer/g, portalFooter);
-    return nunjucks.renderString(resolved, {
-      app,
-      member,
-      logoutUrl: `/app/${app.slug}/logout`,
-    });
-  } catch (err: any) {
-    return `<!-- branding template error: ${err.message} -->`;
-  }
-}
-
-async function getBranding(app: App, memberId: number | null) {
-  const memberData = memberId ? await membersService.getMember(memberId) : null;
-  const headerHtml = app.member_header_html
-    ? renderBrandingTemplate(app.member_header_html, app, memberData ?? null)
-    : null;
-  const footerHtml = app.member_footer_html
-    ? renderBrandingTemplate(app.member_footer_html, app, memberData ?? null)
-    : null;
-  return { headerHtml, footerHtml };
-}
-
-function renderHomeTemplate(template: string, app: App, member: object, views: object[], portalHeader = '', portalFooter = ''): string {
+function renderHomeTemplate(
+  template: string,
+  app: App,
+  member: object,
+  browseViews: any[],
+  manageViews: any[],
+  tables: any[],
+  portalHeader = '',
+  portalFooter = '',
+): string {
   try {
     let _widgetCount = 0;
 
@@ -64,7 +50,12 @@ function renderHomeTemplate(template: string, app: App, member: object, views: o
       .replace(/\$portal_header/g, portalHeader)
       .replace(/\$portal_footer/g, portalFooter);
 
-    return nunjucks.renderString(resolved, { app, member, views, embedView, viewUrl, logoutUrl: `/app/${app.slug}/logout` });
+    // views = combined list for backward compat with custom templates
+    const views = [...browseViews, ...manageViews];
+    return nunjucks.renderString(resolved, {
+      app, member, views, browseViews, manageViews, tables, embedView, viewUrl,
+      logoutUrl: `/app/${app.slug}/logout`,
+    });
   } catch (err: any) {
     return `<p style="color:red"><strong>Template error:</strong> ${err.message}</p>`;
   }
@@ -85,6 +76,144 @@ async function totpStatus(
   return secret ? 'verify' : 'setup';
 }
 
+// ── Member view/table helper ─────────────────────────────────────────────────
+
+/**
+ * Returns all views a member can access, split into two groups:
+ *  - browseViews: views where the member has no edit/add rights on the table
+ *  - manageViews: views where the member can add/edit records, or single_record views
+ */
+async function getMemberViews(
+  appId: number,
+  groupIds: number[],
+  appSlug: string,
+): Promise<{ browseViews: any[]; manageViews: any[] }> {
+  if (!groupIds.length) return { browseViews: [], manageViews: [] };
+
+  const rows = await db('views')
+    .join('view_group_permissions', 'view_group_permissions.view_id', 'views.id')
+    .whereIn('view_group_permissions.group_id', groupIds)
+    .where('view_group_permissions.can_view', true)
+    .where('views.app_id', appId)
+    .distinct(
+      'views.id', 'views.label', 'views.view_name', 'views.base_table_id',
+      'view_group_permissions.limit_to_own_records',
+    )
+    .orderBy('views.label');
+
+  // Which tables does this member have add/edit rights on, and which are single_record?
+  const tablePerms = await db('group_table_permissions')
+    .whereIn('group_id', groupIds)
+    .select('table_id', 'can_add', 'can_edit', 'manage_all', 'single_record');
+
+  const editableTables = new Set(
+    tablePerms
+      .filter((p: any) => p.can_add || p.can_edit || p.manage_all)
+      .map((p: any) => p.table_id)
+  );
+  const singleRecordTables = new Set(
+    tablePerms
+      .filter((p: any) => p.single_record)
+      .map((p: any) => p.table_id)
+  );
+
+  const views = rows.map((v: any) => ({
+    ...v,
+    url:          `/app/${appSlug}/view/${v.view_name}`,
+    canEdit:      editableTables.has(v.base_table_id),
+    singleRecord: singleRecordTables.has(v.base_table_id),
+  }));
+
+  return {
+    browseViews: views.filter((v: any) => !v.canEdit && !v.singleRecord),
+    manageViews: views.filter((v: any) => v.canEdit || v.singleRecord),
+  };
+}
+
+// ── Member table access helper ───────────────────────────────────────────────
+
+/**
+ * Returns all tables a member can directly access (add/edit/delete/manage_all),
+ * merged across all their groups, with CTA metadata for the homepage.
+ */
+async function getMemberTableAccess(
+  app: App,
+  groupIds: number[],
+  memberId: number,
+): Promise<any[]> {
+  if (!groupIds.length) return [];
+
+  const perms = await db('group_table_permissions')
+    .whereIn('group_id', groupIds)
+    .select('table_id', 'can_add', 'can_edit', 'can_delete', 'manage_all', 'single_record');
+
+  if (!perms.length) return [];
+
+  // Merge permissions across groups (OR logic)
+  const merged = new Map<number, {
+    can_add: boolean; can_edit: boolean; can_delete: boolean;
+    manage_all: boolean; single_record: boolean;
+  }>();
+  for (const p of perms) {
+    const ex = merged.get(p.table_id);
+    if (!ex) {
+      merged.set(p.table_id, {
+        can_add:       !!p.can_add,
+        can_edit:      !!p.can_edit,
+        can_delete:    !!p.can_delete,
+        manage_all:    !!p.manage_all,
+        single_record: !!p.single_record,
+      });
+    } else {
+      ex.can_add       = ex.can_add       || !!p.can_add;
+      ex.can_edit      = ex.can_edit      || !!p.can_edit;
+      ex.can_delete    = ex.can_delete    || !!p.can_delete;
+      ex.manage_all    = ex.manage_all    || !!p.manage_all;
+      ex.single_record = ex.single_record || !!p.single_record;
+    }
+  }
+
+  // Only include tables where the member can actually do something
+  const actionableIds = [...merged.entries()]
+    .filter(([, p]) => p.can_add || p.can_edit || p.manage_all)
+    .map(([id]) => id);
+  if (!actionableIds.length) return [];
+
+  const tables = await db('app_tables')
+    .whereIn('id', actionableIds)
+    .where({ app_id: app.id })
+    .orderBy('label');
+
+  const appDb = getAppDb(app);
+  const result = [];
+
+  for (const table of tables) {
+    const perm = merged.get(table.id)!;
+    let existingRecordId: string | null = null;
+
+    if (perm.single_record) {
+      try {
+        const meta = await appDb('_wdpro_metadata')
+          .where({ table_name: table.table_name, created_by_id: memberId })
+          .orderBy('created_at', 'desc')
+          .first();
+        existingRecordId = meta?.record_id ?? null;
+      } catch { /* metadata table not created yet */ }
+    }
+
+    result.push({
+      ...table,
+      ...perm,
+      existingRecordId,
+      tableUrl: `/app/${app.slug}/table/${table.table_name}`,
+      newUrl:   `/app/${app.slug}/table/${table.table_name}/new`,
+      editUrl:  existingRecordId ? `/app/${app.slug}/table/${table.table_name}/${existingRecordId}/edit` : null,
+    });
+  }
+
+  return result;
+}
+
 // Default home template used when no group or app template has been configured.
 const DEFAULT_HOME_TEMPLATE = `
 $portal_header
@@ -94,25 +223,85 @@ $portal_header
   </h2>
   <p style="color:#6b7280;margin-bottom:2rem;">You are signed in to <strong>{{ app.name }}</strong>.</p>
 
-  {% if views.length %}
-  <div style="display:grid;gap:0.75rem;">
-    {% for v in views %}
-    <a href="{{ v.url }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.9rem 1.1rem;
+  {% if browseViews.length %}
+  <h3 style="font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;margin-bottom:0.75rem;">Browse &amp; Search</h3>
+  <div style="display:grid;gap:0.6rem;margin-bottom:2rem;">
+    {% for v in browseViews %}
+    <a href="{{ v.url }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.85rem 1.1rem;
         background:#fff;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;
-        box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow 0.15s;"
-       onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'"
-       onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
-      <span style="font-size:1.25rem;line-height:1;">&#128196;</span>
+        box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+      <span style="font-size:1.1rem;line-height:1;">&#128269;</span>
       <span style="font-weight:600;font-size:0.95rem;">{{ v.label }}</span>
       <span style="margin-left:auto;color:#9ca3af;font-size:0.85rem;">&#8250;</span>
     </a>
     {% endfor %}
   </div>
-  {% else %}
-  <p style="color:#9ca3af;">You don't have access to any views yet. Contact your administrator.</p>
   {% endif %}
 
-  <div style="margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid #e5e7eb;text-align:right;">
+  {% if manageViews.length %}
+  <h3 style="font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;margin-bottom:0.75rem;">Searches and Reports</h3>
+  <div style="display:grid;gap:0.6rem;margin-bottom:2rem;">
+    {% for v in manageViews %}
+    <a href="{{ v.url }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.85rem 1.1rem;
+        background:#fff;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;
+        box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+      <span style="font-size:1.1rem;line-height:1;">&#9998;</span>
+      <span style="font-weight:600;font-size:0.95rem;">{{ v.label }}</span>
+      <span style="margin-left:auto;color:#9ca3af;font-size:0.85rem;">&#8250;</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if tables.length %}
+  <h3 style="font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;margin-bottom:0.75rem;">Manage Data</h3>
+  <div style="display:grid;gap:0.6rem;margin-bottom:2rem;">
+    {% for t in tables %}
+      {% if t.single_record %}
+        {% if t.existingRecordId %}
+        <a href="{{ t.editUrl }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.85rem 1.1rem;
+            background:#fff;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;
+            box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <span style="font-size:1.1rem;line-height:1;">&#9998;</span>
+          <span style="font-weight:600;font-size:0.95rem;">Edit my {{ t.label }}</span>
+          <span style="margin-left:auto;color:#9ca3af;font-size:0.85rem;">&#8250;</span>
+        </a>
+        {% elif t.can_add %}
+        <a href="{{ t.newUrl }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.85rem 1.1rem;
+            background:#fff;border:1px solid #d1fae5;border-radius:10px;text-decoration:none;color:inherit;
+            box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <span style="font-size:1.1rem;line-height:1;">&#43;</span>
+          <span style="font-weight:600;font-size:0.95rem;">Create {{ t.label }}</span>
+          <span style="margin-left:auto;color:#9ca3af;font-size:0.85rem;">&#8250;</span>
+        </a>
+        {% endif %}
+      {% else %}
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <a href="{{ t.tableUrl }}" style="flex:1;display:flex;align-items:center;gap:0.75rem;padding:0.85rem 1.1rem;
+            background:#fff;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;
+            box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <span style="font-size:1.1rem;line-height:1;">&#128196;</span>
+          <span style="font-weight:600;font-size:0.95rem;">{{ t.label }}</span>
+          <span style="margin-left:auto;color:#9ca3af;font-size:0.85rem;">&#8250;</span>
+        </a>
+        {% if t.can_add %}
+        <a href="{{ t.newUrl }}" style="padding:0.85rem 1rem;background:#fff;border:1px solid #e5e7eb;
+            border-radius:10px;text-decoration:none;color:#374151;font-weight:600;white-space:nowrap;
+            box-shadow:0 1px 3px rgba(0,0,0,0.06);font-size:0.85rem;">
+          &#43; Add
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not browseViews.length and not manageViews.length and not tables.length %}
+  <p style="color:#9ca3af;">You don't have access to any content yet. Contact your administrator.</p>
+  {% endif %}
+
+  <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #e5e7eb;text-align:right;">
     <a href="{{ logoutUrl }}" style="font-size:0.85rem;color:#6b7280;text-decoration:none;">Sign out</a>
   </div>
 </div>
@@ -153,20 +342,11 @@ memberRouter.get('/', async (req, res, next) => {
       }
     }
 
-    // Find views the member can access via their groups
-    let views: any[] = [];
-    if (member.groupIds.length > 0) {
-      const rows = await db('views')
-        .join('view_group_permissions', 'view_group_permissions.view_id', 'views.id')
-        .whereIn('view_group_permissions.group_id', member.groupIds)
-        .where('view_group_permissions.can_view', true)
-        .where('views.app_id', app.id)
-        .distinct('views.id', 'views.label', 'views.view_name')
-        .orderBy('views.label');
-      views = rows.map((v: any) => ({ ...v, url: `/app/${app.slug}/view/${v.view_name}` }));
-    }
-
     const freshApp = await db('apps').where({ id: app.id }).first();
+    const [{ browseViews, manageViews }, tables] = await Promise.all([
+      getMemberViews(app.id, member.groupIds, app.slug),
+      getMemberTableAccess(freshApp, member.groupIds, member.memberId),
+    ]);
 
     // Use home_template from first matching group that has one
     let groupTemplate: string | null = null;
@@ -184,13 +364,12 @@ memberRouter.get('/', async (req, res, next) => {
 
     const memberData = await membersService.getMember(member.memberId);
     const { headerHtml, footerHtml } = await getBranding(freshApp, member.memberId);
-    const logoutUrl = `/app/${app.slug}/logout`;
 
     const template = groupTemplate ?? freshApp.home_template ?? DEFAULT_HOME_TEMPLATE;
     const memberCtx = memberData || member;
     const pH = headerHtml ?? '';
     const pF = footerHtml ?? '';
-    const bodyHtml = renderHomeTemplate(template, freshApp, memberCtx, views, pH, pF);
+    const bodyHtml = renderHomeTemplate(template, freshApp, memberCtx, browseViews, manageViews, tables, pH, pF);
     const homeParts = [
       groupHomeHeader ? renderBrandingTemplate(groupHomeHeader, freshApp, memberCtx, pH, pF) : '',
       bodyHtml,
@@ -198,7 +377,7 @@ memberRouter.get('/', async (req, res, next) => {
     ].filter(Boolean);
     return res.render('member/home', {
       title: app.name, app: freshApp, renderedHtml: homeParts.join('\n'),
-      suppressPortalNav: true, memberLogoutUrl: logoutUrl,
+      suppressPortalNav: true, memberLogoutUrl: `/app/${app.slug}/logout`,
     });
   } catch (err) { next(err); }
 });
@@ -216,11 +395,11 @@ memberRouter.get('/view/:viewName', async (req, res, next) => {
     const view = await db('views').where({ app_id: app.id, view_name: req.params.viewName }).first();
     if (!view) return res.status(404).send('View not found');
 
-    // Check if this view is single_record for any of the member's groups
+    // Check if this view's base table is single_record for any of the member's groups
     const singleRecordPerm = member.groupIds.length > 0
-      ? await db('view_group_permissions')
+      ? await db('group_table_permissions')
           .whereIn('group_id', member.groupIds)
-          .where({ view_id: view.id, single_record: true })
+          .where({ table_id: view.base_table_id, single_record: true })
           .first()
       : null;
 
@@ -680,31 +859,17 @@ memberRouter.get('/sitemap', async (req, res, next) => {
       return res.redirect(`/app/${app.slug}/login?returnTo=${encodeURIComponent(req.originalUrl)}`);
     }
 
-    // All views this member can access, with their permissions
-    let views: any[] = [];
-    if (member.groupIds.length > 0) {
-      const rows = await db('views')
-        .join('view_group_permissions', 'view_group_permissions.view_id', 'views.id')
-        .whereIn('view_group_permissions.group_id', member.groupIds)
-        .where('view_group_permissions.can_view', true)
-        .where('views.app_id', app.id)
-        .distinct(
-          'views.id', 'views.label', 'views.view_name',
-          'view_group_permissions.single_record',
-        )
-        .orderBy('views.label');
-      views = rows.map((v: any) => ({
-        ...v,
-        url:       `/app/${app.slug}/view/${v.view_name}`,
-        createUrl: `/app/${app.slug}/view/${v.view_name}?action=new`,
-      }));
-    }
-
-    const { headerHtml, footerHtml } = await getBranding(app, member.memberId);
+    const [{ browseViews, manageViews }, tables, { headerHtml, footerHtml }] = await Promise.all([
+      getMemberViews(app.id, member.groupIds, app.slug),
+      getMemberTableAccess(app, member.groupIds, member.memberId),
+      getBranding(app, member.memberId),
+    ]);
     res.render('member/sitemap', {
       title: `Site Map — ${app.name}`,
       app,
-      views,
+      browseViews,
+      manageViews,
+      tables,
       headerHtml,
       footerHtml,
       suppressPortalNav: !!headerHtml,
@@ -714,6 +879,10 @@ memberRouter.get('/sitemap', async (req, res, next) => {
     });
   } catch (err) { next(err); }
 });
+
+// ── Table CRUD sub-router ────────────────────────────────────────────────────
+
+memberRouter.use('/table', memberTableRouter);
 
 // ── GET /app/:appSlug/logout ─────────────────────────────────────────────────
 

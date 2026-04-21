@@ -1,0 +1,150 @@
+{% extends "member/layout.njk" %}
+
+{% block content %}
+<div class="container py-4" style="max-width:800px;">
+
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <a href="{{ homeUrl }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Home
+    </a>
+    <h1 class="h4 mb-0 fw-bold flex-grow-1">{{ table.label }}</h1>
+    {% if newUrl %}
+    <a href="{{ newUrl }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>Add Record
+    </a>
+    {% endif %}
+  </div>
+
+  {% if flash and flash.type != 'success' %}
+  <div class="alert alert-{{ flash.type }} alert-dismissible fade show" role="alert">
+    {{ flash.message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+
+  <form method="GET" action="{{ tableUrl }}" class="mb-3 d-flex gap-2" style="max-width:480px;">
+    <div class="input-group">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="Search…" autofocus>
+      {% if q %}
+      <a href="{{ tableUrl }}" class="btn btn-outline-secondary" title="Clear">
+        <i class="bi bi-x-lg"></i>
+      </a>
+      {% endif %}
+    </div>
+    <button type="submit" class="btn btn-outline-primary">Search</button>
+  </form>
+
+  {% if records.length === 0 and not q %}
+
+  <div class="card shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-inbox fs-1 text-muted d-block mb-2"></i>
+      <p class="text-muted mb-3">No records yet.</p>
+      {% if newUrl %}
+      <a href="{{ newUrl }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>Add First Record
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% elif records.length === 0 and q %}
+
+  <div class="card shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-search fs-1 text-muted d-block mb-2"></i>
+      <p class="text-muted mb-0">No records match <strong>{{ q }}</strong>.</p>
+    </div>
+  </div>
+
+  {% else %}
+
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            {% if perm.can_edit or perm.manage_all %}
+            <th style="width:44px;"></th>
+            {% endif %}
+            {% for field in fields %}
+              {% if field.ui_widget !== 'hidden' or field.is_primary_key %}
+              <th>{{ field.label }}</th>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in records %}
+          <tr>
+            {% if perm.can_edit or perm.manage_all %}
+            <td style="white-space:nowrap;">
+              {% if pkField %}
+              <a href="{{ tableUrl }}/{{ record[pkField.field_name] }}/edit"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% endif %}
+            </td>
+            {% endif %}
+            {% for field in fields %}
+              {% if field.ui_widget !== 'hidden' or field.is_primary_key %}
+              <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {% set val = record[field.field_name] %}
+                {% if val === null or val === undefined or val === '' %}
+                  <span class="text-muted" style="font-size:0.8rem;">—</span>
+                {% elif field.ui_widget === 'checkbox' or field.data_type === 'boolean' %}
+                  {% if val %}
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                  {% else %}
+                    <i class="bi bi-circle text-muted"></i>
+                  {% endif %}
+                {% elif field.is_primary_key %}
+                  <span class="text-muted" style="font-size:0.8rem;">{{ val }}</span>
+                {% elif field.ui_widget === 'image' and val %}
+                  <img src="/files/{{ val }}?thumb=1" style="height:32px;width:32px;object-fit:cover;border-radius:4px;" alt="">
+                {% else %}
+                  {{ val }}
+                {% endif %}
+              </td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer text-muted" style="font-size:0.8rem;">
+      {% if records.length >= 200 %}
+        Showing first 200 results{% if q %} for <strong>{{ q }}</strong>{% endif %}.
+      {% elif q %}
+        {{ records.length }} result{{ 's' if records.length !== 1 else '' }} for <strong>{{ q }}</strong>
+      {% else %}
+        {{ records.length }} record{{ 's' if records.length !== 1 else '' }}
+      {% endif %}
+    </div>
+  </div>
+
+  {% endif %}
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if flash and flash.type == 'success' %}
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:1100;">
+  <div id="liveToast" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold">
+        <i class="bi bi-check-circle-fill me-1"></i> {{ flash.message }}
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+<script>
+  bootstrap.Toast.getOrCreateInstance(document.getElementById('liveToast'), { delay: 2500 }).show();
+</script>
+{% endif %}
+{% endblock %}

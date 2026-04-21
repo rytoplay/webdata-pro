@@ -98,18 +98,18 @@ adminRouter.get('/endpoints', requireApp, async (req, res, next) => {
     const groupData = await Promise.all(allGroups.map(async (g: any) => {
       const viewPerms = await db('view_group_permissions')
         .where({ group_id: g.id, can_view: true })
-        .select('view_id', 'single_record');
+        .select('view_id');
       const viewIds = new Set(viewPerms.map((p: any) => p.view_id));
-      const srIds   = new Set(viewPerms.filter((p: any) => p.single_record).map((p: any) => p.view_id));
-
-      const memberViews = allViews
-        .filter((v: any) => viewIds.has(v.id) && !v.is_public)
-        .map((v: any) => ({ ...v, single_record: srIds.has(v.id) }));
 
       const tablePerms = await db('group_table_permissions')
         .where({ group_id: g.id })
         .where(function(this: any) { this.where('can_add', true).orWhere('can_edit', true); })
-        .select('table_id', 'can_add', 'can_edit', 'can_delete', 'manage_all');
+        .select('table_id', 'can_add', 'can_edit', 'can_delete', 'manage_all', 'single_record');
+      const srTableIds = new Set(tablePerms.filter((p: any) => p.single_record).map((p: any) => p.table_id));
+
+      const memberViews = allViews
+        .filter((v: any) => viewIds.has(v.id) && !v.is_public)
+        .map((v: any) => ({ ...v, single_record: srTableIds.has(v.base_table_id) }));
 
       const tableIds = tablePerms.map((p: any) => p.table_id);
       const tables   = tableIds.length

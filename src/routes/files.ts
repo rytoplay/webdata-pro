@@ -95,6 +95,19 @@ filesRouter.get('/:appSlug/:tableName/:fieldName/:filename', async (req, res) =>
         .where('view_group_permissions.can_view', true)
         .first();
       if (memberView) return serveFile(res, filePath);
+
+      // ── 8. Member with table CRUD permissions → allow ──
+      // Covers files in tables accessed via the default member table interface
+      // (group_table_permissions) which has no corresponding view_group_permissions entry.
+      const tablePerm = await db('group_table_permissions')
+        .whereIn('group_id', memberSession.groupIds)
+        .whereIn('table_id', tableIdsToCheck)
+        .where(function () {
+          this.where('can_add', true).orWhere('can_edit', true)
+              .orWhere('can_delete', true).orWhere('manage_all', true);
+        })
+        .first();
+      if (tablePerm) return serveFile(res, filePath);
     }
   }
 

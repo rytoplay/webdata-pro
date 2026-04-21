@@ -51,12 +51,12 @@ export interface BlueprintGroupTablePerm {
   can_edit?: boolean;
   can_delete?: boolean;
   manage_all?: boolean;
+  single_record?: boolean;
 }
 
 export interface BlueprintGroupViewPerm {
   can_view?: boolean;
   limit_to_own_records?: boolean;
-  single_record?: boolean;
 }
 
 export interface BlueprintGroup {
@@ -378,12 +378,13 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
         const tableId = tableIdByName.get(tName);
         if (!tableId) continue;
         await groupsService.upsertTablePermission({
-          group_id:   group.id,
-          table_id:   tableId,
-          can_add:    tp.can_add    ?? false,
-          can_edit:   tp.can_edit   ?? false,
-          can_delete: tp.can_delete ?? false,
-          manage_all: tp.manage_all ?? false,
+          group_id:      group.id,
+          table_id:      tableId,
+          can_add:       tp.can_add       ?? false,
+          can_edit:      tp.can_edit      ?? false,
+          can_delete:    tp.can_delete    ?? false,
+          manage_all:    tp.manage_all    ?? false,
+          single_record: tp.single_record ?? false,
         });
       }
 
@@ -397,7 +398,6 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
           view_id:              viewId,
           can_view:             canView,
           limit_to_own_records: vp.limit_to_own_records ?? false,
-          single_record:        vp.single_record        ?? false,
         }]);
         if (canView && homeViewId === null) homeViewId = viewId;
       }

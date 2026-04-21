@@ -127,11 +127,12 @@ groupsRouter.post('/:id/permissions', async (req, res, next) => {
     // Table permissions
     const allTables = await db('app_tables').where({ app_id: app.id });
     const tableRows = allTables.map((t: { id: number }) => ({
-      table_id:   t.id,
-      can_add:    !!(body[`tp_${t.id}_can_add`]),
-      can_edit:   !!(body[`tp_${t.id}_can_edit`]),
-      can_delete: !!(body[`tp_${t.id}_can_delete`]),
-      manage_all: !!(body[`tp_${t.id}_manage_all`]),
+      table_id:      t.id,
+      can_add:       !!(body[`tp_${t.id}_can_add`]),
+      can_edit:      !!(body[`tp_${t.id}_can_edit`]),
+      can_delete:    !!(body[`tp_${t.id}_can_delete`]),
+      manage_all:    !!(body[`tp_${t.id}_manage_all`]),
+      single_record: !!(body[`tp_${t.id}_single_record`]),
     }));
     await groupsService.saveTablePermGrid(group.id, tableRows);
 
@@ -141,7 +142,6 @@ groupsRouter.post('/:id/permissions', async (req, res, next) => {
       view_id:              v.id,
       can_view:             !!(body[`vp_${v.id}_can_view`]),
       limit_to_own_records: !!(body[`vp_${v.id}_limit_to_own_records`]),
-      single_record:        !!(body[`vp_${v.id}_single_record`]),
     }));
     await groupsService.saveViewPermGrid(group.id, viewRows);
 

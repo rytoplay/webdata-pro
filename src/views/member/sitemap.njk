@@ -9,36 +9,74 @@
     <h1 class="h4 mb-0 fw-bold">Site Map</h1>
   </div>
 
-  {% if views.length === 0 %}
+  {% if not browseViews.length and not manageViews.length and not tables.length %}
   <div class="text-center text-muted py-5">
     <i class="bi bi-map fs-1 d-block mb-2"></i>
-    <p>You don't have access to any views yet.</p>
+    <p>You don't have access to any content yet.</p>
   </div>
-  {% else %}
-  <div class="d-flex flex-column gap-3">
-    {% for v in views %}
-    <div class="card border shadow-sm" style="border-radius:12px;overflow:hidden;">
-      <div class="card-body pb-2">
-        <div class="d-flex align-items-start gap-2">
-          <i class="bi bi-table text-primary mt-1"></i>
-          <div class="flex-grow-1">
-            <div class="fw-bold">{{ v.label }}</div>
-          </div>
-        </div>
-      </div>
-      <div class="card-footer bg-transparent border-top d-flex gap-2 flex-wrap py-2">
-        <a href="{{ v.url }}" class="btn btn-sm btn-primary">
-          <i class="bi bi-search me-1"></i>Browse
-        </a>
-        {% if not v.single_record %}
-        <a href="{{ v.createUrl }}" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-plus-circle me-1"></i>Add new
-        </a>
-        {% endif %}
-      </div>
-    </div>
+  {% endif %}
+
+  {% if browseViews.length %}
+  <p class="text-uppercase fw-bold small text-muted mb-2" style="letter-spacing:0.06em;">Browse &amp; Search</p>
+  <div class="d-flex flex-column gap-2 mb-4">
+    {% for v in browseViews %}
+    <a href="{{ v.url }}" class="d-flex align-items-center gap-2 px-3 py-2 bg-white border rounded-3 text-decoration-none text-dark shadow-sm">
+      <i class="bi bi-search text-primary"></i>
+      <span class="fw-semibold">{{ v.label }}</span>
+      <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+    </a>
     {% endfor %}
   </div>
   {% endif %}
+
+  {% if manageViews.length %}
+  <p class="text-uppercase fw-bold small text-muted mb-2" style="letter-spacing:0.06em;">Searches and Reports</p>
+  <div class="d-flex flex-column gap-2 mb-4">
+    {% for v in manageViews %}
+    <a href="{{ v.url }}" class="d-flex align-items-center gap-2 px-3 py-2 bg-white border rounded-3 text-decoration-none text-dark shadow-sm">
+      <i class="bi bi-pencil-square text-success"></i>
+      <span class="fw-semibold">{{ v.label }}</span>
+      <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if tables.length %}
+  <p class="text-uppercase fw-bold small text-muted mb-2" style="letter-spacing:0.06em;">Manage Data</p>
+  <div class="d-flex flex-column gap-2 mb-4">
+    {% for t in tables %}
+      {% if t.single_record %}
+        {% if t.existingRecordId %}
+        <a href="{{ t.editUrl }}" class="d-flex align-items-center gap-2 px-3 py-2 bg-white border rounded-3 text-decoration-none text-dark shadow-sm">
+          <i class="bi bi-pencil text-primary"></i>
+          <span class="fw-semibold">Edit my {{ t.label }}</span>
+          <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+        </a>
+        {% elif t.can_add %}
+        <a href="{{ t.newUrl }}" class="d-flex align-items-center gap-2 px-3 py-2 bg-white border border-success rounded-3 text-decoration-none text-dark shadow-sm">
+          <i class="bi bi-plus-circle text-success"></i>
+          <span class="fw-semibold">Create {{ t.label }}</span>
+          <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+        </a>
+        {% endif %}
+      {% else %}
+      <div class="d-flex align-items-center gap-2">
+        <a href="{{ t.tableUrl }}" class="flex-grow-1 d-flex align-items-center gap-2 px-3 py-2 bg-white border rounded-3 text-decoration-none text-dark shadow-sm">
+          <i class="bi bi-table text-secondary"></i>
+          <span class="fw-semibold">{{ t.label }}</span>
+          <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+        </a>
+        {% if t.can_add %}
+        <a href="{{ t.newUrl }}" class="btn btn-sm btn-outline-success">
+          <i class="bi bi-plus-lg"></i> Add
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
 </div>
 {% endblock %}

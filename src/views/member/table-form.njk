@@ -1,0 +1,283 @@
+{% extends "member/layout.njk" %}
+
+{% block content %}
+
+{% set isEdit = record !== null %}
+
+<div class="container py-4" style="max-width:680px;">
+
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <a href="{{ backUrl }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </a>
+    <h1 class="h4 mb-0 fw-bold">{{ title }}</h1>
+  </div>
+
+  {% if flash and flash.type != 'success' %}
+  <div class="alert alert-{{ flash.type }} alert-dismissible fade show" role="alert">
+    {{ flash.message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+
+      <form method="POST" action="{{ formAction }}" enctype="multipart/form-data">
+
+        {% for field in fields %}
+
+          {# Auto-increment PKs: skip on create, show as read-only on edit #}
+          {% if field.is_primary_key and field.is_auto_increment and not isEdit %}
+            {# nothing #}
+
+          {% elif field.is_primary_key and isEdit %}
+            <div class="mb-3">
+              <label class="form-label">{{ field.label }}</label>
+              <div>
+                <span class="badge bg-secondary" style="font-size:0.85rem;padding:0.35em 0.65em;">
+                  {{ record[field.field_name] }}
+                </span>
+                <span class="ms-2 text-muted" style="font-size:0.78rem;">Primary key</span>
+              </div>
+            </div>
+
+          {% elif field.ui_widget == 'hidden' %}
+            <input type="hidden" name="{{ field.field_name }}"
+              value="{{ record[field.field_name] if (record and record[field.field_name] !== null) else (field.default_value if field.default_value else '') }}">
+
+          {% else %}
+
+            {% set fieldVal = record[field.field_name] if (record and record[field.field_name] !== null and record[field.field_name] !== undefined) else (field.default_value if field.default_value else '') %}
+
+            <div class="mb-3">
+              <label class="form-label" for="f-{{ field.field_name }}">
+                {{ field.label }}
+                {% if field.is_required %}<span class="text-danger ms-1">*</span>{% endif %}
+              </label>
+
+              {% if field.ui_widget == 'checkbox' %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                  name="{{ field.field_name }}" id="f-{{ field.field_name }}" value="on"
+                  {% if fieldVal == 1 or fieldVal == 'true' or fieldVal == 'on' or fieldVal == true %}checked{% endif %}>
+                <label class="form-check-label" for="f-{{ field.field_name }}">Yes</label>
+              </div>
+
+              {% elif field.ui_widget == 'select' %}
+              <select class="form-select" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                {% if field.is_required %}required{% endif %}>
+                {% if not field.is_required %}<option value="">— Select —</option>{% endif %}
+                {% if field.ui_options.options %}
+                  {% for opt in field.ui_options.options %}
+                  <option value="{{ opt }}"{% if fieldVal == opt %} selected{% endif %}>{{ opt }}</option>
+                  {% endfor %}
+                {% else %}
+                  <option value="{{ fieldVal }}" selected>{{ fieldVal }}</option>
+                {% endif %}
+              </select>
+
+              {% elif field.ui_widget == 'textarea' %}
+              <textarea class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                rows="{{ field.ui_options.rows if field.ui_options.rows else 4 }}"
+                {% if field.is_required %}required{% endif %}>{{ fieldVal }}</textarea>
+
+              {% elif field.ui_widget == 'date' %}
+              <input type="date" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                value="{{ fieldVal }}" {% if field.is_required %}required{% endif %}>
+
+              {% elif field.ui_widget == 'datetime' %}
+              <input type="datetime-local" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                value="{{ fieldVal }}" {% if field.is_required %}required{% endif %}>
+
+              {% elif field.ui_widget == 'time' %}
+              <input type="time" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                value="{{ fieldVal }}" {% if field.is_required %}required{% endif %}>
+
+              {% elif field.ui_widget == 'number' %}
+              <input type="number"
+                step="{{ 'any' if field.data_type in ['decimal', 'float'] else '1' }}"
+                class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                value="{{ fieldVal }}" {% if field.is_required %}required{% endif %}>
+
+              {% elif field.ui_widget == 'email' %}
+              <input type="email" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                value="{{ fieldVal }}" {% if field.is_required %}required{% endif %}>
+
+              {% elif field.ui_widget == 'url' %}
+              <input type="url" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                value="{{ fieldVal }}" {% if field.is_required %}required{% endif %}>
+
+              {% elif field.ui_widget == 'password' %}
+              <input type="password" class="form-control" autocomplete="new-password"
+                name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                {% if field.is_required %}required{% endif %}>
+
+              {% elif field.ui_widget == 'image' %}
+              {% if fieldVal %}
+              <div class="mb-2">
+                <img src="/files/{{ fieldVal }}" style="max-height:120px;max-width:240px;border-radius:6px;border:1px solid #dee2e6;" alt="">
+                <div class="form-text">Current image — upload a new one to replace it.</div>
+              </div>
+              {% endif %}
+              <input type="file" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                {% if field.is_required and not fieldVal %}required{% endif %}>
+
+              {% elif field.ui_widget == 'upload' %}
+              {% if fieldVal %}
+              <div class="mb-2">
+                <a href="/files/{{ fieldVal }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                  <i class="bi bi-file-earmark me-1"></i>View current file
+                </a>
+                <span class="text-muted ms-2" style="font-size:0.8rem;">Upload a new file to replace it.</span>
+              </div>
+              {% endif %}
+              <input type="file" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                {% if field.is_required and not fieldVal %}required{% endif %}>
+
+              {% else %}
+              <input type="text" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
+                value="{{ fieldVal }}"
+                {% if field.ui_options.max_length %}maxlength="{{ field.ui_options.max_length }}"{% endif %}
+                {% if field.is_required %}required{% endif %}>
+              {% if field.ui_options.max_length %}
+              <div class="form-text">Max {{ field.ui_options.max_length }} characters</div>
+              {% endif %}
+              {% endif %}
+
+            </div>
+          {% endif %}
+
+        {% endfor %}
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-primary">
+            {% if isEdit %}Save Changes{% else %}Create Record{% endif %}
+          </button>
+          <a href="{{ backUrl }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+
+      </form>
+
+      {% if isEdit and canDelete %}
+      <div class="mt-3 pt-3 border-top">
+        <form method="POST" action="{{ deleteAction }}"
+          onsubmit="return confirm('Delete this record? This cannot be undone.')">
+          <button class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash me-1"></i>Delete this record
+          </button>
+        </form>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  {% if isEdit and galleryTable %}
+  <div class="card shadow-sm mt-3">
+    <div class="card-header py-2 d-flex align-items-center gap-2">
+      <i class="bi bi-images text-muted"></i>
+      <strong class="small">Photos</strong>
+    </div>
+    <div class="card-body p-3"
+      id="member-gallery"
+      data-table="{{ galleryTable.table_name }}"
+      data-app="{{ appSlug }}"
+      data-record="{{ record[pkField.field_name] }}">
+      <div id="member-gallery-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;min-height:24px;"></div>
+      <label class="btn btn-sm btn-outline-secondary" style="cursor:pointer;margin-bottom:0;">
+        <i class="bi bi-plus-lg me-1"></i>Add Photos
+        <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp"
+          style="display:none;" id="member-gallery-input">
+      </label>
+      <span id="member-gallery-status" class="ms-2 text-muted" style="font-size:0.8rem;"></span>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var c    = document.getElementById('member-gallery');
+    var grid = document.getElementById('member-gallery-grid');
+    var inp  = document.getElementById('member-gallery-input');
+    var stat = document.getElementById('member-gallery-status');
+    var tbl  = c.dataset.table;
+    var app  = c.dataset.app;
+    var rec  = c.dataset.record;
+    var base = '/api/v/' + app + '/gallery/' + tbl;
+
+    function load() {
+      fetch(base + '/' + rec, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { render(d.photos || []); })
+        .catch(function () { stat.textContent = 'Could not load photos.'; });
+    }
+
+    function render(photos) {
+      grid.innerHTML = '';
+      if (!photos.length) {
+        grid.innerHTML = '<span class="text-muted" style="font-size:0.82rem;">No photos yet.</span>';
+        return;
+      }
+      photos.forEach(function (p) {
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative;width:88px;height:88px;border-radius:5px;overflow:hidden;border:1px solid #dee2e6;flex-shrink:0;';
+        var img = document.createElement('img');
+        img.src = '/files/' + p.file_path + '?thumb=1';
+        img.alt = p.original_name || '';
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.title = 'Remove';
+        del.innerHTML = '&times;';
+        del.style.cssText = 'position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;';
+        del.addEventListener('click', function () {
+          if (!confirm('Remove this photo?')) return;
+          fetch(base + '/photo/' + p.id + '/delete', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+          }).then(function () { load(); }).catch(function () {});
+        });
+        wrap.appendChild(img);
+        wrap.appendChild(del);
+        grid.appendChild(wrap);
+      });
+    }
+
+    inp.addEventListener('change', function () {
+      if (!inp.files.length) return;
+      stat.textContent = 'Uploading\u2026';
+      var fd = new FormData();
+      for (var i = 0; i < inp.files.length; i++) fd.append('photo', inp.files[i]);
+      fetch(base + '/' + rec, { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function () { stat.textContent = ''; inp.value = ''; load(); })
+        .catch(function () { stat.textContent = 'Upload failed.'; });
+    });
+
+    load();
+  }());
+  </script>
+  {% endif %}
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if flash and flash.type == 'success' %}
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:1100;">
+  <div id="liveToast" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold">
+        <i class="bi bi-check-circle-fill me-1"></i> {{ flash.message }}
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+<script>
+  bootstrap.Toast.getOrCreateInstance(document.getElementById('liveToast'), { delay: 2500 }).show();
+</script>
+{% endif %}
+{% endblock %}
