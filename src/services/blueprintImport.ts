@@ -11,6 +11,43 @@ import type { TemplateField } from './templateGen';
 import type { App } from '../domain/types';
 import type { FieldDataType, UIWidget } from '../domain/types';
 
+// ── Default home template applied to blueprint-generated groups ──────────────
+// Uses runtime variables (browseViews, manageViews, tables) so it works for any
+// combination of views and tables without hardcoding specific names.
+const DEFAULT_BLUEPRINT_HOME_TEMPLATE = `<div style="max-width:640px;margin:0 auto;padding:2rem 1rem;">
+  <h2 style="margin:0 0 1.5rem;">Welcome{% if member.first_name %}, {{ member.first_name }}{% endif %}!</h2>
+
+  {% if browseViews.length %}
+  <h3 style="font-size:1rem;font-weight:600;color:#374151;margin:0 0 0.5rem;">Searches &amp; Reports</h3>
+  <ul style="list-style:none;padding:0;margin:0 0 1.5rem;">
+    {% for v in browseViews %}
+    <li style="margin-bottom:0.4rem;"><a href="{{ v.url }}" style="color:var(--accent);">{{ v.label }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if manageViews.length %}
+  <h3 style="font-size:1rem;font-weight:600;color:#374151;margin:0 0 0.5rem;">Manage Data</h3>
+  <ul style="list-style:none;padding:0;margin:0 0 1.5rem;">
+    {% for v in manageViews %}
+    <li style="margin-bottom:0.4rem;"><a href="{{ v.url }}" style="color:var(--accent);">{{ v.label }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if tables.length %}
+  <h3 style="font-size:1rem;font-weight:600;color:#374151;margin:0 0 0.5rem;">Tables</h3>
+  <ul style="list-style:none;padding:0;margin:0;">
+    {% for t in tables %}
+    <li style="margin-bottom:0.5rem;">
+      <a href="{{ t.tableUrl }}" style="color:var(--accent);">{{ t.label }}</a>
+      {% if t.newUrl %}&ensp;<a href="{{ t.newUrl }}" style="font-size:0.82rem;color:#64748b;">+ Add</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>`;
+
 // ── Blueprint JSON schema ────────────────────────────────────────────────────
 
 export interface BlueprintField {
@@ -388,28 +425,20 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
         });
       }
 
-      // View permissions — and pick first can_view view as home
-      let homeViewId: number | null = null;
+      // View permissions
       for (const [vName, vp] of Object.entries(bg.view_permissions ?? {})) {
         const viewId = viewIdByName.get(vName);
         if (!viewId) continue;
-        const canView = vp.can_view ?? true;
         await groupsService.saveViewPermGrid(group.id, [{
           view_id:              viewId,
-          can_view:             canView,
+          can_view:             vp.can_view ?? true,
           limit_to_own_records: vp.limit_to_own_records ?? false,
         }]);
-        if (canView && homeViewId === null) homeViewId = viewId;
       }
 
-      // Set default home view so members land directly on the main view after login.
-      // Fallback: if no view permissions resolved, use the first created view.
-      if (homeViewId === null && viewIdByName.size > 0) {
-        homeViewId = viewIdByName.values().next().value ?? null;
-      }
-      if (homeViewId !== null) {
-        await groupsService.updateGroup(group.id, { default_home_view_id: homeViewId });
-      }
+      // Generate a default home template so the member portal looks good
+      // out of the box regardless of how many views/tables the group has.
+      await groupsService.updateGroup(group.id, { home_template: DEFAULT_BLUEPRINT_HOME_TEMPLATE });
     } catch (err) {
       result.errors.push(`Group "${bg.group_name}": ${err instanceof Error ? err.message : String(err)}`);
     }

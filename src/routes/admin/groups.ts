@@ -168,7 +168,14 @@ groupsRouter.get('/:id/preview-home', async (req, res, next) => {
         url: `/app/${app.slug}/view/${v.view_name}`,
       })));
     const dummyMember = { first_name: 'Preview', last_name: 'User', email: 'preview@example.com' };
-    const ctx = { app, member: dummyMember, views };
+    const logoutUrl = `/app/${app.slug}/logout`;
+    // For preview purposes all views are shown as browse views; tables is empty
+    const ctx = {
+      app, member: dummyMember, views,
+      browseViews: views, manageViews: [], tables: [],
+      logoutUrl,
+      viewUrl: (name: string) => `/app/${app.slug}/view/${name}`,
+    };
 
     function renderPart(tpl: string): string {
       if (!tpl.trim()) return '';
