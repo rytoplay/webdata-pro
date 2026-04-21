@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-header">
   <h1>Member Home Page <span class="text-muted fw-normal fs-6">/ preview</span></h1>
-  <a href="/admin/home" class="btn btn-sm btn-outline-secondary">&larr; Editor</a>
+  <a href="{{ backUrl or '/admin/home' }}" class="btn btn-sm btn-outline-secondary">&larr; Editor</a>
 </div>
 
 <div class="card shadow-sm">

@@ -188,58 +188,156 @@
   </div>
 
   <div class="col-lg-4">
+    <div class="card shadow-sm" style="font-size:0.8rem;">
 
-    {# ── Embed shortcuts ── #}
-    {% if views.length > 0 %}
-    <div class="card shadow-sm mb-3">
-      <div class="card-header py-2 d-flex align-items-center gap-2">
-        <strong class="small">Insert View</strong>
-        <span class="text-muted small">— click to insert at cursor</span>
-      </div>
-      <div class="card-body p-2">
-        {% for v in views %}
-        <div class="d-flex align-items-center gap-1 mb-1">
-          <span class="flex-grow-1 small text-truncate" title="{{ v.view_name }}">{{ v.label }}</span>
-          <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1 wdp-insert"
-            style="font-size:.72rem;"
-            data-view="{{ v.view_name }}" data-mode="embed">
-            Embed
-          </button>
-          <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1 wdp-insert"
-            style="font-size:.72rem;"
-            data-view="{{ v.view_name }}" data-label="{{ v.label }}" data-mode="link">
-            Link
-          </button>
+      {# Tab header #}
+      <div class="card-header p-0" style="border-bottom:1px solid #e2e8f0;">
+        <div class="d-flex align-items-center justify-content-between ps-1 pe-2" style="padding-top:5px;">
+          <div class="d-flex">
+            <button type="button" class="grp-tab-btn" data-panel="tags"
+              style="background:none;border:none;border-bottom:2px solid var(--accent);color:var(--accent);font-weight:600;font-size:0.78rem;cursor:pointer;padding:2px 12px 5px;">
+              Tags
+            </button>
+            <button type="button" class="grp-tab-btn" data-panel="blocks"
+              style="background:none;border:none;border-bottom:2px solid transparent;color:#64748b;font-weight:400;font-size:0.78rem;cursor:pointer;padding:2px 12px 5px;">
+              Blocks
+            </button>
+          </div>
+          <a href="/admin/styleguide" target="_blank" class="text-muted" style="font-size:0.7rem;">Style guide ↗</a>
         </div>
-        {% endfor %}
       </div>
-    </div>
-    {% endif %}
 
-    {# ── Reference ── #}
-    <div class="card shadow-sm">
-      <div class="card-header py-2"><strong class="small">Available Variables</strong></div>
-      <div class="card-body p-3" style="font-size:0.82rem;">
-        <p class="text-muted small mb-1">Embed a view widget</p>
-        <pre class="bg-light rounded p-2 small mb-3">{% raw %}{{ embedView('viewname') | safe }}{% endraw %}</pre>
+      {# Tags pane #}
+      <div id="grp-panel-tags" style="overflow-y:auto;max-height:520px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;">
+        <div class="p-2">
 
-        <p class="text-muted small mb-1">Link to a view page</p>
-        <pre class="bg-light rounded p-2 small mb-3">{% raw %}<a href="{{ viewUrl('viewname') }}">
-  Browse ads
-</a>{% endraw %}</pre>
+          <div class="text-muted mb-1" style="font-size:0.7rem;">APP</div>
+          {% set appTags = [
+            ['{{ app.name }}',  'App name'],
+            ['{{ app.slug }}',  'App slug / URL key']
+          ] %}
+          {% for t in appTags %}
+          <button type="button" class="grp-tag-btn w-100 text-start mb-1 p-1 rounded"
+            data-token="{{ t[0] }}"
+            style="background:var(--accent-soft);color:var(--accent);border:none;font-family:monospace;font-size:0.75rem;padding:3px 6px;cursor:pointer;">
+            <div>{{ t[0] }}</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.63rem;color:#64748b;">{{ t[1] }}</div>
+          </button>
+          {% endfor %}
 
-        <p class="text-muted small mb-2">Member</p>
-        <ul class="list-unstyled font-monospace mb-3">
-          <li><code>{% raw %}{{ member.first_name }}{% endraw %}</code></li>
-          <li><code>{% raw %}{{ member.last_name }}{% endraw %}</code></li>
-          <li><code>{% raw %}{{ member.email }}{% endraw %}</code></li>
-        </ul>
+          <div class="text-muted mt-2 mb-1" style="font-size:0.7rem;">MEMBER</div>
+          {% set memberTags = [
+            ['{{ member.first_name }}', 'First name'],
+            ['{{ member.last_name }}',  'Last name'],
+            ['{{ member.email }}',      'Email address'],
+            ['{{ logoutUrl }}',         'Sign-out URL']
+          ] %}
+          {% for t in memberTags %}
+          <button type="button" class="grp-tag-btn w-100 text-start mb-1 p-1 rounded"
+            data-token="{{ t[0] }}"
+            style="background:#f0fdf4;color:#166534;border:none;font-family:monospace;font-size:0.75rem;padding:3px 6px;cursor:pointer;">
+            <div>{{ t[0] }}</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.63rem;color:#64748b;">{{ t[1] }}</div>
+          </button>
+          {% endfor %}
 
-        <p class="text-muted small mb-1">Loop over all accessible views</p>
-        <pre class="bg-light rounded p-2 small mb-0">{% raw %}{% for v in views %}
-<a href="{{ v.url }}">{{ v.label }}</a>
-{% endfor %}{% endraw %}</pre>
+          <div class="text-muted mt-2 mb-1" style="font-size:0.7rem;">VIEWS (loop variables)</div>
+          {% set viewTags = [
+            ['{{ v.label }}',     'Display name'],
+            ['{{ v.url }}',       'Ready-to-use link'],
+            ['{{ v.view_name }}', 'Internal view name']
+          ] %}
+          {% for t in viewTags %}
+          <button type="button" class="grp-tag-btn w-100 text-start mb-1 p-1 rounded"
+            data-token="{{ t[0] }}"
+            style="background:#eff6ff;color:#1e40af;border:none;font-family:monospace;font-size:0.75rem;padding:3px 6px;cursor:pointer;">
+            <div>{{ t[0] }}</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.63rem;color:#64748b;">{{ t[1] }}</div>
+          </button>
+          {% endfor %}
+
+          <div class="text-muted mt-2 mb-1" style="font-size:0.7rem;">TABLES (loop variables)</div>
+          {% set tableTags = [
+            ['{{ t.label }}',    'Display name'],
+            ['{{ t.tableUrl }}', 'List / browse URL'],
+            ['{{ t.newUrl }}',   'Add record URL']
+          ] %}
+          {% for t in tableTags %}
+          <button type="button" class="grp-tag-btn w-100 text-start mb-1 p-1 rounded"
+            data-token="{{ t[0] }}"
+            style="background:#fef9c3;color:#713f12;border:none;font-family:monospace;font-size:0.75rem;padding:3px 6px;cursor:pointer;">
+            <div>{{ t[0] }}</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.63rem;color:#64748b;">{{ t[1] }}</div>
+          </button>
+          {% endfor %}
+
+          <div class="mt-2 pt-2 border-top small text-muted" style="font-size:0.7rem;line-height:1.5;">
+            <strong style="color:#374151;">Available arrays:</strong><br>
+            <code style="font-size:0.68rem;">views</code> — all views<br>
+            <code style="font-size:0.68rem;">browseViews</code> — read-only views<br>
+            <code style="font-size:0.68rem;">manageViews</code> — edit/add views<br>
+            <code style="font-size:0.68rem;">tables</code> — direct table access
+          </div>
+
+        </div>
       </div>
+
+      {# Blocks pane #}
+      <div id="grp-panel-blocks" class="d-none" style="overflow-y:auto;max-height:520px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;">
+        <div class="p-2">
+
+          <div class="text-muted mb-2" style="font-size:0.7rem;">A — COMPLETE SCAFFOLDS</div>
+
+          <button type="button" class="grp-block-btn w-100 text-start mb-2 p-2 rounded" data-block="welcome-card"
+            style="background:#f0fdf4;border:1px solid #86efac;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#166534;">Welcome Card</div>
+            <div style="font-size:0.67rem;color:#4b7c59;margin-top:2px;">greeting + member name + email</div>
+          </button>
+
+          <button type="button" class="grp-block-btn w-100 text-start mb-2 p-2 rounded" data-block="nav-sections"
+            style="background:#f0fdf4;border:1px solid #86efac;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#166534;">Full Nav Layout</div>
+            <div style="font-size:0.67rem;color:#4b7c59;margin-top:2px;">Searches, Manage views, Tables — all sections</div>
+          </button>
+
+          <div class="text-muted mt-3 mb-2" style="font-size:0.7rem;">C — COMPOUND SNIPPETS</div>
+
+          <button type="button" class="grp-block-btn w-100 text-start mb-2 p-2 rounded" data-block="views-loop"
+            style="background:#eff6ff;border:1px solid #93c5fd;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#1e40af;">Views Loop</div>
+            <div style="font-size:0.67rem;color:#3b5fa0;margin-top:2px;">{% raw %}{% for v in views %}{% endraw %} links list</div>
+          </button>
+
+          <button type="button" class="grp-block-btn w-100 text-start mb-2 p-2 rounded" data-block="tables-loop"
+            style="background:#eff6ff;border:1px solid #93c5fd;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#1e40af;">Tables Loop</div>
+            <div style="font-size:0.67rem;color:#3b5fa0;margin-top:2px;">{% raw %}{% for t in tables %}{% endraw %} with add/edit CTAs</div>
+          </button>
+
+          <button type="button" class="grp-block-btn w-100 text-start mb-2 p-2 rounded" data-block="sign-out-link"
+            style="background:#eff6ff;border:1px solid #93c5fd;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#1e40af;">Sign Out Link</div>
+            <div style="font-size:0.67rem;color:#3b5fa0;margin-top:2px;">styled anchor using logoutUrl</div>
+          </button>
+
+          {% if views.length > 0 %}
+          <div class="text-muted mt-3 mb-2" style="font-size:0.7rem;">D — INSERT SPECIFIC VIEW</div>
+          {% for v in views %}
+          <div class="d-flex align-items-center gap-1 mb-1">
+            <span class="flex-grow-1 text-truncate" style="font-size:0.72rem;" title="{{ v.view_name }}">{{ v.label }}</span>
+            <button type="button" class="btn btn-outline-primary py-0 px-1 wdp-insert"
+              style="font-size:.68rem;"
+              data-view="{{ v.view_name }}" data-mode="embed">Embed</button>
+            <button type="button" class="btn btn-outline-secondary py-0 px-1 wdp-insert"
+              style="font-size:.68rem;"
+              data-view="{{ v.view_name }}" data-label="{{ v.label }}" data-mode="link">Link</button>
+          </div>
+          {% endfor %}
+          {% endif %}
+
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -309,6 +407,92 @@ document.querySelectorAll('.wdp-insert').forEach(function(btn) {
     } else {
       insertSnippet('<a href="' + ob + " viewUrl('" + view + "') " + cb + '">' + label + '</a>');
     }
+  });
+});
+
+// ── Reference panel: Tags/Blocks tab switcher ────────────────────────────────
+document.querySelectorAll('.grp-tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var panel = btn.dataset.panel;
+    document.querySelectorAll('.grp-tab-btn').forEach(function(b) {
+      var active = b.dataset.panel === panel;
+      b.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+      b.style.color = active ? 'var(--accent)' : '#64748b';
+      b.style.fontWeight = active ? '600' : '400';
+    });
+    document.getElementById('grp-panel-tags').classList.toggle('d-none', panel !== 'tags');
+    document.getElementById('grp-panel-blocks').classList.toggle('d-none', panel !== 'blocks');
+  });
+});
+
+// ── Tag click-to-insert ───────────────────────────────────────────────────────
+document.querySelectorAll('.grp-tag-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    insertSnippet(btn.dataset.token);
+  });
+});
+
+// ── Block content library ─────────────────────────────────────────────────────
+var GROUP_BLOCKS = {
+  'welcome-card': [
+    '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;">',
+    '  <h2 style="margin:0 0 0.4rem;font-size:1.25rem;">Welcome back, {{ member.first_name }}!</h2>',
+    '  <p style="margin:0;color:#64748b;font-size:0.9rem;">{{ member.email }}</p>',
+    '</div>'
+  ].join('\n'),
+
+  'nav-sections': [
+    '<h2 style="font-size:1rem;font-weight:600;margin:1.5rem 0 0.5rem;">Searches &amp; Reports</h2>',
+    '<ul style="list-style:none;padding:0;margin:0 0 1.5rem;">',
+    '{% for v in browseViews %}',
+    '  <li style="margin-bottom:0.4rem;"><a href="{{ v.url }}" style="color:var(--accent);">{{ v.label }}</a></li>',
+    '{% endfor %}',
+    '</ul>',
+    '',
+    '<h2 style="font-size:1rem;font-weight:600;margin:0 0 0.5rem;">Manage Data</h2>',
+    '<ul style="list-style:none;padding:0;margin:0 0 1.5rem;">',
+    '{% for v in manageViews %}',
+    '  <li style="margin-bottom:0.4rem;"><a href="{{ v.url }}" style="color:var(--accent);">{{ v.label }}</a></li>',
+    '{% endfor %}',
+    '</ul>',
+    '',
+    '<h2 style="font-size:1rem;font-weight:600;margin:0 0 0.5rem;">Tables</h2>',
+    '<ul style="list-style:none;padding:0;margin:0;">',
+    '{% for t in tables %}',
+    '  <li style="margin-bottom:0.5rem;">',
+    '    <a href="{{ t.tableUrl }}" style="color:var(--accent);">{{ t.label }}</a>',
+    '    {% if t.newUrl %}&ensp;<a href="{{ t.newUrl }}" style="font-size:0.82rem;color:#64748b;">+ Add</a>{% endif %}',
+    '  </li>',
+    '{% endfor %}',
+    '</ul>'
+  ].join('\n'),
+
+  'views-loop': [
+    '{% for v in views %}',
+    '<a href="{{ v.url }}" style="display:inline-block;margin:0.25rem 0.5rem 0.25rem 0;padding:0.3rem 0.8rem;background:var(--accent-soft);color:var(--accent);border-radius:4px;text-decoration:none;font-size:0.9rem;">',
+    '  {{ v.label }}',
+    '</a>',
+    '{% endfor %}'
+  ].join('\n'),
+
+  'tables-loop': [
+    '{% for t in tables %}',
+    '<div style="margin-bottom:0.75rem;">',
+    '  <strong>{{ t.label }}</strong>',
+    '  &ensp;<a href="{{ t.tableUrl }}">Browse</a>',
+    '  {% if t.newUrl %}&ensp;<a href="{{ t.newUrl }}">Add Record</a>{% endif %}',
+    '</div>',
+    '{% endfor %}'
+  ].join('\n'),
+
+  'sign-out-link': '<a href="{{ logoutUrl }}" style="display:inline-block;padding:0.35rem 1rem;border:1px solid #94a3b8;border-radius:4px;color:#64748b;text-decoration:none;font-size:0.85rem;">Sign Out</a>'
+};
+
+document.querySelectorAll('.grp-block-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var key = btn.dataset.block;
+    if (!key || GROUP_BLOCKS[key] === undefined) return;
+    insertSnippet(GROUP_BLOCKS[key]);
   });
 });
 </script>
