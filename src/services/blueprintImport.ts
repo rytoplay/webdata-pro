@@ -436,9 +436,30 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
         }]);
       }
 
+      // Set default_home_view_id to the first view the group can access.
+      // Prefer a non-public (manage) view if the group has manage_all on any table;
+      // otherwise fall back to the first permitted view.
+      const isManagerGroup = Object.values(bg.table_permissions ?? {}).some(tp => tp.manage_all);
+      const permittedViewNames = Object.entries(bg.view_permissions ?? {})
+        .filter(([, vp]) => vp.can_view !== false)
+        .map(([vName]) => vName);
+
+      let defaultViewId: number | null = null;
+      if (isManagerGroup) {
+        // managers: prefer a view whose name suggests it's a manage/staff view
+        const manageViewName = permittedViewNames.find(n => /manage|staff|admin/i.test(n))
+          ?? permittedViewNames[0];
+        defaultViewId = viewIdByName.get(manageViewName ?? '') ?? null;
+      } else {
+        defaultViewId = viewIdByName.get(permittedViewNames[0] ?? '') ?? null;
+      }
+
       // Generate a default home template so the member portal looks good
       // out of the box regardless of how many views/tables the group has.
-      await groupsService.updateGroup(group.id, { home_template: DEFAULT_BLUEPRINT_HOME_TEMPLATE });
+      await groupsService.updateGroup(group.id, {
+        home_template:       DEFAULT_BLUEPRINT_HOME_TEMPLATE,
+        default_home_view_id: defaultViewId,
+      });
     } catch (err) {
       result.errors.push(`Group "${bg.group_name}": ${err instanceof Error ? err.message : String(err)}`);
     }
