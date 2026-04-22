@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../../db/knex';
+import { getAppDb } from '../../db/adapters/appDb';
 import type { App } from '../../domain/types';
 import * as membersService from '../../services/members';
 
@@ -184,6 +185,46 @@ membersRouter.post('/:id/password', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /admin/members/:id/record-counts ─────────────────────────────────────
+// Returns JSON: { tables: [{ table_name, label, count }] }
+
+membersRouter.get('/:id/record-counts', async (req, res, next) => {
+  try {
+    const app    = res.locals.currentApp as App;
+    const member = await membersService.getMember(Number(req.params.id));
+    if (!member || member.app_id !== app.id)
+      return res.status(404).json({ error: 'Not found' });
+
+    const appDb = getAppDb(app);
+    const metaExists = await appDb.schema.hasTable('_wdpro_metadata');
+    if (!metaExists) return res.json({ tables: [] });
+
+    const rows = await appDb('_wdpro_metadata')
+      .where({ created_by_id: member.id })
+      .groupBy('table_name')
+      .select('table_name')
+      .count('* as count');
+
+    if (!rows.length) return res.json({ tables: [] });
+
+    // Attach human-readable labels from app_tables
+    const tableNames = rows.map((r: any) => r.table_name);
+    const appTables  = await db('app_tables')
+      .where({ app_id: app.id })
+      .whereIn('table_name', tableNames)
+      .select('table_name', 'label');
+    const labelMap = new Map(appTables.map((t: any) => [t.table_name, t.label]));
+
+    const tables = rows.map((r: any) => ({
+      table_name: r.table_name,
+      label:      labelMap.get(r.table_name) || r.table_name,
+      count:      Number(r.count),
+    }));
+
+    res.json({ tables });
+  } catch (err) { next(err); }
+});
+
 // ── POST /admin/members/:id/delete ───────────────────────────────────────────
 
 membersRouter.post('/:id/delete', async (req, res, next) => {
@@ -192,8 +233,38 @@ membersRouter.post('/:id/delete', async (req, res, next) => {
     const member = await membersService.getMember(Number(req.params.id));
     if (!member || member.app_id !== app.id)
       return res.status(404).render('admin/error', { title: 'Not Found', message: 'Member not found' });
+
+    const deleteRecords = req.body.delete_records === 'yes';
+    const appDb = getAppDb(app);
+    const metaExists = await appDb.schema.hasTable('_wdpro_metadata');
+
+    if (metaExists) {
+      if (deleteRecords) {
+        // Delete the actual records from each app table, then remove metadata
+        const metaRows = await appDb('_wdpro_metadata').where({ created_by_id: member.id });
+        const byTable = new Map<string, string[]>();
+        for (const row of metaRows) {
+          if (!byTable.has(row.table_name)) byTable.set(row.table_name, []);
+          byTable.get(row.table_name)!.push(row.record_id);
+        }
+        for (const [tableName, recordIds] of byTable) {
+          const tableRecord = await db('app_tables').where({ app_id: app.id, table_name: tableName }).first();
+          if (!tableRecord) continue;
+          const pkField = await db('app_fields').where({ table_id: tableRecord.id, is_primary_key: true }).first();
+          if (!pkField) continue;
+          await appDb(tableName).whereIn(pkField.field_name, recordIds).delete();
+        }
+        await appDb('_wdpro_metadata').where({ created_by_id: member.id }).delete();
+      } else {
+        // Transfer ownership: clear created_by_id so records become unowned
+        await appDb('_wdpro_metadata')
+          .where({ created_by_id: member.id })
+          .update({ created_by_id: null, created_by_name: 'Admin' });
+      }
+    }
+
     await membersService.deleteMember(member.id);
-    req.session.flash = { type: 'success', message: 'Member deleted.' };
+    req.session.flash = { type: 'success', message: `Member ${member.email} deleted.` };
     res.redirect('/admin/members');
   } catch (err) { next(err); }
 });
