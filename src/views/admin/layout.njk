@@ -191,6 +191,44 @@
 
     .badge { border-radius: 6px; font-weight: 700; }
 
+    /* ── Sidebar collapse ────────────────────── */
+    .sidebar {
+      transition: width 0.22s cubic-bezier(0.4,0,0.2,1);
+      overflow: hidden;
+    }
+    body.sidebar-collapsed .sidebar {
+      width: 10px;
+      cursor: pointer;
+    }
+    body.sidebar-collapsed .sidebar:hover {
+      opacity: 0.85;
+    }
+
+    /* Tab that sticks out from the right edge of the sidebar */
+    .sidebar-toggle-tab {
+      position: fixed;
+      left: 230px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 48px;
+      background: var(--sidebar-to);
+      border: none;
+      border-radius: 0 8px 8px 0;
+      color: rgba(255,255,255,0.9);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      z-index: 1000;
+      transition: left 0.22s cubic-bezier(0.4,0,0.2,1), background 0.15s;
+      padding: 0;
+      line-height: 1;
+    }
+    .sidebar-toggle-tab:hover { background: var(--sidebar-from); }
+    body.sidebar-collapsed .sidebar-toggle-tab { left: 10px; }
+
     /* ── Logout ───────────────────────────────── */
     .btn-logout {
       width: 100%; background: rgba(255,255,255,0.1);
@@ -204,6 +242,7 @@
   </style>
 </head>
 <body>
+<script>if(localStorage.getItem('wdpSidebarCollapsed')==='1')document.body.classList.add('sidebar-collapsed');</script>
 <div class="d-flex">
 
   <nav class="sidebar">
@@ -293,6 +332,10 @@
     </div>
   </nav>
 
+  <button class="sidebar-toggle-tab" id="sidebar-toggle" title="Toggle sidebar" aria-label="Toggle sidebar">
+    <i class="bi bi-chevron-left" id="sidebar-toggle-icon"></i>
+  </button>
+
   <main class="main-content">
     {% if flash %}
     <div class="alert alert-{{ flash.type }} alert-dismissible fade show mb-4" role="alert">
@@ -305,5 +348,34 @@
 
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  var KEY  = 'wdpSidebarCollapsed';
+  var body = document.body;
+  var btn  = document.getElementById('sidebar-toggle');
+  var icon = document.getElementById('sidebar-toggle-icon');
+  var sidebar = document.querySelector('.sidebar');
+
+  function setCollapsed(on) {
+    body.classList.toggle('sidebar-collapsed', on);
+    icon.className = on ? 'bi bi-chevron-right' : 'bi bi-chevron-left';
+    localStorage.setItem(KEY, on ? '1' : '0');
+  }
+
+  // Sync icon to match state restored by the inline script
+  if (body.classList.contains('sidebar-collapsed')) {
+    icon.className = 'bi bi-chevron-right';
+  }
+
+  btn.addEventListener('click', function () {
+    setCollapsed(!body.classList.contains('sidebar-collapsed'));
+  });
+
+  // Clicking the collapsed strip also expands it
+  sidebar.addEventListener('click', function () {
+    if (body.classList.contains('sidebar-collapsed')) setCollapsed(false);
+  });
+})();
+</script>
 </body>
 </html>

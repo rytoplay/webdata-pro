@@ -5,6 +5,7 @@ import type { App, AppField } from '../../domain/types';
 import { db as controlDb } from '../../db/knex';
 import { getAppDb } from '../../db/adapters/appDb';
 import { memoryUpload, saveUpload, deleteUpload } from '../../services/uploads';
+import { maybeNotify } from '../../services/notifications';
 
 const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }).single('csvfile');
 
@@ -82,16 +83,29 @@ async function processUploads(
   return result;
 }
 
-// ── GET /data — redirect to first table ────────────────────────────────────
+// ── GET /data — table index ─────────────────────────────────────────────────
 
 dataRouter.get('/', async (req, res, next) => {
   try {
-    const app = res.locals.currentApp as App;
-    const tables = await controlDb('app_tables').where({ app_id: app.id }).orderBy('label');
-    if (tables.length === 0) {
-      return res.render('admin/data/list', { title: 'Data Browser', table: null, records: [], fields: [], pkField: null, tableExists: false, flash: null });
-    }
-    res.redirect(`/admin/data/${tables[0].table_name}`);
+    const app    = res.locals.currentApp as App;
+    const tables = await controlDb('app_tables')
+      .where({ app_id: app.id, is_gallery: false })
+      .orderBy('label');
+
+    // Attach record counts for each table
+    const appDb = getAppDb(app);
+    const tablesWithCounts = await Promise.all(tables.map(async (t: { table_name: string; id: number; label: string; is_public_addable: boolean }) => {
+      try {
+        const exists = await appDb.schema.hasTable(t.table_name);
+        const count  = exists ? Number((await appDb(t.table_name).count('* as n').first())?.n ?? 0) : 0;
+        return { ...t, count, exists };
+      } catch {
+        return { ...t, count: 0, exists: false };
+      }
+    }));
+
+    const flash = req.session.flash; delete req.session.flash;
+    res.render('admin/data/index', { title: 'Data', tables: tablesWithCounts, flash });
   } catch (err) {
     next(err);
   }
@@ -347,7 +361,8 @@ dataRouter.post('/:tableName', memoryUpload, async (req, res, next) => {
     Object.assign(record, filePaths);
 
     const appDb = getAppDb(app);
-    await appDb(tableName).insert(record);
+    const [newId] = await appDb(tableName).insert(record);
+    await maybeNotify(app, tableName, newId ? String(newId) : null, 'Admin');
 
     req.session.flash = { type: 'success', message: 'Record created.' };
     res.redirect(`/admin/data/${tableName}`);

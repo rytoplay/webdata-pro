@@ -1033,22 +1033,39 @@ export async function renderViewList(
 
   // Per-field filters from $search[...] inputs ("table__field" → value)
   // Supports operator prefixes: >=, <=, >, <, = (exact), and range syntax "a..b"
-  // Bare values use LIKE %value% for text search.
-  for (const [col, val] of Object.entries(fieldFilters)) {
-    const v = val.trim();
-    if (!v) continue;
-    const qcol = `"${col}"`;
-    if (v.startsWith('>='))      { whereParts.push(`${qcol} >= ?`);  bindings.push(v.slice(2)); }
-    else if (v.startsWith('<=')) { whereParts.push(`${qcol} <= ?`);  bindings.push(v.slice(2)); }
-    else if (v.startsWith('>'))  { whereParts.push(`${qcol} > ?`);   bindings.push(v.slice(1)); }
-    else if (v.startsWith('<'))  { whereParts.push(`${qcol} < ?`);   bindings.push(v.slice(1)); }
-    else if (v.startsWith('='))  { whereParts.push(`${qcol} = ?`);   bindings.push(v.slice(1)); }
-    else if (v.includes('..'))   {
-      const [lo, hi] = v.split('..', 2);
-      if (lo.trim()) { whereParts.push(`${qcol} >= ?`); bindings.push(lo.trim()); }
-      if (hi.trim()) { whereParts.push(`${qcol} <= ?`); bindings.push(hi.trim()); }
+  // Bare values use = for indexed fields, LIKE %value% otherwise.
+  {
+    const filterEntries = Object.entries(fieldFilters).filter(([, v]) => v.trim());
+    if (filterEntries.length > 0) {
+      // One batch lookup to find which fields are indexed
+      const filterMeta = await db('app_fields')
+        .whereIn('table_id', await db('app_tables').where({ app_id: app.id }).pluck('id'))
+        .select('field_name', 'is_indexed');
+      const filterIndexMap = new Map(
+        filterMeta.map((f: { field_name: string; is_indexed: boolean }) => [f.field_name, !!f.is_indexed])
+      );
+
+      for (const [col, val] of filterEntries) {
+        const v = val.trim();
+        const qcol = `"${col}"`;
+        // col is "table__field"; extract just the field name for the index lookup
+        const bareField = col.includes('__') ? col.split('__').slice(1).join('__') : col;
+        const isIndexed = filterIndexMap.get(bareField) ?? false;
+
+        if (v.startsWith('>='))      { whereParts.push(`${qcol} >= ?`);  bindings.push(v.slice(2)); }
+        else if (v.startsWith('<=')) { whereParts.push(`${qcol} <= ?`);  bindings.push(v.slice(2)); }
+        else if (v.startsWith('>'))  { whereParts.push(`${qcol} > ?`);   bindings.push(v.slice(1)); }
+        else if (v.startsWith('<'))  { whereParts.push(`${qcol} < ?`);   bindings.push(v.slice(1)); }
+        else if (v.startsWith('='))  { whereParts.push(`${qcol} = ?`);   bindings.push(v.slice(1)); }
+        else if (v.includes('..'))   {
+          const [lo, hi] = v.split('..', 2);
+          if (lo.trim()) { whereParts.push(`${qcol} >= ?`); bindings.push(lo.trim()); }
+          if (hi.trim()) { whereParts.push(`${qcol} <= ?`); bindings.push(hi.trim()); }
+        }
+        else if (isIndexed) { whereParts.push(`${qcol} = ?`); bindings.push(v); }
+        else { whereParts.push(`${qcol} LIKE ?`); bindings.push(`%${v}%`); }
+      }
     }
-    else { whereParts.push(`${qcol} LIKE ?`); bindings.push(`%${v}%`); }
   }
 
   // Ownership filter: when ownerId is set, restrict to records owned by that member
@@ -1258,7 +1275,8 @@ export async function renderViewDetail(
 
   const detailTags = parseGroupTags(templates.detail);
   const detailTplFinal = detailTags.length ? applyGroupTags(templates.detail, detailTags) : templates.detail;
-  return renderReviewMarkers(renderTokens(detailTplFinal, rowData));
+  const rendered = renderReviewMarkers(renderTokens(detailTplFinal, rowData));
+  return renderFormTokens(rendered, app.slug, app.id);
 }
 
 export async function renderViewEditForm(
@@ -1323,11 +1341,13 @@ export async function renderViewCreateForm(
   // No existing record — render $update[...] widgets with empty values
   const createTpl  = templates.create_form || DEFAULT_TEMPLATES.create_form;
   const processed  = await renderWidgetTokens(createTpl, app.id, {}, 'update');
-  return renderReviewMarkers(renderTokens(autoNameEditInputs(processed), {
+  const rendered   = renderReviewMarkers(renderTokens(autoNameEditInputs(processed), {
     _pk: '',
     _portal_header: portalContext?.portalHeader ?? '',
     _portal_footer: portalContext?.portalFooter ?? '',
+    _app_slug: app.slug,
   }));
+  return renderFormTokens(rendered, app.slug, app.id);
 }
 
 // ── Edit-form helpers ────────────────────────────────────────────────────────
@@ -1337,6 +1357,112 @@ export async function renderViewCreateForm(
  * auto-set its name attribute to "field" (overwriting whatever the admin typed).
  * This runs before renderTokens so the token is still visible.
  */
+/**
+ * Processes $formopen[tableName,key=value,...] and $form[tableName,key=value,...] tokens.
+ * Must be called AFTER renderTokens() so ${...} sub-tokens inside key=value pairs are
+ * already resolved (e.g. $formopen[inquiries,pet_id=42] after ${pets.id} → 42).
+ *
+ * $formopen — emits only the <form> opening tag + hidden fields (admin writes own inputs)
+ * $form     — emits the full form: opening tag + auto-generated fields + submit + </form>
+ */
+export async function renderFormTokens(
+  html: string,
+  appSlug: string,
+  appId: number,
+): Promise<string> {
+  // $formclose → </form> (keeps the editor from seeing an unbalanced close tag)
+  html = html.replace(/\$formclose\b/g, '</form>');
+
+  const tokenRe = /\$(formopen|form)\[([^\]]+)\]/g;
+  const matches = [...html.matchAll(tokenRe)];
+  if (!matches.length) return html;
+
+  // Collect all unique table names so we can batch-load fields
+  const tableNames = [...new Set(matches.map(m => {
+    const parts = m[2].split(',');
+    return parts[0].trim();
+  }))];
+  const tables = await db('app_tables')
+    .where({ app_id: appId })
+    .whereIn('table_name', tableNames);
+  const tableMap = new Map<string, { id: number; is_public_addable: boolean }>(
+    tables.map((t: { table_name: string; id: number; is_public_addable: boolean }) => [t.table_name, t])
+  );
+
+  // Load fields for all found tables at once
+  const tableIds = tables.map((t: { id: number }) => t.id);
+  const allFields = tableIds.length
+    ? await db('app_fields').whereIn('table_id', tableIds).where({ is_primary_key: false }).orderBy('sort_order')
+    : [];
+  const fieldsByTableId = new Map<number, typeof allFields>();
+  for (const f of allFields) {
+    if (!fieldsByTableId.has(f.table_id)) fieldsByTableId.set(f.table_id, []);
+    fieldsByTableId.get(f.table_id)!.push(f);
+  }
+
+  return html.replace(tokenRe, (_match: string, type: string, args: string) => {
+    const parts     = args.split(',').map((s: string) => s.trim());
+    const tableName = parts[0];
+    const hiddenPairs = parts.slice(1); // e.g. ["pet_id=42", "source=detail"]
+
+    const table = tableMap.get(tableName);
+    if (!table || !table.is_public_addable) {
+      return `<!-- formopen: table "${tableName}" not found or not public-addable -->`;
+    }
+
+    const action  = `/api/v/${appSlug}/form/${tableName}`;
+    // Determine the redirect URL from a _redirect= hidden pair if provided
+    let redirectVal = '';
+    const hiddens = hiddenPairs.filter(p => {
+      if (p.startsWith('_redirect=')) { redirectVal = p.slice('_redirect='.length); return false; }
+      return true;
+    });
+
+    const openTag = `<form method="POST" action="${action}">` +
+      hiddens.map(p => {
+        const eq = p.indexOf('=');
+        if (eq === -1) return '';
+        const k = p.slice(0, eq).trim();
+        const v = p.slice(eq + 1).trim();
+        if (!/^[a-zA-Z0-9_]+$/.test(k)) return '';
+        return `<input type="hidden" name="${k}" value="${escHtmlAttr(v)}">`;
+      }).join('') +
+      (redirectVal ? `<input type="hidden" name="_redirect" value="${escHtmlAttr(redirectVal)}">` : '');
+
+    if (type === 'formopen') return openTag;
+
+    // $form — auto-generate inputs for all non-PK, non-image, non-upload fields
+    const fields = fieldsByTableId.get(table.id) ?? [];
+    const inputsHtml = fields
+      .filter((f: { data_type: string }) => f.data_type !== 'image' && f.data_type !== 'upload')
+      .map((f: { field_name: string; label: string; ui_widget: string; ui_options_json: string | null; is_required: boolean }) => {
+        const name  = f.field_name;
+        const label = f.label || name;
+        const req   = f.is_required ? ' required' : '';
+
+        if (f.ui_widget === 'textarea') {
+          return `<div class="wdp-field"><label>${label}</label><textarea name="${name}"${req}></textarea></div>`;
+        }
+        if (f.ui_widget === 'checkbox') {
+          return `<div class="wdp-field"><label><input type="checkbox" name="${name}" value="on"> ${label}</label></div>`;
+        }
+        if (f.ui_widget === 'select') {
+          const opts = parseSelectOptions(f.ui_options_json);
+          const optHtml = ['', ...opts].map(o => `<option value="${escHtmlAttr(o)}">${o || '— select —'}</option>`).join('');
+          return `<div class="wdp-field"><label>${label}</label><select name="${name}"${req}>${optHtml}</select></div>`;
+        }
+        const inputType = f.ui_widget === 'number' ? 'number'
+          : f.ui_widget === 'date' ? 'date'
+          : f.ui_widget === 'datetime' ? 'datetime-local'
+          : f.ui_widget === 'email' ? 'email'
+          : 'text';
+        return `<div class="wdp-field"><label>${label}</label><input type="${inputType}" name="${name}"${req}></div>`;
+      }).join('\n');
+
+    return `${openTag}\n${inputsHtml}\n<div class="wdp-field"><button type="submit">Submit</button></div>\n</form>`;
+  });
+}
+
 function autoNameEditInputs(template: string): string {
   return template.replace(/<input([^>]*)>/gi, (_match, attrs: string) => {
     const tokenMatch = attrs.match(/value="\$\{[^.]+\.([^}]+)\}"/);
@@ -1452,10 +1578,11 @@ async function injectAdvancedSearch(
     .join('\n');
   const renderedInputs = await renderWidgetTokens(searchTpl, appId, {}, 'search');
 
-  const onShowAdv    = `event.preventDefault();var s=this.closest('[data-wdp-form]');s.querySelector('.wdp-sf-simple').style.display='none';s.querySelector('.wdp-sf-adv').style.display=''`;
-  const onShowSimple = `var s=this.closest('[data-wdp-form]');s.querySelector('.wdp-sf-adv').style.display='none';s.querySelector('.wdp-sf-simple').style.display=''`;
+  const onShowAdv    = `event.preventDefault();var a=this.closest('[data-wdp-form]').querySelector('.wdp-sf-adv');a.querySelectorAll('input,select').forEach(function(e){e.disabled=false});this.closest('[data-wdp-form]').querySelector('.wdp-sf-simple').style.display='none';a.style.display=''`;
+  const onShowSimple = `var a=this.closest('[data-wdp-form]').querySelector('.wdp-sf-adv');a.querySelectorAll('input,select').forEach(function(e){e.disabled=true});a.style.display='none';this.closest('[data-wdp-form]').querySelector('.wdp-sf-simple').style.display=''`;
 
-  const advPanel = `\n<div class="wdp-sf-adv" style="display:none"><div class="wdp-adv-fields">${renderedInputs}</div><div class="wdp-adv-btns"><button type="submit" class="wdp-btn">Search</button> <button type="button" class="wdp-adv-link" onclick="${onShowSimple}">&#8593; Simple</button> <a data-wdp-action="clear" class="wdp-btn-link">Clear</a></div></div>`;
+  // Inputs start disabled so they aren't submitted while the panel is hidden
+  const advPanel = `\n<div class="wdp-sf-adv" style="display:none"><div class="wdp-adv-fields">${renderedInputs}</div><div class="wdp-adv-btns"><button type="submit" class="wdp-btn">Search</button> <button type="button" class="wdp-adv-link" onclick="${onShowSimple}">&#8593; Simple</button> <a data-wdp-action="clear" class="wdp-btn-link">Clear</a></div><script>document.currentScript.closest('.wdp-sf-adv').querySelectorAll('input,select').forEach(function(e){e.disabled=true});<\/script></div>`;
   const advLink  = ` <a href="#" class="wdp-adv-link" onclick="${onShowAdv}">Advanced</a>`;
 
   if (hasProperForm) {

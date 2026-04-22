@@ -261,6 +261,40 @@
           </div>
           {% endfor %}
 
+          {% if childFormTables and childFormTables.length %}
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">INSERT FORM — RELATED TABLES</div>
+          <div class="mb-2 p-2 rounded" style="font-size:0.68rem;background:#fdf4ff;color:#6b21a8;line-height:1.5;border:1px solid #e9d5ff;">
+            Click a table to insert a complete form linked to the current record. Edit labels or remove fields as needed. Close with <code>$formclose</code>.
+          </div>
+          {% for ct in childFormTables %}
+          <button type="button" class="token-btn w-100 text-start mb-1 p-2 rounded"
+            data-token="{{ ct.formBlock }}"
+            style="background:#fdf4ff;color:#6b21a8;border:1px solid #d8b4fe;font-size:0.8rem;font-weight:600;cursor:pointer;">
+            <i class="bi bi-card-list me-1" style="opacity:0.7;"></i>{{ ct.table.label or ct.table.table_name }}
+          </button>
+          {% endfor %}
+          {% endif %}
+
+          {% if publicTableFields and publicTableFields.length %}
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">PUBLIC FORM — INDIVIDUAL INPUTS</div>
+          <div class="mb-1" style="font-size:0.68rem;color:#6b7280;line-height:1.5;">
+            Click a field to insert just that input at the cursor.
+          </div>
+          {% for pt in publicTableFields %}
+          <div class="mt-1 mb-2">
+            <div style="font-size:0.68rem;font-weight:600;color:#6b21a8;margin-bottom:3px;">{{ pt.table.label or pt.table.table_name }}</div>
+            {% for f in pt.fields %}
+            <button type="button" class="token-btn w-100 text-start mb-1 p-1 rounded"
+              data-token="{{ f.inputSnippet }}"
+              title="Insert input for {{ f.label or f.field_name }}"
+              style="background:#f8fafc;color:#374151;border:1px solid #e5e7eb;font-size:0.72rem;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              <span style="color:#9333ea;font-family:monospace;font-size:0.65rem;margin-right:4px;">{{ f.ui_widget or 'text' }}</span>{{ f.label or f.field_name }}
+            </button>
+            {% endfor %}
+          </div>
+          {% endfor %}
+          {% endif %}
+
           <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">TEMPLATE TAGS</div>
           <div style="font-size:0.72rem;color:#6b7280;line-height:1.6;">
             <div class="mb-1"><strong style="color:#374151;">$if()</strong> — conditional output</div>
@@ -334,6 +368,14 @@
             style="background:#eff6ff;border:1px solid #93c5fd;cursor:pointer;">
             <div style="font-weight:600;font-size:0.78rem;color:#1e40af;">Pagination Footer</div>
             <div style="font-size:0.67rem;color:#3b5fa0;margin-top:2px;">wdp-footer · ${_pagination}</div>
+          </button>
+
+          <div class="text-muted mt-3 mb-2" style="font-size:0.7rem;">D — PUBLIC FORMS</div>
+
+          <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="form-open"
+            style="background:#fdf4ff;border:1px solid #d8b4fe;cursor:pointer;">
+            <div style="font-weight:600;font-size:0.78rem;color:#6b21a8;">Public Form</div>
+            <div style="font-size:0.67rem;color:#7e22ce;margin-top:2px;">HTML form posting to /api/v/{app}/form/{table}</div>
           </button>
 
           <div class="text-muted mt-3 mb-2" style="font-size:0.7rem;">B — INDIVIDUAL ELEMENTS</div>
@@ -1454,6 +1496,19 @@ add_shortcode('wdp_view', function($atts) {
     'wdp-row-div':      '<div class="wdp-row" data-wdp-action="detail" data-wdp-id="${_pk}">\n\n</div>',
     'wdp-surface-div':  '<div class="wdp-surface">\n\n</div>',
     'wdp-detail-div':   '<div class="wdp-detail">\n\n</div>',
+
+    'form-open': [
+      '<form method="POST" action="/api/v/{{ currentApp.slug if currentApp else "app-slug" }}/form/table_name">',
+      '  <input type="hidden" name="foreign_key" value="${table.id}">',
+      '  <div class="wdp-field">',
+      '    <label class="wdp-field-label" for="f-field">Label</label>',
+      '    <input type="text" class="wdp-input" name="field" id="f-field" value="">',
+      '  </div>',
+      '  <div class="wdp-field">',
+      '    <button type="submit" class="wdp-btn">Submit</button>',
+      '  </div>',
+      '</form>',
+    ].join('\n'),
   };
 
   document.querySelectorAll('.block-btn').forEach(btn => {

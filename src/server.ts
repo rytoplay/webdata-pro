@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import { config } from './config';
 import { db } from './db/knex';
+import { sendDailyDigest } from './services/email';
 
 async function start() {
   try {
@@ -28,6 +29,14 @@ async function start() {
     console.log(`Admin panel: http://localhost:${config.port}/admin`);
     console.log(`Environment: ${config.env}`);
   });
+
+  // Daily digest — runs once per day (every 24 hours)
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+  setInterval(() => {
+    sendDailyDigest().catch((err: unknown) => {
+      console.error('[daily-digest] failed:', err);
+    });
+  }, TWENTY_FOUR_HOURS);
 }
 
 start();

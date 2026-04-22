@@ -3,6 +3,7 @@ import type { App, AppField } from '../../domain/types';
 import { db as controlDb } from '../../db/knex';
 import { getAppDb } from '../../db/adapters/appDb';
 import { touchRecordMeta } from '../../services/recordMeta';
+import { maybeNotify } from '../../services/notifications';
 import { memoryUpload, saveUpload, deleteUpload } from '../../services/uploads';
 import { getBranding } from './branding';
 
@@ -281,6 +282,7 @@ memberTableRouter.post('/:tableName/new', memoryUpload, async (req, res, next) =
 
     const memberName = await getMemberName(member.memberId);
     await touchRecordMeta(app, tableName, recordId, member.memberId, memberName, new Date().toISOString());
+    await maybeNotify(app, tableName, recordId, memberName || `Member #${member.memberId}`);
 
     req.session.flash = { type: 'success', message: 'Record created.' };
     res.redirect(

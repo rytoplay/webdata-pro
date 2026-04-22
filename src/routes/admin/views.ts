@@ -10,6 +10,43 @@ import { buildStarterTemplates } from '../../services/templateGen';
 
 export const viewsRouter = Router();
 
+function buildPublicInputSnippet(field: {
+  field_name: string;
+  ui_widget: string;
+  ui_options_json: string | null;
+  is_required: boolean;
+}): string {
+  const name = field.field_name;
+  const id   = `f-${name}`;
+  const req  = field.is_required ? ' required' : '';
+
+  if (field.ui_widget === 'textarea') {
+    let rows = 3;
+    try { rows = (JSON.parse(field.ui_options_json ?? '{}') as { rows?: number }).rows ?? 3; } catch {}
+    return `<textarea name="${name}" id="${id}" rows="${rows}"${req}></textarea>`;
+  }
+  if (field.ui_widget === 'checkbox') {
+    return `<input type="checkbox" name="${name}" id="${id}" value="on">`;
+  }
+  if (field.ui_widget === 'select') {
+    let opts: string[] = [];
+    try { opts = (JSON.parse(field.ui_options_json ?? '{}') as { options?: string[] }).options ?? []; } catch {}
+    const optHtml = ['', ...opts]
+      .map(o => `<option value="${o}">${o || '— select —'}</option>`).join('');
+    return `<select name="${name}" id="${id}"${req}>${optHtml}</select>`;
+  }
+  const typeMap: Record<string, string> = {
+    number: 'number', date: 'date', datetime: 'datetime-local', email: 'email',
+  };
+  const inputType = typeMap[field.ui_widget] ?? 'text';
+  if (inputType === 'text') {
+    let maxlen = 255;
+    try { maxlen = (JSON.parse(field.ui_options_json ?? '{}') as { max_length?: number }).max_length ?? 255; } catch {}
+    return `<input type="text" name="${name}" id="${id}" value="" maxlength="${maxlen}"${req}>`;
+  }
+  return `<input type="${inputType}" name="${name}" id="${id}"${req}>`;
+}
+
 const ViewSchema = z.object({
   view_name:               z.string().min(1).regex(/^[a-z0-9_-]+$/, 'URL slug: lowercase letters, numbers, - or _'),
   label:                   z.string().min(1),
@@ -32,6 +69,122 @@ const ViewSchema = z.object({
   const { group_by_sort: _, ...rest } = data;
   return { ...rest, grouping_field };
 });
+
+type FieldInfo = { field_name: string; label: string; ui_widget: string; ui_options_json: string | null; is_required: boolean };
+
+function buildChildFormBlock(
+  appSlug: string,
+  childTableName: string,
+  fkFieldName: string,
+  baseTableName: string,
+  basePkFieldName: string,
+  fields: FieldInfo[],
+): string {
+  const action   = `/api/v/${appSlug}/form/${childTableName}`;
+  const fkToken  = `\${${baseTableName}.${basePkFieldName}}`;
+  const lines: string[] = [
+    `<form method="POST" action="${action}">`,
+    `  <input type="hidden" name="${fkFieldName}" value="${fkToken}">`,
+  ];
+
+  for (const f of fields) {
+    if (f.field_name === fkFieldName) continue;
+    const id  = `f-${f.field_name}`;
+    const lbl = f.label || f.field_name;
+    const req = f.is_required ? ' required' : '';
+
+    if (f.ui_widget === 'checkbox') {
+      lines.push(`  <div class="wdp-field">`, `    <label><input type="checkbox" name="${f.field_name}" id="${id}" value="on"> ${lbl}</label>`, `  </div>`);
+      continue;
+    }
+
+    let input: string;
+    if (f.ui_widget === 'textarea') {
+      let rows = 3;
+      try { rows = (JSON.parse(f.ui_options_json ?? '{}') as { rows?: number }).rows ?? 3; } catch {}
+      input = `<textarea class="wdp-input" name="${f.field_name}" id="${id}" rows="${rows}"${req}></textarea>`;
+    } else if (f.ui_widget === 'select') {
+      let opts: string[] = [];
+      try { opts = (JSON.parse(f.ui_options_json ?? '{}') as { options?: string[] }).options ?? []; } catch {}
+      const optHtml = ['', ...opts].map(o => `<option value="${o}">${o || '— select —'}</option>`).join('');
+      input = `<select class="wdp-select" name="${f.field_name}" id="${id}"${req}>${optHtml}</select>`;
+    } else {
+      const typeMap: Record<string, string> = { number: 'number', date: 'date', datetime: 'datetime-local', email: 'email' };
+      const inputType = typeMap[f.ui_widget] ?? 'text';
+      let extra = '';
+      if (inputType === 'text') {
+        let maxlen = 255;
+        try { maxlen = (JSON.parse(f.ui_options_json ?? '{}') as { max_length?: number }).max_length ?? 255; } catch {}
+        extra = ` maxlength="${maxlen}"`;
+      }
+      input = `<input type="${inputType}" class="wdp-input" name="${f.field_name}" id="${id}" value=""${extra}${req}>`;
+    }
+    lines.push(`  <div class="wdp-field">`, `    <label class="wdp-field-label" for="${id}">${lbl}</label>`, `    ${input}`, `  </div>`);
+  }
+
+  lines.push(`  <div class="wdp-field">`, `    <button type="submit" class="wdp-btn">Submit</button>`, `  </div>`, `</form>`);
+  return lines.join('\n');
+}
+
+async function findChildFormTables(
+  appId: number,
+  baseTableId: number,
+  baseTableName: string,
+  appSlug: string,
+): Promise<{ table: { table_name: string; label: string }; formBlock: string }[]> {
+  const [joins, publicTables, basePkField] = await Promise.all([
+    db('app_joins').where({ app_id: appId }),
+    db('app_tables').where({ app_id: appId, is_public_addable: true }).whereNot({ id: baseTableId }),
+    db('app_fields').where({ table_id: baseTableId, is_primary_key: true }).first(),
+  ]);
+  const basePkName = basePkField?.field_name ?? 'id';
+
+  const result: { table: { table_name: string; label: string }; formBlock: string }[] = [];
+
+  for (const pt of publicTables) {
+    let fkFieldName: string | null = null;
+    let basePkFieldName = basePkName;
+
+    // Check for a defined join between this table and the base table
+    const join = joins.find((j: { left_table_id: number; right_table_id: number }) =>
+      (j.left_table_id === pt.id && j.right_table_id === baseTableId) ||
+      (j.right_table_id === pt.id && j.left_table_id === baseTableId),
+    );
+
+    if (join) {
+      if (join.left_table_id === pt.id) {
+        fkFieldName    = join.left_field_name;
+        basePkFieldName = join.right_field_name;
+      } else {
+        fkFieldName    = join.right_field_name;
+        basePkFieldName = join.left_field_name;
+      }
+    } else {
+      // Fallback: look for a field named {baseTableName}_id or {singular}_id
+      const singular = baseTableName.replace(/ies$/i, 'y').replace(/s$/i, '');
+      const candidates = [...new Set([`${baseTableName}_id`, `${singular}_id`])];
+      const fkField = await db('app_fields')
+        .where({ table_id: pt.id })
+        .whereIn('field_name', candidates)
+        .first();
+      if (fkField) fkFieldName = fkField.field_name;
+    }
+
+    if (!fkFieldName) continue;
+
+    const fields: FieldInfo[] = await db('app_fields')
+      .where({ table_id: pt.id, is_primary_key: false })
+      .whereNotIn('data_type', ['image', 'upload'])
+      .orderBy('sort_order');
+
+    result.push({
+      table:     pt,
+      formBlock: buildChildFormBlock(appSlug, pt.table_name, fkFieldName, baseTableName, basePkFieldName, fields),
+    });
+  }
+
+  return result;
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -207,6 +360,31 @@ viewsRouter.get('/:id/templates', async (req, res, next) => {
       generatedSql = await viewsService.generateViewSql(app.id, baseTable?.table_name ?? '', templates);
     } catch (_) {}
 
+    // Child tables (public-addable, with FK to base table) — one-click form insertion
+    const childFormTables = await findChildFormTables(app.id, view.base_table_id, baseTable?.table_name ?? '', app.slug);
+
+    // Collect public-addable tables with their non-PK fields for the form builder panel
+    const publicAddableTables = await db('app_tables')
+      .where({ app_id: app.id, is_public_addable: true })
+      .orderBy('label');
+    const publicTableFields: {
+      table: { table_name: string; label: string };
+      fields: { field_name: string; label: string; ui_widget: string; inputSnippet: string }[];
+    }[] = [];
+    for (const t of publicAddableTables) {
+      const tFields = await db('app_fields')
+        .where({ table_id: t.id, is_primary_key: false })
+        .whereNotIn('data_type', ['image', 'upload'])
+        .orderBy('sort_order');
+      publicTableFields.push({
+        table: t,
+        fields: tFields.map((f: { field_name: string; label: string; ui_widget: string; ui_options_json: string | null; is_required: boolean }) => ({
+          ...f,
+          inputSnippet: buildPublicInputSnippet(f),
+        })),
+      });
+    }
+
     const flash = req.session.flash;
     delete req.session.flash;
 
@@ -214,6 +392,8 @@ viewsRouter.get('/:id/templates', async (req, res, next) => {
       title: `Templates — ${view.label}`,
       view, baseTable, templates,
       baseFields, joinedFields,
+      childFormTables,
+      publicTableFields,
       templateTypes: viewsService.TEMPLATE_TYPES,
       templateLabels: viewsService.TEMPLATE_LABELS,
       generatedSql,

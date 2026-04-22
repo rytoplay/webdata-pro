@@ -39,6 +39,7 @@ interface BatchRow {
   data_type?: string;
   widget?: string;
   is_required?: boolean | string;
+  is_indexed?: boolean | string;
   max_length?: string;
   options?: string;
   textarea_rows?: string;
@@ -160,6 +161,7 @@ fieldsRouter.post('/batch', async (req, res, next) => {
           label: row.label?.trim() || fieldNameToLabel(name),
           data_type: dataType,
           is_required: Boolean(row.is_required),
+          is_indexed: Boolean(row.is_indexed),
           ui_widget: resolveWidget(widget, dataType),
           ui_options_json: uiOptionsJson
         });

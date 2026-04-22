@@ -48,4 +48,7 @@ export interface UpdateAppInput {
   member_css_url?: string | null;
   member_header_html?: string | null;
   member_footer_html?: string | null;
+  notify_admin_email?: string | null;
+  notify_tables_json?: string | null;
+  notify_mode?: string | null;
 }

@@ -61,6 +61,7 @@
           <col style="width:148px">    <!-- data type -->
           <col style="width:130px">    <!-- widget -->
           <col style="width:48px">     <!-- req -->
+          <col style="width:48px">     <!-- idx -->
           <col>                        <!-- params (flex) -->
         </colgroup>
         <thead class="table-light">
@@ -71,6 +72,7 @@
             <th>Type</th>
             <th>Widget</th>
             <th title="Required">Req</th>
+            <th title="Add a database index — uses = instead of LIKE for search">Idx</th>
             <th>Parameters</th>
           </tr>
         </thead>
@@ -338,6 +340,9 @@ function addRow(focusNew) {
     <td style="text-align:center;">
       <input type="checkbox" data-field="is_required">
     </td>
+    <td style="text-align:center;">
+      <input type="checkbox" data-field="is_indexed" title="Index this field">
+    </td>
     <td>${buildParamsHtml(idx, 'text')}</td>`;
 
   tbody.appendChild(tr);
@@ -474,11 +479,12 @@ function prepareSubmit() {
 
     const dataType = tr.querySelector('[data-field="data_type"]').value;
     const widget   = tr.querySelector('[data-field="widget"]').value;
-    const isReq    = tr.querySelector('[data-field="is_required"]').checked;
-    const wrapper  = tr.querySelector('.params-wrapper');
+    const isReq     = tr.querySelector('[data-field="is_required"]').checked;
+    const isIndexed = tr.querySelector('[data-field="is_indexed"]').checked;
+    const wrapper   = tr.querySelector('.params-wrapper');
 
     const row = { field_name: fieldName, label: fieldNameToLabel(fieldName),
-                  data_type: dataType, widget, is_required: isReq };
+                  data_type: dataType, widget, is_required: isReq, is_indexed: isIndexed };
 
     if (widget === 'text' || widget === 'number') {
       const ml = wrapper.querySelector('[data-field="max_length"]');

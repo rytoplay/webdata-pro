@@ -34,6 +34,104 @@ export async function isEmailConfigured(): Promise<boolean> {
   return cfg !== null;
 }
 
+export async function sendNewRecordNotification(
+  toEmail: string,
+  appName: string,
+  tableLabel: string,
+  recordId: string | null,
+  submittedBy: string,
+): Promise<void> {
+  const cfg = await getSmtpConfig();
+  if (!cfg) return; // silently skip — SMTP not configured
+
+  const transporter = nodemailer.createTransport({
+    host: cfg.host, port: cfg.port, secure: cfg.secure,
+    auth: { user: cfg.user, pass: cfg.pass },
+  });
+
+  const when = new Date().toLocaleString();
+  const recordLine = recordId ? `<br>Record ID: <strong>${recordId}</strong>` : '';
+
+  await transporter.sendMail({
+    from:    `"${appName}" <${cfg.from}>`,
+    to:      toEmail,
+    subject: `New record in ${tableLabel} — ${appName}`,
+    html: `
+      <p>A new record was submitted to the <strong>${tableLabel}</strong> table
+         in your <strong>${appName}</strong> app.</p>
+      <p>Submitted by: <strong>${submittedBy}</strong><br>
+         Time: ${when}${recordLine}</p>
+      <hr style="border:none;border-top:1px solid #e5e7eb">
+      <p style="font-size:0.8em;color:#6b7280">You are receiving this because admin notifications
+         are enabled for ${appName}. Manage settings in the App Settings page.</p>
+    `,
+    text: `New record in ${tableLabel} — ${appName}\nSubmitted by: ${submittedBy}\nTime: ${when}${recordId ? `\nRecord ID: ${recordId}` : ''}`,
+  });
+}
+
+export async function sendDailyDigest(): Promise<void> {
+  const cfg = await getSmtpConfig();
+  if (!cfg) return;
+
+  // Find all apps that have daily mode and a notify email
+  const apps = await db('apps')
+    .whereNotNull('notify_admin_email')
+    .where('notify_mode', 'daily')
+    .whereNotNull('notify_tables_json')
+    .select('id', 'name', 'notify_admin_email');
+
+  if (apps.length === 0) return;
+
+  const transporter = nodemailer.createTransport({
+    host: cfg.host, port: cfg.port, secure: cfg.secure,
+    auth: { user: cfg.user, pass: cfg.pass },
+  });
+
+  for (const app of apps) {
+    const items = await db('notification_queue')
+      .where({ app_id: app.id })
+      .orderBy('queued_at', 'asc')
+      .select('table_label', 'record_id', 'submitted_by', 'queued_at');
+
+    if (items.length === 0) continue;
+
+    const rows = items.map((r: { table_label: string; record_id: string | null; submitted_by: string; queued_at: string }) =>
+      `<tr>
+        <td style="padding:4px 8px;border-bottom:1px solid #e5e7eb">${r.table_label ?? r.table_label}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid #e5e7eb">${r.record_id ?? ''}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid #e5e7eb">${r.submitted_by ?? ''}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid #e5e7eb;white-space:nowrap">${new Date(r.queued_at).toLocaleString()}</td>
+      </tr>`
+    ).join('');
+
+    await transporter.sendMail({
+      from:    `"${app.name}" <${cfg.from}>`,
+      to:      app.notify_admin_email,
+      subject: `Daily digest — ${items.length} new record${items.length !== 1 ? 's' : ''} in ${app.name}`,
+      html: `
+        <p><strong>${app.name}</strong> — daily new-record digest</p>
+        <table style="border-collapse:collapse;font-size:0.9em">
+          <thead><tr style="background:#f9fafb">
+            <th style="padding:4px 8px;text-align:left">Table</th>
+            <th style="padding:4px 8px;text-align:left">Record ID</th>
+            <th style="padding:4px 8px;text-align:left">Submitted by</th>
+            <th style="padding:4px 8px;text-align:left">Time</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p style="font-size:0.8em;color:#6b7280;margin-top:16px">
+          Manage notification settings in the App Settings page.</p>
+      `,
+      text: items.map((r: { table_label: string; record_id: string | null; submitted_by: string; queued_at: string }) =>
+        `${r.table_label} | ID: ${r.record_id ?? 'n/a'} | ${r.submitted_by ?? ''} | ${r.queued_at}`
+      ).join('\n'),
+    });
+
+    // Clear sent items
+    await db('notification_queue').where({ app_id: app.id }).delete();
+  }
+}
+
 export async function sendPasswordResetEmail(
   toEmail: string,
   resetUrl: string,

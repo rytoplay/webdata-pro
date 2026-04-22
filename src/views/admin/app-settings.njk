@@ -109,6 +109,82 @@
     </div>
   </div>
 
+  <!-- ── Admin Notifications ───────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-bold py-3 px-4">
+        <i class="bi bi-bell me-2 text-primary"></i>Admin Notifications
+      </div>
+      <div class="card-body p-4">
+        <p class="text-muted small mb-4">
+          Receive an email whenever a new record is added to selected tables —
+          useful for public inquiry forms or member-submitted content.
+          Requires SMTP to be configured in <a href="/admin/settings">Settings</a>.
+        </p>
+        <form method="POST" action="/admin/app-settings">
+          {# carry through all other fields so a partial save doesn't wipe them #}
+          <input type="hidden" name="allowed_origins"    value="{{ originsText }}">
+          <input type="hidden" name="member_css_url"     value="{{ memberCssUrl }}">
+          <input type="hidden" name="member_header_html" value="{{ memberHeaderHtml }}">
+          <input type="hidden" name="member_footer_html" value="{{ memberFooterHtml }}">
+
+          <div class="mb-4">
+            <label class="form-label" for="notify_admin_email">Notify this email address</label>
+            <input type="email" id="notify_admin_email" name="notify_admin_email"
+              class="form-control" style="max-width:380px"
+              placeholder="admin@example.com"
+              value="{{ notifyAdminEmail }}">
+            <div class="form-text">Leave blank to disable all notifications.</div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label d-block mb-2">Notify for new records in…</label>
+            {% if appTables and appTables.length %}
+              <div class="d-flex flex-wrap gap-3">
+                {% for tbl in appTables %}
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox"
+                    id="nt_{{ tbl.table_name }}"
+                    name="notify_tables"
+                    value="{{ tbl.table_name }}"
+                    {% if tbl.table_name in notifyTables %}checked{% endif %}>
+                  <label class="form-check-label" for="nt_{{ tbl.table_name }}">{{ tbl.label }}</label>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="text-muted small">No tables in this app yet.</p>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label d-block mb-2">Delivery</label>
+            <div class="d-flex gap-4">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="notify_mode" id="nm_immediate"
+                  value="immediate" {% if notifyMode !== 'daily' %}checked{% endif %}>
+                <label class="form-check-label" for="nm_immediate">
+                  <strong>Immediate</strong> — send one email per new record
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="notify_mode" id="nm_daily"
+                  value="daily" {% if notifyMode === 'daily' %}checked{% endif %}>
+                <label class="form-check-label" for="nm_daily">
+                  <strong>Daily digest</strong> — one summary email per day
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Save Notifications
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Database Connection (non-SQLite only) ──────────────────────────── -->
   {% if dbMode !== 'sqlite' %}
   <div class="col-12">

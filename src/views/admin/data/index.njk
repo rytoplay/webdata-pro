@@ -1,0 +1,64 @@
+{% extends "admin/layout.njk" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Data</h1>
+</div>
+
+{% if flash %}
+<div class="alert alert-{{ flash.type }} alert-dismissible fade show" role="alert">
+  {{ flash.message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if tables.length === 0 %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-table fs-1 d-block mb-2"></i>
+  No tables yet. <a href="/admin/tables/new">Create one</a>.
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <table class="table table-hover mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Table</th>
+        <th class="text-end" style="width:100px;">Records</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tables %}
+      <tr>
+        <td>
+          <a href="/admin/data/{{ t.table_name }}" class="fw-semibold text-decoration-none">{{ t.label }}</a>
+          <div class="text-muted" style="font-size:0.75rem;font-family:monospace;">{{ t.table_name }}</div>
+          {% if t.is_public_addable %}
+          <span class="badge bg-success-subtle text-success-emphasis ms-0 mt-1" style="font-size:0.65rem;">public add</span>
+          {% endif %}
+        </td>
+        <td class="text-end text-muted align-middle">
+          {% if t.exists %}
+            {{ t.count }}
+          {% else %}
+            <span class="badge bg-warning text-dark" style="font-size:0.65rem;">not created</span>
+          {% endif %}
+        </td>
+        <td class="text-end align-middle" style="white-space:nowrap;">
+          <a href="/admin/data/{{ t.table_name }}" class="btn btn-sm btn-outline-primary me-1">
+            <i class="bi bi-grid-3x3-gap"></i> Browse
+          </a>
+          <a href="/admin/data/{{ t.table_name }}/new" class="btn btn-sm btn-outline-secondary me-1">
+            <i class="bi bi-plus-lg"></i> Add
+          </a>
+          <a href="/admin/data/{{ t.table_name }}/import" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-filetype-csv"></i>
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

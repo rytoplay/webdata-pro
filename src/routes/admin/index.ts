@@ -129,27 +129,40 @@ adminRouter.get('/endpoints', requireApp, async (req, res, next) => {
 
 // ── App Settings ──────────────────────────────────────────────────────────────
 
-adminRouter.get('/app-settings', requireApp, (req, res) => {
-  const app = res.locals.currentApp;
-  const origins: string[] = app.allowed_origins_json
-    ? (JSON.parse(app.allowed_origins_json) as string[])
-    : [];
-  const dbCfg = app.database_config_json
-    ? JSON.parse(app.database_config_json)
-    : {};
-  const flash = req.session.flash;
-  delete req.session.flash;
-  res.render('admin/app-settings', {
-    title: 'App Settings',
-    app,
-    originsText:       origins.join('\n'),
-    memberCssUrl:      app.member_css_url      ?? '',
-    memberHeaderHtml:  app.member_header_html  ?? '',
-    memberFooterHtml:  app.member_footer_html  ?? '',
-    dbMode:            app.database_mode,
-    dbCfg,
-    flash,
-  });
+adminRouter.get('/app-settings', requireApp, async (req, res, next) => {
+  try {
+    const app = res.locals.currentApp;
+    const origins: string[] = app.allowed_origins_json
+      ? (JSON.parse(app.allowed_origins_json) as string[])
+      : [];
+    const dbCfg = app.database_config_json
+      ? JSON.parse(app.database_config_json)
+      : {};
+    const notifyTables: string[] = app.notify_tables_json
+      ? JSON.parse(app.notify_tables_json)
+      : [];
+    const appTables = await db('app_tables')
+      .where({ app_id: app.id, is_gallery: false })
+      .orderBy('label')
+      .select('table_name', 'label');
+    const flash = req.session.flash;
+    delete req.session.flash;
+    res.render('admin/app-settings', {
+      title:             'App Settings',
+      app,
+      originsText:       origins.join('\n'),
+      memberCssUrl:      app.member_css_url      ?? '',
+      memberHeaderHtml:  app.member_header_html  ?? '',
+      memberFooterHtml:  app.member_footer_html  ?? '',
+      dbMode:            app.database_mode,
+      dbCfg,
+      appTables,
+      notifyTables,
+      notifyAdminEmail:  app.notify_admin_email  ?? '',
+      notifyMode:        app.notify_mode         ?? 'immediate',
+      flash,
+    });
+  } catch (err) { next(err); }
 });
 
 adminRouter.post('/app-settings', requireApp, async (req, res, next) => {
@@ -160,16 +173,29 @@ adminRouter.post('/app-settings', requireApp, async (req, res, next) => {
       member_css_url?: string;
       member_header_html?: string;
       member_footer_html?: string;
+      notify_admin_email?: string;
+      notify_tables?: string | string[];
+      notify_mode?: string;
     };
     const lines = (body.allowed_origins ?? '')
       .split('\n')
       .map((l: string) => l.trim())
       .filter(Boolean);
+
+    // notify_tables comes as a single string or array depending on how many boxes are checked
+    const rawTables = body.notify_tables
+      ? (Array.isArray(body.notify_tables) ? body.notify_tables : [body.notify_tables])
+      : [];
+    const notifyTables = rawTables.filter(Boolean);
+
     await updateApp(app.id, {
       allowed_origins_json: lines.length ? JSON.stringify(lines) : null,
       member_css_url:       (body.member_css_url ?? '').trim() || null,
       member_header_html:   (body.member_header_html ?? '').trim() || null,
       member_footer_html:   (body.member_footer_html ?? '').trim() || null,
+      notify_admin_email:   (body.notify_admin_email ?? '').trim() || null,
+      notify_tables_json:   notifyTables.length ? JSON.stringify(notifyTables) : null,
+      notify_mode:          body.notify_mode === 'daily' ? 'daily' : 'immediate',
     });
     req.session.flash = { type: 'success', message: 'App settings saved.' };
     res.redirect('/admin/app-settings');

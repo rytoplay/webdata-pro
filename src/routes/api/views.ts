@@ -5,6 +5,8 @@ import { appCors } from '../../middleware/cors';
 import type { App } from '../../domain/types';
 import * as viewsService from '../../services/views';
 import { memoryUpload, saveUpload, deleteUpload, validateUpload, type UploadRestrictions } from '../../services/uploads';
+import { touchRecordMeta } from '../../services/recordMeta';
+import { maybeNotify } from '../../services/notifications';
 
 async function getPortalContext(app: App, req: Request): Promise<{ portalHeader: string; portalFooter: string }> {
   if (!app.member_header_html && !app.member_footer_html) return { portalHeader: '', portalFooter: '' };
@@ -614,6 +616,69 @@ apiViewsRouter.post('/gallery/:galleryTable/photo/:photoId/delete', async (req, 
     await appDb(galleryTable).where({ id: photoId }).delete();
 
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Public form submission ────────────────────────────────────────────────────
+// POST /api/v/:appSlug/form/:tableName
+// Accepts submissions from public-facing $formopen/$form tokens.
+// Only works when the table has is_public_addable = true.
+
+apiViewsRouter.post('/form/:tableName', async (req, res, next) => {
+  try {
+    const app = res.locals.apiApp as App;
+    const { tableName } = req.params;
+
+    // Validate table name (alphanumeric + underscore only)
+    if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+      return res.status(400).send('Invalid table name.');
+    }
+
+    const table = await db('app_tables')
+      .where({ app_id: app.id, table_name: tableName })
+      .first();
+    if (!table) return res.status(404).send('Table not found.');
+    if (!table.is_public_addable) return res.status(403).send('This table does not accept public submissions.');
+
+    const { getAppDb } = await import('../../db/adapters/appDb');
+    const appDb = getAppDb(app);
+
+    // Load non-PK fields to know what to accept
+    const fields = await db('app_fields')
+      .where({ table_id: table.id, is_primary_key: false })
+      .orderBy('sort_order');
+
+    const record: Record<string, unknown> = {};
+    for (const field of fields) {
+      // Skip image/upload fields — public forms don't handle file uploads
+      if (field.data_type === 'image' || field.data_type === 'upload') continue;
+      const name = field.field_name as string;
+      // Accept both "fieldName" and "tableName__fieldName" (WDP convention)
+      const raw  = req.body[name] ?? req.body[`${tableName}__${name}`];
+      if (raw === undefined) {
+        // Unchecked checkboxes are omitted by the browser; default to false/0
+        if (field.ui_widget === 'checkbox') record[name] = 0;
+        continue;
+      }
+      if (field.ui_widget === 'checkbox') {
+        record[name] = (raw === 'on' || raw === '1' || raw === 'true' || raw === true) ? 1 : 0;
+      } else {
+        record[name] = raw === '' ? null : raw;
+      }
+    }
+
+    const [newId] = await appDb(tableName).insert(record);
+
+    // Write metadata so ownership can be tracked (anonymous public submission)
+    if (newId) {
+      await touchRecordMeta(app, tableName, String(newId), null, 'Public', new Date().toISOString());
+      await maybeNotify(app, tableName, String(newId), 'Public');
+    }
+
+    const redirectTo = String(req.body._redirect || req.headers.referer || '/');
+    res.redirect(redirectTo);
   } catch (err) {
     next(err);
   }
