@@ -155,17 +155,29 @@ Returns the **sum** or **average** of a numeric field across the **entire filter
 - The value is the same regardless of which page or row the token appears in.
 - Works in all templates: Row, Header, Footer, Group Header, Group Footer.
 - Returns blank if no records match or the field is non-numeric.
+- An optional second argument sets decimal places (default: 2 for `$avg`, raw for `$sum`).
+
+```
+$sum[table.field]         → raw sum, e.g. 97500
+$sum[table.field, 2]      → fixed decimals, e.g. 97500.00
+$avg[table.field]         → average to 2 decimal places, e.g. 485000.00
+$avg[table.field, 0]      → average rounded to whole number, e.g. 485000
+```
+
+### Combining with `$currency[]`
+
+Nest `$sum` or `$avg` inside `$currency[]` to get a fully formatted number with thousands separators:
 
 ```html
 <!-- In Header or Footer -->
-Total value of available pets: $currency[$sum[pets.adoption_fee], 2]
-Average adoption fee: $currency[$avg[pets.adoption_fee], 2]
+We currently have ${_total} properties listed.
+The average asking price is $$currency[$avg[properties.price], 0].
 
-<!-- In Row — same number repeated on every row, useful in a footer summary row -->
-<div class="wdp-row-meta">Average age: $avg[pets.dob] years on file</div>
+Total adoption fees collected: $$currency[$sum[pets.adoption_fee], 2]
+Average fee: $$currency[$avg[pets.adoption_fee], 2]
 ```
 
-> **Tip:** Combine with `$currency[]` to format the result with commas and decimal places.
+The `$avg` (or `$sum`) token resolves first to a plain number, then `$currency[]` formats it. The `$` before `$currency` is a literal dollar sign — just type two `$` in a row.
 
 ---
 
@@ -182,6 +194,8 @@ Formats a number with thousands separators. The optional second argument sets de
 $currency[products.price, 2]   → 1,299.00
 $currency[reports.total]       → 42,500
 ```
+
+Also accepts a literal number as its first argument, which is how nesting with `$sum`/`$avg` works (see above).
 
 ---
 

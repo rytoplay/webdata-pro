@@ -274,6 +274,18 @@
             <div>$avg[table.field, 2]</div>
             <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Average of field across all found records</div>
           </button>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token="$$currency[$avg[table.field], 0]"
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$$currency[$avg[table.field], 0]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Avg formatted with $-sign &amp; commas — e.g. $485,000</div>
+          </button>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token="$$currency[$sum[table.field], 2]"
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$$currency[$sum[table.field], 2]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Sum formatted with $-sign &amp; commas — e.g. $9,750.00</div>
+          </button>
 
           <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">DATE TOKENS</div>
           <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"

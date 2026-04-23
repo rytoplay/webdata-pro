@@ -618,21 +618,6 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
     return `<img src="/files/${val}" style="max-width:100%;" alt="">`;
   });
 
-  // $currency[table.field] or $currency[table.field,2] → comma-formatted number
-  result = result.replace(/\$currency\[([^\]]+)\]/g, (_, ref: string) => {
-    const parts      = ref.split(',').map((s: string) => s.trim());
-    const fieldRef   = parts[0];
-    const decimals   = parts[1] !== undefined ? parseInt(parts[1], 10) : undefined;
-    const alias      = fieldRef.replace('.', '__');
-    const raw        = data[alias] ?? data[fieldRef];
-    if (raw === null || raw === undefined || raw === '') return '';
-    const num = parseFloat(String(raw));
-    if (isNaN(num)) return String(raw);
-    return decimals !== undefined
-      ? num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-      : num.toLocaleString('en-US');
-  });
-
   // $days_since[table.field] or $days_since[table.field, decimals]
   // Default: whole days (floor). With decimals arg: fractional days to N places.
   result = result.replace(/\$days_since\[([^\]]+)\]/g, (_, ref: string) => {
@@ -686,6 +671,25 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
     const num = parseFloat(String(val));
     if (isNaN(num)) return '';
     return num.toFixed(decimals);
+  });
+
+  // $currency[table.field] or $currency[table.field,2] → comma-formatted number
+  // Runs AFTER $sum/$avg so nested forms like $currency[$avg[table.field], 0] work:
+  // $avg resolves to a plain number first, then $currency formats it.
+  result = result.replace(/\$currency\[([^\]]+)\]/g, (_, ref: string) => {
+    const parts      = ref.split(',').map((s: string) => s.trim());
+    const fieldRef   = parts[0];
+    const decimals   = parts[1] !== undefined ? parseInt(parts[1], 10) : undefined;
+    const alias      = fieldRef.replace('.', '__');
+    // Look up from data row first; fall back to treating fieldRef as a literal number
+    // (handles $currency[$avg[...], 0] after the inner token has already resolved)
+    const raw        = data[alias] ?? data[fieldRef] ?? fieldRef;
+    if (raw === null || raw === undefined || raw === '') return '';
+    const num = parseFloat(String(raw));
+    if (isNaN(num)) return String(raw);
+    return decimals !== undefined
+      ? num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+      : num.toLocaleString('en-US');
   });
 
   // $order_url[table.field] → raw data-wdp-action/data-wdp-field attributes
