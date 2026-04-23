@@ -79,6 +79,7 @@ adminRouter.use('/members',    requireApp, membersRouter);
 adminRouter.use('/blueprint',  requireApp, blueprintRouter);
 adminRouter.get('/auth',      requireApp, (_req, res) => res.render('admin/stub', { title: 'Auth / SSO' }));
 adminRouter.get('/styleguide', (_req, res) => res.render('admin/styleguide', { title: 'CSS Style Guide' }));
+adminRouter.get('/help',       (_req, res) => res.render('admin/help',       { title: 'Help' }));
 
 // ── Endpoint Directory ────────────────────────────────────────────────────────
 

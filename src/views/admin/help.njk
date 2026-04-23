@@ -1,0 +1,106 @@
+{% extends "admin/layout.njk" %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-question-circle me-2"></i>Help</h1>
+</div>
+
+<div class="row g-4">
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="fw-800 mb-1"><i class="bi bi-book me-2 text-primary"></i>Getting Started</h5>
+        <p class="text-muted small mb-3">Installation, first app walkthrough, embedding on a website.</p>
+        <a href="https://github.com/rytoplay/webdata-pro#readme" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Read on GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="fw-800 mb-1"><i class="bi bi-braces me-2 text-primary"></i>Template Tokens</h5>
+        <p class="text-muted small mb-3">All <code>${field}</code>, <code>$if()</code>, <code>$dayssince[]</code>, <code>$order[]</code>, aggregates, and more.</p>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/docs/templates.md" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Token reference
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="fw-800 mb-1"><i class="bi bi-search me-2 text-primary"></i>Search Syntax</h5>
+        <p class="text-muted small mb-3">AND / OR / NOT, wildcards, ranges (<code>10..50</code>), fulltext, per-field operators.</p>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/docs/search.md" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Search reference
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="fw-800 mb-1"><i class="bi bi-people me-2 text-primary"></i>Members &amp; Groups</h5>
+        <p class="text-muted small mb-3">Group permissions, member registration, ownership, two-factor authentication.</p>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/docs/members.md" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Members guide
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="fw-800 mb-1"><i class="bi bi-cart me-2 text-primary"></i>E-Commerce</h5>
+        <p class="text-muted small mb-3">Adding Snipcart or Stripe Checkout to your product catalog.</p>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/docs/ecommerce.md" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>E-commerce guide
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="fw-800 mb-1"><i class="bi bi-server me-2 text-primary"></i>Deployment</h5>
+        <p class="text-muted small mb-3">Running on a VPS, reverse proxy setup, backups, PM2, cloud hosting.</p>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/docs/deployment.md" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Deployment guide
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="fw-800 mb-1"><i class="bi bi-shield-check me-2 text-primary"></i>Security</h5>
+        <p class="text-muted small mb-3">Permissions model, bcrypt passwords, 2FA, file access, XSS and SQL injection protection.</p>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/docs/security.md" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Security notes
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="fw-800 mb-1"><i class="bi bi-bug me-2 text-primary"></i>Report an Issue</h5>
+        <p class="text-muted small mb-3">Found a bug or have a feature request? Open an issue on GitHub.</p>
+        <a href="https://github.com/rytoplay/webdata-pro/issues" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>GitHub Issues
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
