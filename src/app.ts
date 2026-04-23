@@ -17,9 +17,10 @@ export function createApp(): express.Application {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  const sessionDir = process.env.DATA_DIR ?? './';
   app.use(
     session({
-      store: new SqliteSessionStore({ db: 'sessions.sqlite', dir: './' }),
+      store: new SqliteSessionStore({ db: 'sessions.sqlite', dir: sessionDir }),
       secret: config.session.secret,
       resave: false,
       saveUninitialized: false,

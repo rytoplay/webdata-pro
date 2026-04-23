@@ -13,7 +13,8 @@ export function getAppDb(app: App): Knex.Knex {
 
   if (app.database_mode === 'sqlite') {
     const cfg = JSON.parse(app.database_config_json || '{}') as Partial<SqliteConfig>;
-    const rawPath = cfg.path ?? `./data/${app.slug}.sqlite`;
+    const dataDir  = process.env.DATA_DIR ?? path.join(process.cwd(), 'data');
+    const rawPath  = cfg.path ?? path.join(dataDir, `${app.slug}.sqlite`);
     const filePath = path.isAbsolute(rawPath)
       ? rawPath
       : path.resolve(process.cwd(), rawPath);

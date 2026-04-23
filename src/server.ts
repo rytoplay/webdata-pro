@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { config } from './config';
 import { db } from './db/knex';
 import { sendDailyDigest } from './services/email';
+import { maybeSeedDemo } from './services/seedDemo';
 
 async function start() {
   try {
@@ -21,6 +22,10 @@ async function start() {
     console.error('Migration failed:', err);
     process.exit(1);
   }
+
+  await maybeSeedDemo().catch(err => {
+    console.warn('[seed] Demo seed failed (non-fatal):', err);
+  });
 
   const app = createApp();
 

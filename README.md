@@ -1,5 +1,7 @@
 # Webdata Pro
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/deploy?template=https://github.com/rytoplay/webdata-pro)
+
 **Build data-driven web apps without hand-coding the back end.**
 
 Webdata Pro is a visual builder for database-powered websites and applications. Describe your project in plain English and the AI builds your tables, search forms, and sample records. Or skip the AI and set everything up by hand through the admin panel. Either way, you stay in full control — of your tables, fields, templates, permissions, and data — from first prototype to working application.
@@ -202,22 +204,69 @@ There is no "forgot password" link for the admin account — it lives entirely i
 
 ---
 
+## Deploy on Railway (5 minutes, no CLI required)
+
+Railway is the easiest way to put Webdata Pro on the internet. You need a free Railway account — sign up at [railway.com](https://railway.com) using your GitHub account.
+
+### Step 1 — Click deploy
+
+Click the button at the top of this page, or go to:
+
+```
+https://railway.com/template/deploy?template=https://github.com/rytoplay/webdata-pro
+```
+
+Railway will fork this repository into your GitHub account and begin building it automatically.
+
+### Step 2 — Set your environment variables
+
+In the Railway dashboard, open your new project and click the **Variables** tab. Add:
+
+| Variable | Value |
+|---|---|
+| `ADMIN_USERNAME` | Your chosen admin username |
+| `ADMIN_PASSWORD` | A strong password |
+| `SESSION_SECRET` | Any long random string |
+| `DATA_DIR` | `/data` |
+
+> Railway sets `PORT` and `NODE_ENV` automatically — you don't need to add those.
+
+### Step 3 — Add a Volume for persistent storage
+
+Without this step, your data is wiped every time Railway redeploys your app (which happens automatically when you push updates).
+
+1. In the Railway dashboard, open your service
+2. Click **Settings** → scroll to **Volumes**
+3. Click **Add Volume**
+4. Set the **Mount Path** to `/data`
+5. Click **Add**
+
+Railway will redeploy automatically. Your SQLite databases will now survive every redeploy.
+
+### Step 4 — Open your app
+
+Railway gives your app a URL like `yourapp.up.railway.app`. Find it under **Settings → Domains**. Click it and log in with the admin credentials you set.
+
+> **Want a custom domain?** Go to **Settings → Domains** in Railway and add your own.
+
+---
+
 ## Running Webdata Pro on a server (always-on)
 
 When you're ready to move beyond your laptop, the simplest path is a one-click cloud host:
 
-- **Railway** — free tier available, easy environment variable setup
+- **Railway** — see the [Deploy on Railway](#deploy-on-railway-5-minutes-no-cli-required) section above
 - **Render** — similar to Railway, good free tier
 - **Any VPS** (DigitalOcean, Linode, etc.) — run `npm run build` then `npm start`
 
-For cloud hosts, set these environment variables in their dashboard:
+For VPS hosting, set these environment variables:
 
 | Variable | What to set |
 |---|---|
 | `ADMIN_PASSWORD` | A strong password |
 | `SESSION_SECRET` | A long random string |
 | `NODE_ENV` | `production` |
-| `PORT` | Usually set automatically by the host |
+| `DATA_DIR` | Path to a persistent directory, e.g. `/var/lib/webdata-pro` |
 
 ---
 
