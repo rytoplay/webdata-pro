@@ -1,6 +1,6 @@
 # Webdata Pro
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.app/new/template?template=https://github.com/rytoplay/webdata-pro)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.app/new/github)
 
 **Build data-driven web apps without hand-coding the back end.**
 
@@ -184,15 +184,11 @@ There is no "forgot password" link for the admin account — it lives entirely i
 
 Railway is the easiest way to put Webdata Pro on the internet. You need a free Railway account — sign up at [railway.com](https://railway.com) using your GitHub account.
 
-### Step 1 — Click deploy
+### Step 1 — Create a new Railway project from GitHub
 
-Click the button at the top of this page, or go to:
+Click the **Deploy on Railway** button at the top of this page (or go to [railway.app/new/github](https://railway.app/new/github)).
 
-```
-https://railway.app/new/template?template=https://github.com/rytoplay/webdata-pro
-```
-
-Railway will fork this repository into your GitHub account and begin building it automatically.
+Railway will ask you to connect your GitHub account if you haven't already. Once connected, search for **webdata-pro** and select it. Railway will begin building it automatically.
 
 ### Step 2 — Set your environment variables
 
