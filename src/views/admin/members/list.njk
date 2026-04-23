@@ -3,9 +3,14 @@
 {% block content %}
 <div class="page-header">
   <h1>Members</h1>
-  <a href="/admin/members/new" class="btn btn-primary btn-sm">
-    <i class="bi bi-person-plus me-1"></i>New Member
-  </a>
+  <div class="d-flex gap-2 align-items-center">
+    <a href="/admin/members/new" class="btn btn-primary btn-sm">
+      <i class="bi bi-person-plus me-1"></i>New Member
+    </a>
+    <a href="/admin/members/export" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-download me-1"></i>Export CSV
+    </a>
+  </div>
 </div>
 
 {% if flash %}

@@ -127,7 +127,9 @@ dataRouter.get('/:tableName', async (req, res, next) => {
     const appDb = getAppDb(app);
     const tableExists = await appDb.schema.hasTable(tableName);
 
-    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const q    = typeof req.query.q    === 'string' ? req.query.q.trim() : '';
+    const sort = typeof req.query.sort === 'string' ? req.query.sort.trim() : '';
+    const dir  = req.query.dir === 'desc' ? 'desc' : 'asc';
 
     let records: Record<string, unknown>[] = [];
     if (tableExists) {
@@ -148,6 +150,12 @@ dataRouter.get('/:tableName', async (req, res, next) => {
         });
       }
 
+      // Sort — validate field name against known fields to prevent injection
+      const sortField = fields.find(f => f.field_name === sort);
+      if (sortField) {
+        query = query.orderBy(sort, dir);
+      }
+
       records = await query;
     }
 
@@ -162,8 +170,69 @@ dataRouter.get('/:tableName', async (req, res, next) => {
       records,
       tableExists,
       q,
+      sort,
+      dir,
       flash
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /data/:tableName/export ────────────────────────────────────────────
+// Must be before /:tableName/:id routes
+
+dataRouter.get('/:tableName/export', async (req, res, next) => {
+  try {
+    const app = res.locals.currentApp as App;
+    const { tableName } = req.params;
+
+    const table = await loadTable(app, tableName);
+    if (!table) return res.status(404).send('Table not found');
+
+    const fields = await loadFields(table.id);
+    const appDb  = getAppDb(app);
+
+    const tableExists = await appDb.schema.hasTable(tableName);
+    if (!tableExists) return res.status(404).send('Table does not exist');
+
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+    const searchableFields = fields.filter(f =>
+      !f.is_primary_key &&
+      f.ui_widget !== 'checkbox' &&
+      f.ui_widget !== 'hidden' &&
+      !['boolean', 'integer', 'int', 'bigint', 'float', 'decimal', 'double', 'date', 'datetime', 'time'].includes(f.data_type.toLowerCase())
+    );
+
+    let query = appDb(tableName).select('*');
+    if (q && searchableFields.length > 0) {
+      query = query.where(function () {
+        for (const field of searchableFields) {
+          this.orWhere(field.field_name, 'like', `%${q}%`);
+        }
+      });
+    }
+
+    const records = await query;
+
+    function csvCell(val: unknown): string {
+      const s = val === null || val === undefined ? '' : String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }
+
+    const headerRow = fields.map(f => csvCell(f.label)).join(',');
+    const dataRows  = records.map((rec: Record<string, unknown>) =>
+      fields.map(f => csvCell(rec[f.field_name])).join(',')
+    );
+    const csv = [headerRow, ...dataRows].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${tableName}.csv"`);
+    res.send('\uFEFF' + csv); // BOM for Excel compatibility
   } catch (err) {
     next(err);
   }

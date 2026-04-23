@@ -103,6 +103,55 @@ membersRouter.post('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /admin/members/export ─────────────────────────────────────────────────
+// Must be before /:id routes
+
+membersRouter.get('/export', async (req, res, next) => {
+  try {
+    const app     = res.locals.currentApp as App;
+    const members = await membersService.listMembers(app.id);
+
+    // Attach group names
+    const assigns = await db('member_group_assignments')
+      .join('groups', 'groups.id', 'member_group_assignments.group_id')
+      .where('groups.app_id', app.id)
+      .select('member_group_assignments.member_id', 'groups.group_name');
+
+    const groupsByMember: Record<number, string[]> = {};
+    for (const a of assigns) {
+      if (!groupsByMember[a.member_id]) groupsByMember[a.member_id] = [];
+      groupsByMember[a.member_id].push(a.group_name);
+    }
+
+    function csvCell(val: unknown): string {
+      const s = val === null || val === undefined ? '' : String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }
+
+    const headers = ['ID', 'Email', 'Username', 'First Name', 'Last Name', 'Phone', 'Active', 'Groups', 'Joined'];
+    const dataRows = members.map((m: any) => [
+      csvCell(m.id),
+      csvCell(m.email),
+      csvCell(m.username),
+      csvCell(m.first_name),
+      csvCell(m.last_name),
+      csvCell(m.phone),
+      csvCell(m.is_active ? 'Yes' : 'No'),
+      csvCell((groupsByMember[m.id] || []).join('; ')),
+      csvCell(m.created_at),
+    ].join(','));
+
+    const csv = [headers.join(','), ...dataRows].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="members.csv"');
+    res.send('\uFEFF' + csv);
+  } catch (err) { next(err); }
+});
+
 // ── GET /admin/members/:id/edit ──────────────────────────────────────────────
 
 membersRouter.get('/:id/edit', async (req, res, next) => {

@@ -11,6 +11,9 @@
     <a href="/admin/data/{{ table.table_name }}/import" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-filetype-csv me-1"></i>Import CSV
     </a>
+    <a href="/admin/data/{{ table.table_name }}/export{% if q %}?q={{ q | urlencode }}{% endif %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-download me-1"></i>Export CSV
+    </a>
     {% endif %}
     <a href="/admin/data" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-grid-3x3-gap me-1"></i>All Tables
@@ -76,7 +79,19 @@
         <tr>
           {% for field in fields %}
             {% if field.ui_widget !== 'hidden' or field.is_primary_key %}
-            <th>{{ field.label }}</th>
+            <th style="white-space:nowrap;">
+              {% set nextDir = 'asc' %}
+              {% if sort == field.field_name and dir == 'asc' %}{% set nextDir = 'desc' %}{% endif %}
+              <a href="/admin/data/{{ table.table_name }}?sort={{ field.field_name }}&dir={{ nextDir }}{% if q %}&q={{ q | urlencode }}{% endif %}"
+                 style="text-decoration:none;color:inherit;">
+                {{ field.label }}
+                {% if sort == field.field_name %}
+                  <span style="opacity:0.7;">{% if dir == 'asc' %}↑{% else %}↓{% endif %}</span>
+                {% else %}
+                  <span style="opacity:0.25;">↕</span>
+                {% endif %}
+              </a>
+            </th>
             {% endif %}
           {% endfor %}
           <th style="width:100px;"></th>

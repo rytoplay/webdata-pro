@@ -261,6 +261,44 @@
           </div>
           {% endfor %}
 
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">DATE TOKENS</div>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token="$days_since[table.field]"
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$days_since[table.field]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Days since date (floor) — e.g. 142</div>
+          </button>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token="$years_since[table.field]"
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$years_since[table.field]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Years since date (1 decimal) — e.g. 3.4</div>
+          </button>
+
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">SORT TOKENS</div>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token="$order[table.field, Label]"
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$order[table.field, Label]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Sort link — auto ↑ ↓ arrow when active</div>
+          </button>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token='<button class="wdp-btn" $order_url[table.field]>Label</button>'
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$order_url[table.field]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Sort attrs — embed in any element</div>
+            <div style="font-family:monospace;font-size:0.6rem;color:#78350f;margin-top:3px;opacity:0.8;">&lt;button class="wdp-btn" $order_url[pets.dob]&gt;DOB&lt;/button&gt;</div>
+          </button>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token='<button class="wdp-btn" $order_url[table.field]>&#10;  Label $if(_sort == &#39;table__field&#39;, $if(_dir == &#39;asc&#39;, &#39; ↑&#39;, &#39; ↓&#39;), &#39;&#39;)&#10;</button>'
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$order_url + active indicator</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Custom button with ↑↓ arrow using ${_sort} and ${_dir}</div>
+            <div style="font-family:monospace;font-size:0.6rem;color:#78350f;margin-top:3px;white-space:pre;opacity:0.8;">&lt;button class="wdp-btn" $order_url[pets.dob]&gt;
+  DOB $if(_sort==&#39;pets__dob&#39;,$if(_dir==&#39;asc&#39;,&#39; ↑&#39;,&#39; ↓&#39;),&#39;&#39;)
+&lt;/button&gt;</div>
+          </button>
+
           {% if childFormTables and childFormTables.length %}
           <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">INSERT FORM — RELATED TABLES</div>
           <div class="mb-2 p-2 rounded" style="font-size:0.68rem;background:#fdf4ff;color:#6b21a8;line-height:1.5;border:1px solid #e9d5ff;">

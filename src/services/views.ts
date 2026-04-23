@@ -294,7 +294,7 @@ export function parseViewTokens(templates: Partial<ViewTemplates>) {
   const tokenContents: string[] = [];
   let m: RegExpExecArray | null;
   const curlyRe  = /\$\{([^}]+)\}/g;
-  const bracketRe = /\$(?:update|search|thumbnail|img|sort|currency|perpage)\[([^\]]+)\]/g;
+  const bracketRe = /\$(?:update|search|thumbnail|img|sort|order_url|order|days_since|years_since|currency|perpage)\[([^\]]+)\]/g;
   while ((m = curlyRe.exec(combined))   !== null) tokenContents.push(m[1]);
   while ((m = bracketRe.exec(combined)) !== null) tokenContents.push(m[1]);
 
@@ -541,7 +541,8 @@ function processIfTags(template: string, data: Record<string, unknown>): string 
     const args    = splitIfArgs(inner);
     const trueVal  = stripBranchQuotes(args[1] ?? '');
     const falseVal = stripBranchQuotes(args[2] ?? '');
-    result += evalIfCondition(args[0] ?? '', data) ? trueVal : falseVal;
+    const chosen   = evalIfCondition(args[0] ?? '', data) ? trueVal : falseVal;
+    result += processIfTags(chosen, data); // recurse so nested $if() calls are evaluated
     i = j + 1;
   }
   return result;
@@ -630,6 +631,48 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
     return decimals !== undefined
       ? num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
       : num.toLocaleString('en-US');
+  });
+
+  // $days_since[table.field] → whole days between a date field and today (floor)
+  result = result.replace(/\$days_since\[([^\]]+)\]/g, (_, ref: string) => {
+    const alias = ref.trim().replace('.', '__');
+    const val   = data[alias] ?? data[ref.trim()];
+    if (val === null || val === undefined || val === '') return '';
+    const ms = Date.now() - new Date(String(val).replace(' ', 'T')).getTime();
+    if (isNaN(ms)) return '';
+    return String(Math.floor(ms / 86_400_000));
+  });
+
+  // $years_since[table.field] → years to 1 decimal place between a date field and today
+  result = result.replace(/\$years_since\[([^\]]+)\]/g, (_, ref: string) => {
+    const alias = ref.trim().replace('.', '__');
+    const val   = data[alias] ?? data[ref.trim()];
+    if (val === null || val === undefined || val === '') return '';
+    const ms = Date.now() - new Date(String(val).replace(' ', 'T')).getTime();
+    if (isNaN(ms)) return '';
+    return (ms / 31_557_600_000).toFixed(1); // 365.25 days × 24h × 3600s × 1000ms
+  });
+
+  // $order_url[table.field] → raw data-wdp-action/data-wdp-field attributes
+  // Embed in any HTML element to make it trigger a sort on click.
+  // Example: <button class="btn btn-primary" $order_url[pets.dob]>Sort by Age</button>
+  result = result.replace(/\$order_url\[([^\]]+)\]/g, (_, ref: string) => {
+    const fieldRef = ref.trim().split(',')[0].trim();
+    const alias    = fieldRef.includes('__') ? fieldRef : fieldRef.replace('.', '__');
+    return `data-wdp-action="sort" data-wdp-field="${alias}"`;
+  });
+
+  // $order[table.field] or $order[table.field, Label] → <a> sort link with direction arrow
+  result = result.replace(/\$order\[([^\]]+)\]/g, (_, ref: string) => {
+    const parts    = ref.split(',').map((s: string) => s.trim());
+    const fieldRef = parts[0];
+    const label    = parts[1] ?? fieldRef.split('.').pop() ?? fieldRef;
+    const alias    = fieldRef.includes('__') ? fieldRef : fieldRef.replace('.', '__');
+    const curSort  = String(data['_sort'] ?? '');
+    const curDir   = String(data['_dir']  ?? 'asc');
+    const isActive = curSort === alias || curSort === fieldRef;
+    const arrow    = isActive ? (curDir === 'asc' ? ' ↑' : ' ↓') : '';
+    return `<a href="#" data-wdp-action="sort" data-wdp-field="${alias}" class="wdp-sort${isActive ? ' wdp-sort-active' : ''}">${label}${arrow}</a>`;
   });
 
   // $sort[table.field] or $sort[table.field,Label] → sortable column header button
@@ -1156,11 +1199,26 @@ export async function renderViewList(
   const total      = Number(countRows[0]?.['_t'] ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // Data rows
-  const rowsRaw = await appDb.raw(
-    `${outerSql}${sortSql} LIMIT ? OFFSET ?`,
-    [...bindings, pageSize, offset]
-  );
+  // Data rows — if the sort column doesn't exist in the result set (e.g. advanced_sql
+  // mode that doesn't alias the field), fall back gracefully to unsorted results.
+  let rowsRaw: unknown;
+  try {
+    rowsRaw = await appDb.raw(
+      `${outerSql}${sortSql} LIMIT ? OFFSET ?`,
+      [...bindings, pageSize, offset]
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (sortSql && /no such column|Unknown column|column .* does not exist/i.test(msg)) {
+      console.warn(`[views] Sort column not found, falling back to unsorted: ${msg}`);
+      rowsRaw = await appDb.raw(
+        `${outerSql} LIMIT ? OFFSET ?`,
+        [...bindings, pageSize, offset]
+      );
+    } else {
+      throw err;
+    }
+  }
   const rows: Record<string, unknown>[] = isMysql
     ? (rowsRaw as [Record<string, unknown>[], unknown])[0]
     : (rowsRaw as Record<string, unknown>[]);
