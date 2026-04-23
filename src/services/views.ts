@@ -1082,7 +1082,15 @@ export async function renderViewList(
           if (hi.trim()) { whereParts.push(`${qcol} <= ?`); bindings.push(hi.trim()); }
         }
         else if (isIndexed) { whereParts.push(`${qcol} = ?`); bindings.push(v); }
-        else { whereParts.push(`${qcol} LIKE ?`); bindings.push(`%${v}%`); }
+        else {
+          // Apply boolean parser for unqualified LIKE searches
+          const fieldAst = parseSearchQuery(v);
+          if (fieldAst) {
+            whereParts.push(searchAstToSql(fieldAst, [qcol], bindings));
+          } else {
+            whereParts.push(`${qcol} LIKE ?`); bindings.push(`%${v}%`);
+          }
+        }
       }
     }
   }
@@ -1600,8 +1608,9 @@ async function injectAdvancedSearch(
   const onShowAdv    = `event.preventDefault();var a=this.closest('[data-wdp-form]').querySelector('.wdp-sf-adv');a.querySelectorAll('input,select').forEach(function(e){e.disabled=false});this.closest('[data-wdp-form]').querySelector('.wdp-sf-simple').style.display='none';a.style.display=''`;
   const onShowSimple = `var a=this.closest('[data-wdp-form]').querySelector('.wdp-sf-adv');a.querySelectorAll('input,select').forEach(function(e){e.disabled=true});a.style.display='none';this.closest('[data-wdp-form]').querySelector('.wdp-sf-simple').style.display=''`;
 
-  // Inputs start disabled so they aren't submitted while the panel is hidden
-  const advPanel = `\n<div class="wdp-sf-adv" style="display:none"><div class="wdp-adv-fields">${renderedInputs}</div><div class="wdp-adv-btns"><button type="submit" class="wdp-btn">Search</button> <button type="button" class="wdp-adv-link" onclick="${onShowSimple}">&#8593; Simple</button> <a data-wdp-action="clear" class="wdp-btn-link">Clear</a></div><script>document.currentScript.closest('.wdp-sf-adv').querySelectorAll('input,select').forEach(function(e){e.disabled=true});<\/script></div>`;
+  // Inputs start disabled so they aren't submitted while the panel is hidden.
+  // On page load: if any input already has a value (from a prior search), show the panel and enable all inputs.
+  const advPanel = `\n<div class="wdp-sf-adv" style="display:none"><div class="wdp-adv-fields">${renderedInputs}</div><div class="wdp-adv-btns"><button type="submit" class="wdp-btn">Search</button> <button type="button" class="wdp-adv-link" onclick="${onShowSimple}">&#8593; Simple</button> <a data-wdp-action="clear" class="wdp-btn-link">Clear</a></div><script>(function(){var p=document.currentScript.closest('.wdp-sf-adv');var inputs=p.querySelectorAll('input,select');var hasValue=Array.from(inputs).some(function(e){return e.value&&e.value.trim();});if(hasValue){p.style.display='';var sf=p.closest('[data-wdp-form]');if(sf){var s=sf.querySelector('.wdp-sf-simple');if(s)s.style.display='none';}}else{inputs.forEach(function(e){e.disabled=true;});}}());<\/script></div>`;
   const advLink  = ` <a href="#" class="wdp-adv-link" onclick="${onShowAdv}">Advanced</a>`;
 
   if (hasProperForm) {
