@@ -2,6 +2,7 @@ import { db } from '../db/knex';
 import { getAppDb, castToText } from '../db/adapters/appDb';
 import { buildJoinQuery, parseColumnRefs } from './queryBuilder';
 import { getRecordMeta, metaToRowKeys } from './recordMeta';
+import { parseSearchQuery, searchAstToSql } from './searchParser';
 import type { GroupConcatSpec } from './queryBuilder';
 import type { App, View, CreateViewInput, UpdateViewInput, UIWidget } from '../domain/types';
 
@@ -37,9 +38,24 @@ export const TEMPLATE_LABELS: Record<ViewTemplateType, string> = {
 export const DEFAULT_TEMPLATES: ViewTemplates = {
   search_form: `$portal_header
 <form data-wdp-form="search" class="wdp-search">
-  <input type="text" name="q" value="\${_q}" placeholder="Search…" class="wdp-input">
-  <button type="submit" class="wdp-btn">Search</button>
-  \${_q ? '<a data-wdp-action="clear" class="wdp-btn-link">Clear</a>' : ''}
+  <div class="wdp-search-row">
+    <input type="text" name="q" value="\${_q}" placeholder="Search…" class="wdp-input">
+    <button type="submit" class="wdp-btn">Search</button>
+    \${_q ? '<a data-wdp-action="clear" class="wdp-btn-link">Clear</a>' : ''}
+    <details class="wdp-search-help">
+      <summary title="Search tips">&#x24D8;</summary>
+      <div class="wdp-search-help-body">
+        <strong>Search tips</strong>
+        <ul>
+          <li><code>pool view</code> &mdash; both words must appear</li>
+          <li><code>&quot;ocean view&quot;</code> &mdash; exact phrase</li>
+          <li><code>pool OR beach</code> &mdash; either word</li>
+          <li><code>!condo</code> &mdash; exclude a word</li>
+          <li><code>pool AND (view OR beach)</code> &mdash; grouping</li>
+        </ul>
+      </div>
+    </details>
+  </div>
 </form>`,
   header: `<div class="wdp-header">
   <span class="wdp-count">\${_total} record\${_total == 1 ? '' : 's'}</span>
@@ -999,26 +1015,28 @@ export async function renderViewList(
       .filter(t => textTypes.has((fieldTypeMap.get(t.field) ?? 'text').toLowerCase()))
       .filter(t => !customSqlAliases || customSqlAliases.has(`${t.table}__${t.field}`));
 
-    // Classify tokens: fulltext (MySQL MATCH...AGAINST), exact (indexed), or LIKE
+    // All searchable columns as LIKE targets (GROUP_CONCAT aliases included)
     const isMysql = app.database_mode === 'mysql';
     const fulltextTokens = isMysql ? regularTokens.filter(t => fieldFtMap.get(t.field)) : [];
     const nonFtTokens    = regularTokens.filter(t => !isMysql || !fieldFtMap.get(t.field));
-    const exactCols = nonFtTokens.filter(t =>  fieldIndexMap.get(t.field)).map(t => `"${t.table}__${t.field}"`);
-    const likeCols  = nonFtTokens.filter(t => !fieldIndexMap.get(t.field)).map(t => `"${t.table}__${t.field}"`);
-
-    // GROUP_CONCAT aliases are plain text — safe to LIKE search
     const groupAliasCols = groupTagsList.map(g => `"${g.alias}"`);
-    const allLikeCols = [...likeCols, ...groupAliasCols];
+    const allLikeCols = [
+      ...nonFtTokens.map(t => `"${t.table}__${t.field}"`),
+      ...groupAliasCols
+    ];
 
+    // Parse the query with boolean operator support, fall back to plain LIKE on parse failure
+    const ast = parseSearchQuery(q);
     const searchParts: string[] = [];
-    if (exactCols.length > 0) {
-      searchParts.push(...exactCols.map(c => `${c} = ?`));
-      bindings.push(...Array(exactCols.length).fill(q));
-    }
-    if (allLikeCols.length > 0) {
+
+    if (ast && allLikeCols.length > 0) {
+      searchParts.push(searchAstToSql(ast, allLikeCols, bindings));
+    } else if (!ast && allLikeCols.length > 0) {
+      // Unparseable input — fall back to literal LIKE on all columns
       searchParts.push(...allLikeCols.map(c => `${c} LIKE ?`));
       bindings.push(...Array(allLikeCols.length).fill(`%${q}%`));
     }
+
     // Fulltext fields: correlated EXISTS so MATCH...AGAINST runs on the original indexed column
     for (const t of fulltextTokens) {
       searchParts.push(
@@ -1026,6 +1044,7 @@ export async function renderViewList(
       );
       bindings.push(q);
     }
+
     if (searchParts.length > 0) {
       whereParts.push(`(${searchParts.join(' OR ')})`);
     }
