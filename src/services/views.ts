@@ -633,24 +633,33 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
       : num.toLocaleString('en-US');
   });
 
-  // $days_since[table.field] → whole days between a date field and today (floor)
+  // $days_since[table.field] or $days_since[table.field, decimals]
+  // Default: whole days (floor). With decimals arg: fractional days to N places.
   result = result.replace(/\$days_since\[([^\]]+)\]/g, (_, ref: string) => {
-    const alias = ref.trim().replace('.', '__');
-    const val   = data[alias] ?? data[ref.trim()];
+    const parts    = ref.split(',').map((s: string) => s.trim());
+    const fieldRef = parts[0];
+    const decimals = parts[1] !== undefined ? parseInt(parts[1], 10) : undefined;
+    const alias    = fieldRef.replace('.', '__');
+    const val      = data[alias] ?? data[fieldRef];
     if (val === null || val === undefined || val === '') return '';
     const ms = Date.now() - new Date(String(val).replace(' ', 'T')).getTime();
     if (isNaN(ms)) return '';
-    return String(Math.floor(ms / 86_400_000));
+    const days = ms / 86_400_000;
+    return decimals !== undefined ? days.toFixed(decimals) : String(Math.floor(days));
   });
 
-  // $years_since[table.field] → years to 1 decimal place between a date field and today
+  // $years_since[table.field] or $years_since[table.field, decimals]
+  // Default: 1 decimal place. With decimals arg: N decimal places.
   result = result.replace(/\$years_since\[([^\]]+)\]/g, (_, ref: string) => {
-    const alias = ref.trim().replace('.', '__');
-    const val   = data[alias] ?? data[ref.trim()];
+    const parts    = ref.split(',').map((s: string) => s.trim());
+    const fieldRef = parts[0];
+    const decimals = parts[1] !== undefined ? parseInt(parts[1], 10) : 1;
+    const alias    = fieldRef.replace('.', '__');
+    const val      = data[alias] ?? data[fieldRef];
     if (val === null || val === undefined || val === '') return '';
     const ms = Date.now() - new Date(String(val).replace(' ', 'T')).getTime();
     if (isNaN(ms)) return '';
-    return (ms / 31_557_600_000).toFixed(1); // 365.25 days × 24h × 3600s × 1000ms
+    return (ms / 31_557_600_000).toFixed(decimals);
   });
 
   // $order_url[table.field] → raw data-wdp-action/data-wdp-field attributes
