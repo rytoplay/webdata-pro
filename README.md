@@ -1,7 +1,5 @@
 # Webdata Pro
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rytoplay/webdata-pro)
-
 **Build data-driven web apps without hand-coding the back end.**
 
 Webdata Pro is a visual builder for database-powered websites and applications. Describe your project in plain English and the AI builds your tables, search forms, and sample records. Or skip the AI and set everything up by hand through the admin panel. Either way, you stay in full control — of your tables, fields, templates, permissions, and data — from first prototype to working application.
@@ -180,41 +178,11 @@ There is no "forgot password" link for the admin account — it lives entirely i
 
 ---
 
-## Deploy free on Render (5 minutes, no credit card)
-
-Render is the easiest way to put Webdata Pro on the internet for free. You need a free Render account — sign up at [render.com](https://render.com) using your GitHub account.
-
-> **Free tier note:** Free Render apps sleep after 15 minutes of inactivity and take about 30 seconds to wake up on the first visit. A Demo App with sample data is created automatically on every startup, so there's always something to explore. When you're ready to go live, upgrade to Render's Starter plan ($7/month) for an always-on app with persistent storage.
-
-### Step 1 — Click deploy
-
-Click the **Deploy to Render** button at the top of this page. Render will read the configuration from this repository and show you a setup form.
-
-### Step 2 — Set your admin password
-
-Render pre-fills most settings from `render.yaml`. The only thing you need to enter is your **ADMIN_PASSWORD**. Set it to something you'll remember.
-
-`SESSION_SECRET` is generated automatically — you don't need to touch it.
-
-### Step 3 — Click "Apply"
-
-Render builds and deploys the app. This takes about 2 minutes. When it's done, Render gives you a URL like `webdata-pro.onrender.com`.
-
-### Step 4 — Open your app
-
-Visit your Render URL and log in:
-- **Username:** `admin` (or whatever you set for `ADMIN_USERNAME`)
-- **Password:** the password you set in Step 2
-
-A Demo App with sample books data is waiting for you.
-
----
-
 ## Running Webdata Pro on a server (always-on)
 
 When you're ready to move beyond your laptop, the simplest path is a cloud host:
 
-- **Render** — see the [Deploy free on Render](#deploy-free-on-render-5-minutes-no-credit-card) section above (free tier available)
+- **Render** — free tier available, deploy from GitHub
 - **Railway** — $5/month Hobby plan, persistent volumes included
 - **Any VPS** (DigitalOcean, Linode, etc.) — run `npm run build` then `npm start`
 
