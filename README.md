@@ -1,6 +1,6 @@
 # Webdata Pro
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.app/new/github)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rytoplay/webdata-pro)
 
 **Build data-driven web apps without hand-coding the back end.**
 
@@ -180,55 +180,42 @@ There is no "forgot password" link for the admin account — it lives entirely i
 
 ---
 
-## Deploy on Railway (5 minutes, no CLI required)
+## Deploy free on Render (5 minutes, no credit card)
 
-Railway is the easiest way to put Webdata Pro on the internet. You need a free Railway account — sign up at [railway.com](https://railway.com) using your GitHub account.
+Render is the easiest way to put Webdata Pro on the internet for free. You need a free Render account — sign up at [render.com](https://render.com) using your GitHub account.
 
-### Step 1 — Create a new Railway project from GitHub
+> **Free tier note:** Free Render apps sleep after 15 minutes of inactivity and take about 30 seconds to wake up on the first visit. A Demo App with sample data is created automatically on every startup, so there's always something to explore. When you're ready to go live, upgrade to Render's Starter plan ($7/month) for an always-on app with persistent storage.
 
-Click the **Deploy on Railway** button at the top of this page (or go to [railway.app/new/github](https://railway.app/new/github)).
+### Step 1 — Click deploy
 
-Railway will ask you to connect your GitHub account if you haven't already. Once connected, search for **webdata-pro** and select it. Railway will begin building it automatically.
+Click the **Deploy to Render** button at the top of this page. Render will read the configuration from this repository and show you a setup form.
 
-### Step 2 — Set your environment variables
+### Step 2 — Set your admin password
 
-In the Railway dashboard, open your new project and click the **Variables** tab. Add:
+Render pre-fills most settings from `render.yaml`. The only thing you need to enter is your **ADMIN_PASSWORD**. Set it to something you'll remember.
 
-| Variable | Value |
-|---|---|
-| `ADMIN_USERNAME` | Your chosen admin username |
-| `ADMIN_PASSWORD` | A strong password |
-| `SESSION_SECRET` | Any long random string |
-| `DATA_DIR` | `/data` |
+`SESSION_SECRET` is generated automatically — you don't need to touch it.
 
-> Railway sets `PORT` and `NODE_ENV` automatically — you don't need to add those.
+### Step 3 — Click "Apply"
 
-### Step 3 — Add a Volume for persistent storage
-
-Without this step, your data is wiped every time Railway redeploys your app (which happens automatically when you push updates).
-
-1. In the Railway dashboard, open your service
-2. Click **Settings** → scroll to **Volumes**
-3. Click **Add Volume**
-4. Set the **Mount Path** to `/data`
-5. Click **Add**
-
-Railway will redeploy automatically. Your SQLite databases will now survive every redeploy.
+Render builds and deploys the app. This takes about 2 minutes. When it's done, Render gives you a URL like `webdata-pro.onrender.com`.
 
 ### Step 4 — Open your app
 
-Railway gives your app a URL like `yourapp.up.railway.app`. Find it under **Settings → Domains**. Click it and log in with the admin credentials you set.
+Visit your Render URL and log in:
+- **Username:** `admin` (or whatever you set for `ADMIN_USERNAME`)
+- **Password:** the password you set in Step 2
 
-> **Want a custom domain?** Go to **Settings → Domains** in Railway and add your own.
+A Demo App with sample books data is waiting for you.
 
 ---
 
 ## Running Webdata Pro on a server (always-on)
 
-When you're ready to move beyond your laptop, the simplest path is a one-click cloud host:
+When you're ready to move beyond your laptop, the simplest path is a cloud host:
 
-- **Railway** — see the [Deploy on Railway](#deploy-on-railway-5-minutes-no-cli-required) section above
-- **Render** — similar to Railway, good free tier
+- **Render** — see the [Deploy free on Render](#deploy-free-on-render-5-minutes-no-credit-card) section above (free tier available)
+- **Railway** — $5/month Hobby plan, persistent volumes included
 - **Any VPS** (DigitalOcean, Linode, etc.) — run `npm run build` then `npm start`
 
 For VPS hosting, set these environment variables:
