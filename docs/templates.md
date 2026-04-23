@@ -143,6 +143,32 @@ $gallery[pets_photos]
 
 ---
 
+## Aggregates: `$sum[]` and `$avg[]`
+
+```
+$sum[table.field]
+$avg[table.field]
+```
+
+Returns the **sum** or **average** of a numeric field across the **entire filtered result set** — not just the current page.
+
+- The value is the same regardless of which page or row the token appears in.
+- Works in all templates: Row, Header, Footer, Group Header, Group Footer.
+- Returns blank if no records match or the field is non-numeric.
+
+```html
+<!-- In Header or Footer -->
+Total value of available pets: $currency[$sum[pets.adoption_fee], 2]
+Average adoption fee: $currency[$avg[pets.adoption_fee], 2]
+
+<!-- In Row — same number repeated on every row, useful in a footer summary row -->
+<div class="wdp-row-meta">Average age: $avg[pets.dob] years on file</div>
+```
+
+> **Tip:** Combine with `$currency[]` to format the result with commas and decimal places.
+
+---
+
 ## Currency / number: `$currency[]`
 
 ```

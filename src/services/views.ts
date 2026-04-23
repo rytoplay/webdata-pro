@@ -294,7 +294,7 @@ export function parseViewTokens(templates: Partial<ViewTemplates>) {
   const tokenContents: string[] = [];
   let m: RegExpExecArray | null;
   const curlyRe  = /\$\{([^}]+)\}/g;
-  const bracketRe = /\$(?:update|search|thumbnail|img|sort|order_url|order|days_since|years_since|currency|perpage)\[([^\]]+)\]/g;
+  const bracketRe = /\$(?:update|search|thumbnail|img|sort|order_url|order|days_since|years_since|sum|avg|currency|perpage)\[([^\]]+)\]/g;
   while ((m = curlyRe.exec(combined))   !== null) tokenContents.push(m[1]);
   while ((m = bracketRe.exec(combined)) !== null) tokenContents.push(m[1]);
 
@@ -660,6 +660,32 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
     const ms = Date.now() - new Date(String(val).replace(' ', 'T')).getTime();
     if (isNaN(ms)) return '';
     return (ms / 31_557_600_000).toFixed(decimals);
+  });
+
+  // $sum[table.field] or $sum[table.field, decimals] → sum of field across all found records
+  result = result.replace(/\$sum\[([^\]]+)\]/g, (_, ref: string) => {
+    const parts    = ref.split(',').map((s: string) => s.trim());
+    const fieldRef = parts[0];
+    const decimals = parts[1] !== undefined ? parseInt(parts[1], 10) : undefined;
+    const alias    = fieldRef.includes('__') ? fieldRef : fieldRef.replace('.', '__');
+    const val      = data[`_sum__${alias}`];
+    if (val === null || val === undefined) return '';
+    const num = parseFloat(String(val));
+    if (isNaN(num)) return '';
+    return decimals !== undefined ? num.toFixed(decimals) : String(num);
+  });
+
+  // $avg[table.field] or $avg[table.field, decimals] → average of field across all found records
+  result = result.replace(/\$avg\[([^\]]+)\]/g, (_, ref: string) => {
+    const parts    = ref.split(',').map((s: string) => s.trim());
+    const fieldRef = parts[0];
+    const decimals = parts[1] !== undefined ? parseInt(parts[1], 10) : 2;
+    const alias    = fieldRef.includes('__') ? fieldRef : fieldRef.replace('.', '__');
+    const val      = data[`_avg__${alias}`];
+    if (val === null || val === undefined) return '';
+    const num = parseFloat(String(val));
+    if (isNaN(num)) return '';
+    return num.toFixed(decimals);
   });
 
   // $order_url[table.field] → raw data-wdp-action/data-wdp-field attributes
@@ -1208,6 +1234,35 @@ export async function renderViewList(
   const total      = Number(countRows[0]?.['_t'] ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // Aggregate tokens ($sum / $avg) — scan all templates, run one batched query
+  const allTemplateText = Object.values(tpl).filter(Boolean).join('\n');
+  const aggRefs = new Map<string, { needSum: boolean; needAvg: boolean }>();
+  for (const m of allTemplateText.matchAll(/\$(?:sum|avg)\[([^\]]+)\]/gi)) {
+    const fieldRef = m[1].split(',')[0].trim();
+    const alias    = fieldRef.includes('__') ? fieldRef : fieldRef.replace('.', '__');
+    if (!aggRefs.has(alias)) aggRefs.set(alias, { needSum: false, needAvg: false });
+    if (m[0].toLowerCase().startsWith('$sum')) aggRefs.get(alias)!.needSum = true;
+    else                                        aggRefs.get(alias)!.needAvg = true;
+  }
+  const aggExtras: Record<string, unknown> = {};
+  if (aggRefs.size > 0) {
+    const selectParts: string[] = [];
+    for (const [alias, { needSum, needAvg }] of aggRefs) {
+      if (needSum) selectParts.push(`SUM("${alias}") AS "_sum__${alias}"`);
+      if (needAvg) selectParts.push(`AVG("${alias}") AS "_avg__${alias}"`);
+    }
+    try {
+      const aggRaw = await appDb.raw(
+        `SELECT ${selectParts.join(', ')} FROM (${outerSql}) AS _agg`,
+        bindings
+      );
+      const aggRows: Record<string, unknown>[] = isMysql
+        ? (aggRaw as [Record<string, unknown>[], unknown])[0]
+        : (aggRaw as Record<string, unknown>[]);
+      if (aggRows[0]) Object.assign(aggExtras, aggRows[0]);
+    } catch { /* non-fatal — field may not be numeric */ }
+  }
+
   // Data rows — if the sort column doesn't exist in the result set (e.g. advanced_sql
   // mode that doesn't alias the field), fall back gracefully to unsorted results.
   let rowsRaw: unknown;
@@ -1250,6 +1305,7 @@ export async function renderViewList(
     _portal_header:  params.portalHeader ?? '',
     _portal_footer:  params.portalFooter ?? '',
     _app_slug:       app.slug,
+    ...aggExtras,
   };
 
   const parts: string[] = [];
