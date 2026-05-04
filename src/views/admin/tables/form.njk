@@ -13,7 +13,7 @@
       <div class="row g-3 mb-3">
         <div class="col-md-6">
           <label class="form-label">Table name <span class="text-danger">*</span></label>
-          <input type="text" name="table_name"
+          <input type="text" name="table_name" id="table_name"
             class="form-control {% if errors.table_name %}is-invalid{% endif %}"
             value="{{ table.table_name if table else '' }}"
             placeholder="e.g. books" required>
@@ -24,7 +24,7 @@
         </div>
         <div class="col-md-6">
           <label class="form-label">Label <span class="text-danger">*</span></label>
-          <input type="text" name="label"
+          <input type="text" name="label" id="table_label"
             class="form-control {% if errors.label %}is-invalid{% endif %}"
             value="{{ table.label if table else '' }}"
             placeholder="e.g. Books" required>
@@ -33,6 +33,34 @@
           {% endif %}
         </div>
       </div>
+
+      <script>
+      (function () {
+        var nameEl  = document.getElementById('table_name');
+        var labelEl = document.getElementById('table_label');
+        var labelTouched = labelEl.value.length > 0;
+
+        labelEl.addEventListener('input', function () { labelTouched = true; });
+
+        nameEl.addEventListener('blur', function () {
+          // Sanitize: lowercase, replace spaces/hyphens with underscores, strip invalid chars
+          var sanitized = nameEl.value
+            .toLowerCase()
+            .replace(/[\s-]+/g, '_')
+            .replace(/[^a-z0-9_]/g, '')
+            .replace(/^_+|_+$/g, '');
+          nameEl.value = sanitized;
+
+          // Auto-fill label only if the user hasn't typed in it yet
+          if (!labelTouched && sanitized) {
+            labelEl.value = sanitized
+              .split('_')
+              .map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); })
+              .join(' ');
+          }
+        });
+      }());
+      </script>
 
       <div class="mb-3">
         <label class="form-label">Description</label>

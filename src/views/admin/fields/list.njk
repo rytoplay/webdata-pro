@@ -5,6 +5,9 @@
   <h1>Fields — <span class="text-muted fw-normal">{{ table.label }}</span></h1>
   <div class="d-flex gap-2">
     <a href="/admin/tables" class="btn btn-sm btn-outline-secondary">&larr; Tables</a>
+    <a href="/admin/data/{{ table.table_name }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-table me-1"></i>View Data
+    </a>
     <a href="/admin/fields/new?table_id={{ table.id }}" class="btn btn-sm btn-primary">
       <i class="bi bi-plus-lg me-1"></i>Add Fields
     </a>
@@ -154,6 +157,18 @@
             <label class="form-label fw-semibold">Select Options <small class="text-muted">(one per line)</small></label>
             <textarea class="form-control font-monospace" name="options" id="rd-options" rows="4"></textarea>
           </div>
+          <div class="mb-3 d-none" id="rd-upload-group">
+            <div class="row g-2">
+              <div class="col">
+                <label class="form-label fw-semibold">Allowed extensions <small class="text-muted">(comma-separated, blank = any)</small></label>
+                <input type="text" class="form-control" name="allowed_extensions" id="rd-allowed-extensions" placeholder=".pdf,.docx,.xlsx">
+              </div>
+              <div class="col-auto">
+                <label class="form-label fw-semibold">Max size (KB)</label>
+                <input type="number" class="form-control" name="max_file_size_kb" id="rd-max-file-size" min="1" style="width:100px;" placeholder="none">
+              </div>
+            </div>
+          </div>
           <div class="d-flex align-items-center gap-2 mb-2">
             <label class="form-check-label mb-0" for="rd-is-indexed">Index this field</label>
             <input class="form-check-input mt-0" type="checkbox" name="is_indexed" id="rd-is-indexed" value="on">
@@ -264,13 +279,17 @@
         ftEl.checked = isText && btn.dataset.fulltext === 'true';
       }
 
-      // Populate options / max_length from ui_options_json
-      const optGroup    = document.getElementById('rd-options-group');
-      const optArea     = document.getElementById('rd-options');
-      const maxLenGroup = document.getElementById('rd-maxlen-group');
-      const maxLenInput = document.getElementById('rd-max-length');
-      const widget      = btn.dataset.widget;
-      const TEXT_LIKE   = ['text','number','email','url','password'];
+      // Populate options / max_length / upload params from ui_options_json
+      const optGroup      = document.getElementById('rd-options-group');
+      const optArea       = document.getElementById('rd-options');
+      const maxLenGroup   = document.getElementById('rd-maxlen-group');
+      const maxLenInput   = document.getElementById('rd-max-length');
+      const uploadGroup   = document.getElementById('rd-upload-group');
+      const extInput      = document.getElementById('rd-allowed-extensions');
+      const sizeInput     = document.getElementById('rd-max-file-size');
+      const widget        = btn.dataset.widget;
+      const TEXT_LIKE     = ['text','number','email','url','password'];
+      const UPLOAD_LIKE   = ['image','upload'];
       try {
         const parsed = options ? JSON.parse(options) : {};
         if (parsed.options && Array.isArray(parsed.options)) {
@@ -281,20 +300,32 @@
           optGroup.classList.add('d-none');
         }
         if (maxLenInput) maxLenInput.value = parsed.max_length || '';
-      } catch { optArea.value = ''; optGroup.classList.add('d-none'); if (maxLenInput) maxLenInput.value = ''; }
-      if (maxLenGroup) maxLenGroup.classList.toggle('d-none', !TEXT_LIKE.includes(widget));
+        if (extInput)  extInput.value  = parsed.allowed_extensions || '';
+        if (sizeInput) sizeInput.value = parsed.max_file_size_kb   || '';
+      } catch {
+        optArea.value = '';
+        optGroup.classList.add('d-none');
+        if (maxLenInput) maxLenInput.value = '';
+        if (extInput)    extInput.value    = '';
+        if (sizeInput)   sizeInput.value   = '';
+      }
+      if (maxLenGroup)  maxLenGroup.classList.toggle('d-none', !TEXT_LIKE.includes(widget));
+      if (uploadGroup)  uploadGroup.classList.toggle('d-none', !UPLOAD_LIKE.includes(widget));
 
       new bootstrap.Modal(document.getElementById('redefineModal')).show();
     });
   });
 
-  // Show/hide options textarea and max_length when widget changes
-  const TEXT_LIKE = ['text','number','email','url','password'];
+  // Show/hide options textarea, max_length, and upload params when widget changes
+  const TEXT_LIKE   = ['text','number','email','url','password'];
+  const UPLOAD_LIKE = ['image','upload'];
   document.getElementById('rd-widget').addEventListener('change', function () {
     const optGroup    = document.getElementById('rd-options-group');
     const maxLenGroup = document.getElementById('rd-maxlen-group');
+    const uploadGroup = document.getElementById('rd-upload-group');
     optGroup.classList.toggle('d-none', this.value !== 'select');
-    if (maxLenGroup) maxLenGroup.classList.toggle('d-none', !TEXT_LIKE.includes(this.value));
+    if (maxLenGroup)  maxLenGroup.classList.toggle('d-none', !TEXT_LIKE.includes(this.value));
+    if (uploadGroup)  uploadGroup.classList.toggle('d-none', !UPLOAD_LIKE.includes(this.value));
   });
 
   // Show/hide fulltext checkbox when data type changes

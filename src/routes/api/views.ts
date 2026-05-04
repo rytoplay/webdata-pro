@@ -7,6 +7,7 @@ import * as viewsService from '../../services/views';
 import { memoryUpload, saveUpload, deleteUpload, validateUpload, type UploadRestrictions } from '../../services/uploads';
 import { touchRecordMeta } from '../../services/recordMeta';
 import { maybeNotify } from '../../services/notifications';
+import { cascadeInsertJoinedRecords } from '../../services/joins';
 
 async function getPortalContext(app: App, req: Request): Promise<{ portalHeader: string; portalFooter: string }> {
   if (!app.member_header_html && !app.member_footer_html) return { portalHeader: '', portalFooter: '' };
@@ -96,6 +97,11 @@ async function checkTablePermission(
   action: 'can_add' | 'can_edit' | 'can_delete'
 ): Promise<{ allowed: boolean; manageAll: boolean }> {
   if (!memberSession || memberSession.appId !== app.id || !Array.isArray(memberSession.groupIds)) {
+    // Anonymous user — only can_add is possible, via allow_public_add on the table
+    if (action === 'can_add') {
+      const table = await db('app_tables').where({ id: tableId }).first();
+      return { allowed: !!table?.is_public_addable, manageAll: false };
+    }
     return { allowed: false, manageAll: false };
   }
   const perm = await db('group_table_permissions')
@@ -308,6 +314,8 @@ apiViewsRouter.post('/:viewName', memoryUpload, async (req, res, next) => {
     const { getAppDb } = await import('../../db/adapters/appDb');
     const appDb = getAppDb(app);
     const [newId] = await appDb(baseTable.table_name).insert(data);
+
+    await cascadeInsertJoinedRecords(appDb, app.id, view.base_table_id, newId, body);
 
     const { touchRecordMeta } = await import('../../services/recordMeta');
     const memberSession = (req.session as any)?.member;
@@ -621,6 +629,36 @@ apiViewsRouter.post('/gallery/:galleryTable/photo/:photoId/delete', async (req, 
   }
 });
 
+// POST — reorder photos
+apiViewsRouter.post('/gallery/:galleryTable/reorder', async (req, res, next) => {
+  try {
+    const app = res.locals.apiApp as App;
+    const { galleryTable: param } = req.params;
+
+    const isAdmin = (req.session as any)?.admin?.isAdmin === true;
+    const memberSession = (req.session as any)?.member;
+    if (!isAdmin && !(memberSession?.appId === app.id)) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const galleryTable = await resolveGalleryTable(app.id, param);
+    if (!galleryTable) return res.status(404).json({ error: 'Gallery table not found' });
+
+    const ids: number[] = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids array required' });
+
+    const { getAppDb } = await import('../../db/adapters/appDb');
+    const appDb = getAppDb(app);
+    for (let i = 0; i < ids.length; i++) {
+      await appDb(galleryTable).where({ id: ids[i] }).update({ sort_order: i });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Public form submission ────────────────────────────────────────────────────
 // POST /api/v/:appSlug/form/:tableName
 // Accepts submissions from public-facing $formopen/$form tokens.
@@ -641,6 +679,27 @@ apiViewsRouter.post('/form/:tableName', async (req, res, next) => {
       .first();
     if (!table) return res.status(404).send('Table not found.');
     if (!table.is_public_addable) return res.status(403).send('This table does not accept public submissions.');
+
+    // Verify reCAPTCHA only if both site key and secret key are configured
+    const captchaSecretRow = await db('settings').where({ key: 'recaptcha_secret_key' }).first();
+    const captchaSiteRow   = await db('settings').where({ key: 'recaptcha_site_key' }).first();
+    const captchaSecret: string = captchaSecretRow?.value || '';
+    const captchaSiteKey: string = captchaSiteRow?.value || '';
+    if (captchaSecret && captchaSiteKey) {
+      const token = String((req.body as Record<string, string>)['g-recaptcha-response'] || '');
+      if (!token) {
+        return res.status(400).send('<p>Please complete the CAPTCHA before submitting.</p><p><a href="javascript:history.back()">Go back</a></p>');
+      }
+      const verifyRes = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `secret=${encodeURIComponent(captchaSecret)}&response=${encodeURIComponent(token)}&remoteip=${encodeURIComponent(req.ip || '')}`,
+      });
+      const verifyData = await verifyRes.json() as { success: boolean };
+      if (!verifyData.success) {
+        return res.status(400).send('<p>CAPTCHA verification failed. Please go back and try again.</p><p><a href="javascript:history.back()">Go back</a></p>');
+      }
+    }
 
     const { getAppDb } = await import('../../db/adapters/appDb');
     const appDb = getAppDb(app);
@@ -675,6 +734,8 @@ apiViewsRouter.post('/form/:tableName', async (req, res, next) => {
     if (newId) {
       await touchRecordMeta(app, tableName, String(newId), null, 'Public', new Date().toISOString());
       await maybeNotify(app, tableName, String(newId), 'Public');
+      // Cascade insert into joined child tables (e.g. notes__body → notes)
+      await cascadeInsertJoinedRecords(appDb, app.id, table.id, newId, req.body);
     }
 
     const redirectTo = String(req.body._redirect || req.headers.referer || '/');

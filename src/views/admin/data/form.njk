@@ -124,8 +124,10 @@
             {% elif field.ui_widget == 'image' %}
             {% if fieldVal %}
             <div class="mb-2">
-              <img src="/files/{{ fieldVal }}" style="max-height:120px;max-width:240px;border-radius:6px;border:1px solid var(--border);" alt="">
-              <div class="form-text">Current image — upload a new one to replace it.</div>
+              <a href="/files/{{ fieldVal }}" target="_blank">
+                <img src="/files/{{ fieldVal }}" style="max-height:120px;max-width:240px;border-radius:6px;border:1px solid var(--border);" alt="" title="Click to open full size">
+              </a>
+              <div class="form-text">Current image — click to view full size. Upload a new one to replace it.</div>
             </div>
             {% endif %}
             <input type="file" class="form-control" name="{{ field.field_name }}" id="f-{{ field.field_name }}"
@@ -185,7 +187,8 @@
     data-table="{{ galleryTable.table_name }}"
     data-app="{{ appSlug }}"
     data-record="{{ record[pkField.field_name] }}">
-    <div id="admin-gallery-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;min-height:24px;"></div>
+    <div id="admin-gallery-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;min-height:24px;"></div>
+    <div style="font-size:0.72rem;color:var(--text-muted,#9ca3af);margin-bottom:10px;">drag to re-order</div>
     <label class="btn btn-sm btn-outline-secondary" style="cursor:pointer;margin-bottom:0;">
       <i class="bi bi-plus-lg me-1"></i>Add Photos
       <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp"
@@ -213,6 +216,8 @@
       .catch(function () { stat.textContent = 'Could not load photos.'; });
   }
 
+  var dragSrc = null;
+
   function render(photos) {
     grid.innerHTML = '';
     if (!photos.length) {
@@ -221,11 +226,15 @@
     }
     photos.forEach(function (p) {
       var wrap = document.createElement('div');
-      wrap.style.cssText = 'position:relative;width:88px;height:88px;border-radius:5px;overflow:hidden;border:1px solid var(--border);flex-shrink:0;';
+      wrap.style.cssText = 'position:relative;width:88px;height:88px;border-radius:5px;overflow:hidden;border:1px solid var(--border);flex-shrink:0;cursor:grab;';
+      wrap.draggable = true;
+      wrap.dataset.id = p.id;
+
       var img = document.createElement('img');
       img.src = '/files/' + p.file_path + '?thumb=1';
       img.alt = p.original_name || '';
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;';
+
       var del = document.createElement('button');
       del.type = 'button';
       del.title = 'Remove';
@@ -239,6 +248,47 @@
           body: '{}'
         }).then(function () { load(); }).catch(function () {});
       });
+
+      // Drag events
+      wrap.addEventListener('dragstart', function (e) {
+        dragSrc = wrap;
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(function () { wrap.style.opacity = '0.4'; }, 0);
+      });
+      wrap.addEventListener('dragend', function () {
+        wrap.style.opacity = '';
+        dragSrc = null;
+        grid.querySelectorAll('[data-id]').forEach(function (el) {
+          el.style.outline = '';
+        });
+      });
+      wrap.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (wrap !== dragSrc) wrap.style.outline = '2px solid var(--accent,#2563eb)';
+      });
+      wrap.addEventListener('dragleave', function () {
+        wrap.style.outline = '';
+      });
+      wrap.addEventListener('drop', function (e) {
+        e.preventDefault();
+        wrap.style.outline = '';
+        if (!dragSrc || dragSrc === wrap) return;
+        // Reorder in DOM
+        var kids = Array.from(grid.querySelectorAll('[data-id]'));
+        var fromIdx = kids.indexOf(dragSrc);
+        var toIdx   = kids.indexOf(wrap);
+        if (fromIdx < toIdx) grid.insertBefore(dragSrc, wrap.nextSibling);
+        else                 grid.insertBefore(dragSrc, wrap);
+        // Save new order
+        var ids = Array.from(grid.querySelectorAll('[data-id]')).map(function (el) { return Number(el.dataset.id); });
+        fetch(base + '/reorder', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: ids })
+        }).catch(function () { stat.textContent = 'Reorder failed.'; });
+      });
+
       wrap.appendChild(img);
       wrap.appendChild(del);
       grid.appendChild(wrap);

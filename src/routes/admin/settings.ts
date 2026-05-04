@@ -4,6 +4,16 @@ import { db } from '../../db/knex';
 
 export const settingsRouter = Router();
 
+async function getCaptchaSettings() {
+  const rows = await db('settings').whereIn('key', ['recaptcha_site_key', 'recaptcha_secret_key']);
+  const map: Record<string, string> = {};
+  for (const row of rows) map[row.key] = row.value ?? '';
+  return {
+    siteKey:   map['recaptcha_site_key']   || '',
+    secretKey: map['recaptcha_secret_key'] || '',
+  };
+}
+
 async function getSmtpSettings() {
   const rows = await db('settings').whereIn('key', [
     'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'smtp_from',
@@ -28,10 +38,11 @@ settingsRouter.get('/', async (req, res, next) => {
     const ollamaModels = settings.provider === 'ollama'
       ? await aiService.listOllamaModels(settings.baseUrl).catch(() => [])
       : [];
-    const smtpSettings = await getSmtpSettings();
+    const smtpSettings    = await getSmtpSettings();
+    const captchaSettings = await getCaptchaSettings();
     const flash = req.session.flash;
     delete req.session.flash;
-    res.render('admin/settings', { title: 'Settings', settings, ollamaModels, smtpSettings, flash });
+    res.render('admin/settings', { title: 'Settings', settings, ollamaModels, smtpSettings, captchaSettings, flash });
   } catch (err) { next(err); }
 });
 
@@ -103,6 +114,24 @@ settingsRouter.post('/test-ai', async (req, res) => {
   } catch (err: unknown) {
     res.json({ ok: false, error: err instanceof Error ? err.message : String(err) });
   }
+});
+
+// ── POST /admin/settings/captcha — save reCAPTCHA keys ───────────────────────
+
+settingsRouter.post('/captcha', async (req, res, next) => {
+  try {
+    const body = req.body as Record<string, string>;
+    const pairs: Record<string, string> = {
+      recaptcha_site_key: body.recaptcha_site_key || '',
+    };
+    // Only overwrite secret key if a new one was entered
+    if (body.recaptcha_secret_key) pairs['recaptcha_secret_key'] = body.recaptcha_secret_key;
+    for (const [key, value] of Object.entries(pairs)) {
+      await db('settings').insert({ key, value }).onConflict('key').merge();
+    }
+    req.session.flash = { type: 'success', message: 'CAPTCHA settings saved.' };
+    res.redirect('/admin/settings#captcha');
+  } catch (err) { next(err); }
 });
 
 // ── GET /admin/settings/ollama-models — live model list ──────────────────────

@@ -8,3 +8,4 @@ generated/
 .DS_Store
 uploads/
 sql-console.log
+google-recaptcha-keys

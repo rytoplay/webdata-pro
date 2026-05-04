@@ -10,7 +10,7 @@ interface AppLike {
 }
 
 /**
- * Called after a record is successfully inserted. Checks whether admin
+ * Called after a record is inserted, updated, or deleted. Checks whether admin
  * notifications are enabled for this table and sends immediately or queues
  * for the daily digest.
  */
@@ -19,6 +19,7 @@ export async function maybeNotify(
   tableName: string,
   recordId: string | null,
   submittedBy: string,
+  action: 'insert' | 'update' | 'delete' = 'insert',
 ): Promise<void> {
   try {
     if (!app.notify_admin_email || !app.notify_tables_json) return;
@@ -52,6 +53,7 @@ export async function maybeNotify(
         tableLabel,
         recordId,
         submittedBy,
+        action,
       ).catch((err: unknown) => {
         console.error('[notifications] immediate send failed:', err);
       });

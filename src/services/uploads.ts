@@ -57,6 +57,7 @@ const UPLOAD_TYPES = new Set([
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain', 'text/csv',
+  'application/octet-stream', // generic binary — browsers sometimes use this for PDFs and other files
 ]);
 
 // multer storage — keeps files in memory for processing

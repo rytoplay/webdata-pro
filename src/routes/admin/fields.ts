@@ -272,6 +272,20 @@ fieldsRouter.post('/:id/redefine', async (req, res, next) => {
         rows: Number(req.body.textarea_rows) || 4,
         cols: Number(req.body.textarea_cols) || 60,
       });
+    } else if (req.body.widget === 'image' || req.body.widget === 'upload') {
+      const opts: Record<string, unknown> = {};
+      const ext = (req.body.allowed_extensions || '').trim();
+      const sz  = Number(req.body.max_file_size_kb);
+      if (ext)   opts.allowed_extensions = ext;
+      if (sz > 0) opts.max_file_size_kb  = sz;
+      // preserve allow_gallery for image fields
+      if (newType === 'image') {
+        try {
+          const existing = field.ui_options_json ? JSON.parse(field.ui_options_json) : {};
+          if (existing.allow_gallery) opts.allow_gallery = existing.allow_gallery;
+        } catch { /* ignore */ }
+      }
+      newOptions = Object.keys(opts).length ? JSON.stringify(opts) : null;
     }
 
     const oldName = field.field_name;

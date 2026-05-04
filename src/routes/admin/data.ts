@@ -4,8 +4,9 @@ import { parse as csvParse } from 'csv-parse/sync';
 import type { App, AppField } from '../../domain/types';
 import { db as controlDb } from '../../db/knex';
 import { getAppDb } from '../../db/adapters/appDb';
-import { memoryUpload, saveUpload, deleteUpload } from '../../services/uploads';
+import { memoryUpload, saveUpload, deleteUpload, validateUpload } from '../../services/uploads';
 import { maybeNotify } from '../../services/notifications';
+import { touchRecordMeta } from '../../services/recordMeta';
 
 const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }).single('csvfile');
 
@@ -70,6 +71,11 @@ async function processUploads(
     const field = fields.find(f => f.field_name === file.fieldname);
     if (!field) continue;
     if (field.data_type !== 'image' && field.data_type !== 'upload') continue;
+    const err = validateUpload(file, {
+      max_file_size_kb:   field.ui_options.max_file_size_kb   as number | undefined,
+      allowed_extensions: field.ui_options.allowed_extensions as string | undefined,
+    });
+    if (err) throw new Error(err);
     const isImage = field.data_type === 'image';
     result[file.fieldname] = await saveUpload(
       file.buffer,
@@ -431,7 +437,8 @@ dataRouter.post('/:tableName', memoryUpload, async (req, res, next) => {
 
     const appDb = getAppDb(app);
     const [newId] = await appDb(tableName).insert(record);
-    await maybeNotify(app, tableName, newId ? String(newId) : null, 'Admin');
+    await maybeNotify(app, tableName, newId ? String(newId) : null, 'Admin', 'insert');
+    if (newId) await touchRecordMeta(app, tableName, String(newId), null, 'Admin', new Date().toISOString());
 
     req.session.flash = { type: 'success', message: 'Record created.' };
     res.redirect(`/admin/data/${tableName}`);
@@ -494,6 +501,8 @@ dataRouter.post('/:tableName/:id/delete', async (req, res, next) => {
 
     const appDb = getAppDb(app);
     await appDb(tableName).where({ [pkField.field_name]: id }).delete();
+    try { await appDb('_wdpro_metadata').where({ table_name: tableName, record_id: String(id) }).delete(); } catch {}
+    await maybeNotify(app, tableName, id, 'Admin', 'delete');
 
     req.session.flash = { type: 'success', message: 'Record deleted.' };
     res.redirect(`/admin/data/${tableName}`);
@@ -535,6 +544,8 @@ dataRouter.post('/:tableName/:id', memoryUpload, async (req, res, next) => {
     Object.assign(record, filePaths);
 
     await appDb(tableName).where({ [pkField.field_name]: id }).update(record);
+    await touchRecordMeta(app, tableName, id, null, 'Admin', new Date().toISOString());
+    await maybeNotify(app, tableName, id, 'Admin', 'update');
 
     req.session.flash = { type: 'success', message: 'Record updated.' };
     res.redirect(`/admin/data/${tableName}`);

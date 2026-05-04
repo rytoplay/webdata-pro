@@ -4,7 +4,8 @@ import { db as controlDb } from '../../db/knex';
 import { getAppDb } from '../../db/adapters/appDb';
 import { touchRecordMeta } from '../../services/recordMeta';
 import { maybeNotify } from '../../services/notifications';
-import { memoryUpload, saveUpload, deleteUpload } from '../../services/uploads';
+import { cascadeInsertJoinedRecords } from '../../services/joins';
+import { memoryUpload, saveUpload, deleteUpload, validateUpload } from '../../services/uploads';
 import { getBranding } from './branding';
 
 export const memberTableRouter = Router({ mergeParams: true });
@@ -53,6 +54,11 @@ async function processUploads(
     const field = fields.find(f => f.field_name === file.fieldname);
     if (!field) continue;
     if (field.data_type !== 'image' && field.data_type !== 'upload') continue;
+    const err = validateUpload(file, {
+      max_file_size_kb:   field.ui_options.max_file_size_kb   as number | undefined,
+      allowed_extensions: field.ui_options.allowed_extensions as string | undefined,
+    });
+    if (err) throw new Error(err);
     result[file.fieldname] = await saveUpload(
       file.buffer, file.mimetype, app.slug, tableName, file.fieldname,
       field.data_type === 'image',
@@ -280,9 +286,11 @@ memberTableRouter.post('/:tableName/new', memoryUpload, async (req, res, next) =
       ? String(newId)
       : String(record[pkField?.field_name ?? ''] ?? newId);
 
+    await cascadeInsertJoinedRecords(appDb, app.id, table.id, newId, req.body);
+
     const memberName = await getMemberName(member.memberId);
     await touchRecordMeta(app, tableName, recordId, member.memberId, memberName, new Date().toISOString());
-    await maybeNotify(app, tableName, recordId, memberName || `Member #${member.memberId}`);
+    await maybeNotify(app, tableName, recordId, memberName || `Member #${member.memberId}`, 'insert');
 
     req.session.flash = { type: 'success', message: 'Record created.' };
     res.redirect(
@@ -308,7 +316,7 @@ memberTableRouter.get('/:tableName/:id/edit', async (req, res, next) => {
     if (!table) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Table not found' });
 
     const perm = await getTablePerm(member.groupIds, table.id);
-    if (!perm?.can_edit && !perm?.manage_all) {
+    if (!perm?.can_edit) {
       return res.status(403).render('admin/error', { title: 'Forbidden', message: 'You cannot edit records in this table.' });
     }
 
@@ -345,7 +353,7 @@ memberTableRouter.get('/:tableName/:id/edit', async (req, res, next) => {
       table, fields, pkField, record, errors: null, perm,
       formAction:  `/app/${app.slug}/table/${tableName}/${id}/edit`,
       backUrl:     perm.single_record ? `/app/${app.slug}/` : `/app/${app.slug}/table/${tableName}`,
-      canDelete:   !!(perm.can_delete || perm.manage_all),
+      canDelete:   !!perm.can_delete,
       deleteAction:`/app/${app.slug}/table/${tableName}/${id}/delete`,
       galleryTable, appSlug: app.slug,
       homeUrl:     `/app/${app.slug}/`,
@@ -371,7 +379,7 @@ memberTableRouter.post('/:tableName/:id/edit', memoryUpload, async (req, res, ne
     if (!table) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Table not found' });
 
     const perm = await getTablePerm(member.groupIds, table.id);
-    if (!perm?.can_edit && !perm?.manage_all) {
+    if (!perm?.can_edit) {
       return res.status(403).render('admin/error', { title: 'Forbidden', message: 'You cannot edit records in this table.' });
     }
 
@@ -412,6 +420,7 @@ memberTableRouter.post('/:tableName/:id/edit', memoryUpload, async (req, res, ne
 
     const memberName = await getMemberName(member.memberId);
     await touchRecordMeta(app, tableName, id, member.memberId, memberName, new Date().toISOString());
+    await maybeNotify(app, tableName, id, memberName || `Member #${member.memberId}`, 'update');
 
     req.session.flash = { type: 'success', message: 'Record updated.' };
     res.redirect(
@@ -435,7 +444,7 @@ memberTableRouter.post('/:tableName/:id/delete', async (req, res, next) => {
     if (!table) return res.status(404).render('admin/error', { title: 'Not Found', message: 'Table not found' });
 
     const perm = await getTablePerm(member.groupIds, table.id);
-    if (!perm?.can_delete && !perm?.manage_all) {
+    if (!perm?.can_delete) {
       return res.status(403).render('admin/error', { title: 'Forbidden', message: 'You cannot delete records in this table.' });
     }
 
@@ -458,6 +467,9 @@ memberTableRouter.post('/:tableName/:id/delete', async (req, res, next) => {
     }
 
     await appDb(tableName).where({ [pkField.field_name]: id }).delete();
+    try { await appDb('_wdpro_metadata').where({ table_name: tableName, record_id: String(id) }).delete(); } catch {}
+    const delMemberName = await getMemberName(member.memberId);
+    await maybeNotify(app, tableName, id, delMemberName || `Member #${member.memberId}`, 'delete');
 
     req.session.flash = { type: 'success', message: 'Record deleted.' };
     res.redirect(

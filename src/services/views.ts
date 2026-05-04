@@ -293,10 +293,13 @@ export function parseViewTokens(templates: Partial<ViewTemplates>) {
   // instructional placeholder text from being treated as real column refs.
   const tokenContents: string[] = [];
   let m: RegExpExecArray | null;
-  const curlyRe  = /\$\{([^}]+)\}/g;
+  const curlyRe   = /\$\{([^}]+)\}/g;
   const bracketRe = /\$(?:update|search|thumbnail|img|sort|order_url|order|days_since|years_since|sum|avg|currency|perpage)\[([^\]]+)\]/g;
+  // Also extract the field reference from $if() conditions (left-hand side before any operator or comma)
+  const ifCondRe  = /\$if\(\s*([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)/gi;
   while ((m = curlyRe.exec(combined))   !== null) tokenContents.push(m[1]);
   while ((m = bracketRe.exec(combined)) !== null) tokenContents.push(m[1]);
+  while ((m = ifCondRe.exec(combined))  !== null) tokenContents.push(m[1]);
 
   return parseColumnRefs(tokenContents.join('\n')).filter(r => !r.table.startsWith('_'));
 }
@@ -592,13 +595,14 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
       `<scr` + `ipt>${init}</scr` + `ipt>`;
   });
 
-  // $thumbnail[table.field] → <img src="/files/...?thumb=1" width="100"> (thumbnail)
+  // $thumbnail[table.field] → thumbnail image (or pile-of-photos for gallery tokens)
   // When the field is empty, renders a "No Image" placeholder with a subtle diagonal-stripe pattern.
   result = result.replace(/\$thumbnail\[([^\]]+)\]/g, (_, ref: string) => {
+    ref = ref.trim();
     const alias = ref.replace('.', '__');
     const val   = String(data[alias] ?? data[ref] ?? data[`_owner__${alias}`] ?? '');
     if (!val) return (
-      `<div style="width:100px;height:100px;border-radius:4px;display:inline-flex;` +
+      `<div style="width:76px;height:76px;border-radius:4px;display:inline-flex;` +
       `align-items:center;justify-content:center;` +
       `background:#d8d8d8;` +
       `background-image:repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(0,0,0,0.06) 8px,rgba(0,0,0,0.06) 9px);` +
@@ -607,7 +611,41 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
       `user-select:none;pointer-events:none;">No Image</span>` +
       `</div>`
     );
-    return `<img src="/files/${val}?thumb=1" width="100" style="border-radius:4px;" alt="">`;
+    // Detect gallery tokens: _gcount__ key is only injected for gallery table refs
+    const isGallery = data[`_gcount__${alias}`] !== undefined || data[`_gcount__${ref}`] !== undefined;
+    const count = isGallery ? Number(data[`_gcount__${alias}`] ?? data[`_gcount__${ref}`] ?? 1) : 1;
+    if (isGallery) {
+      // Gallery table name: 'contacts.photo_gallery' → 'contacts_photo_gallery'
+      const galleryTable = ref.includes('.')
+        ? ref.slice(0, ref.indexOf('.')) + '_' + ref.slice(ref.indexOf('.') + 1)
+        : ref;
+      const appSlug  = String(data['_app_slug'] ?? '');
+      const recordId = String(data['_pk'] ?? '');
+      const galleryRef = `${galleryTable}/${recordId}`;
+      if (count > 1) {
+        // Pile-of-photos effect: rotated cards behind the front image + count badge
+        const extra = count - 1;
+        const badge = extra > 9 ? '9+' : `+${extra}`;
+        return (
+          `<div style="position:relative;display:inline-block;width:76px;height:76px;vertical-align:middle;flex-shrink:0;cursor:pointer;"` +
+          ` data-wdp-gallery-ref="${galleryRef}" data-wdp-app="${appSlug}"` +
+          ` onclick="event.stopPropagation();wdpOpenGallery(this)">` +
+          `<div style="position:absolute;inset:0;background:#c4c9d4;border-radius:5px;transform:rotate(8deg);"></div>` +
+          `<div style="position:absolute;inset:0;background:#d9dde6;border-radius:5px;transform:rotate(4deg);"></div>` +
+          `<img src="/files/${val}?thumb=1" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:5px;" alt="">` +
+          `<span style="position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;line-height:1.5;pointer-events:none;">${badge}</span>` +
+          `</div>`
+        );
+      }
+      // Single gallery photo — still opens lightbox on click
+      return (
+        `<img src="/files/${val}?thumb=1"` +
+        ` style="width:76px;height:76px;object-fit:cover;border-radius:4px;vertical-align:middle;cursor:pointer;"` +
+        ` data-wdp-gallery-ref="${galleryRef}" data-wdp-app="${appSlug}"` +
+        ` onclick="event.stopPropagation();wdpOpenGallery(this)" alt="">`
+      );
+    }
+    return `<img src="/files/${val}?thumb=1" style="width:76px;height:76px;object-fit:cover;border-radius:4px;vertical-align:middle;" alt="">`;
   });
 
   // $img[table.field] → <img src="/files/..."> (full image)
@@ -808,8 +846,8 @@ async function prefetchGalleryThumbnails(
   templateText: string,
   recordIds: string[],
   existingKeys: Set<string>,
-): Promise<Map<string, Map<string, string>>> {
-  const result = new Map<string, Map<string, string>>();
+): Promise<Map<string, Map<string, { file_path: string; count: number }>>> {
+  const result = new Map<string, Map<string, { file_path: string; count: number }>>();
   if (!recordIds.length || !templateText) return result;
 
   const thumbnailRefs = [...templateText.matchAll(/\$thumbnail\[([^\]]+)\]/g)].map(m => m[1].trim());
@@ -819,10 +857,10 @@ async function prefetchGalleryThumbnails(
     if (existingKeys.has(alias) || existingKeys.has(ref)) continue; // direct column exists
 
     const dotIdx = ref.indexOf('.');
-    if (dotIdx === -1) continue;
-    const refTable = ref.slice(0, dotIdx);
-    const refField = ref.slice(dotIdx + 1);
-    const galleryTableName = `${refTable}_${refField}`;
+    // Support both "table.field" (→ table_field gallery) and direct gallery table name
+    const galleryTableName = dotIdx !== -1
+      ? `${ref.slice(0, dotIdx)}_${ref.slice(dotIdx + 1)}`
+      : ref;
 
     const galleryMeta = await db('app_tables')
       .where({ app_id: app.id, table_name: galleryTableName, is_gallery: true })
@@ -831,6 +869,7 @@ async function prefetchGalleryThumbnails(
 
     try {
       const placeholders = recordIds.map(() => '?').join(',');
+      // Fetch first photo (lowest sort_order, then id)
       const sql =
         `SELECT p1.record_id, p1.file_path` +
         ` FROM "${galleryTableName}" AS p1` +
@@ -845,9 +884,19 @@ async function prefetchGalleryThumbnails(
           ? (raw as [Array<{ record_id: string | number; file_path: string }>, unknown])[0]
           : (raw as Array<{ record_id: string | number; file_path: string }>);
 
-      const photoMap = new Map<string, string>();
+      // Fetch counts per record
+      const countRows: Array<{ record_id: string | number; cnt: number }> = await appDb(galleryTableName)
+        .whereIn('record_id', recordIds)
+        .groupBy('record_id')
+        .select('record_id')
+        .count('* as cnt') as any;
+      const countByRecord = new Map<string, number>();
+      for (const cr of countRows) countByRecord.set(String(cr.record_id), Number(cr.cnt));
+
+      const photoMap = new Map<string, { file_path: string; count: number }>();
       for (const pr of photoRows) {
-        photoMap.set(String(pr.record_id), pr.file_path);
+        const rid = String(pr.record_id);
+        photoMap.set(rid, { file_path: pr.file_path, count: countByRecord.get(rid) ?? 1 });
       }
       result.set(alias, photoMap);
     } catch {
@@ -1022,10 +1071,21 @@ export async function renderViewList(
   // Build base SQL
   let baseSql: string;
   if (view.query_mode === 'advanced_sql' && view.custom_sql) {
-    baseSql = view.custom_sql;
+    // Substitute :q with the current search term as a safe SQL literal.
+    // Users write  LIKE '%' || :q || '%'  or  = :q  etc. directly in their SQL.
+    const escapedQ = (params.q ?? '').replace(/'/g, "''");
+    baseSql = view.custom_sql.replace(/:q\b/g, `'${escapedQ}'`);
   } else {
     baseSql = await generateViewSql(app.id, baseTableName, templates);
   }
+
+  // For advanced SQL: if the user didn't alias the PK as table__field (e.g. contacts__id),
+  // fall back to the bare column name (e.g. id) for metadata JOIN and ownership filter.
+  const stdPkAlias = `${baseTableName}__${pkName}`;
+  const effectivePkAlias = (view.query_mode === 'advanced_sql' && view.custom_sql &&
+    !extractSqlAliases(view.custom_sql).has(stdPkAlias.toLowerCase()))
+    ? pkName
+    : stdPkAlias;
 
   // Determine sort — for auto SQL the columns are aliased as table__field,
   // so we must prefix the sort/group field names with the base table name.
@@ -1138,12 +1198,12 @@ export async function renderViewList(
   {
     const filterEntries = Object.entries(fieldFilters).filter(([, v]) => v.trim());
     if (filterEntries.length > 0) {
-      // One batch lookup to find which fields are indexed
+      // One batch lookup to find which fields are indexed and what widget they use
       const filterMeta = await db('app_fields')
         .whereIn('table_id', await db('app_tables').where({ app_id: app.id }).pluck('id'))
-        .select('field_name', 'is_indexed');
+        .select('field_name', 'is_indexed', 'ui_widget');
       const filterIndexMap = new Map(
-        filterMeta.map((f: { field_name: string; is_indexed: boolean }) => [f.field_name, !!f.is_indexed])
+        filterMeta.map((f: { field_name: string; is_indexed: boolean; ui_widget: string }) => [f.field_name, { isIndexed: !!f.is_indexed, widget: f.ui_widget }])
       );
 
       for (const [col, val] of filterEntries) {
@@ -1151,26 +1211,44 @@ export async function renderViewList(
         const qcol = `"${col}"`;
         // col is "table__field"; extract just the field name for the index lookup
         const bareField = col.includes('__') ? col.split('__').slice(1).join('__') : col;
-        const isIndexed = filterIndexMap.get(bareField) ?? false;
+        const fieldMeta  = filterIndexMap.get(bareField);
+        const isIndexed  = fieldMeta?.isIndexed ?? false;
+        const isSelect   = fieldMeta?.widget === 'select' || fieldMeta?.widget === 'checkbox' || fieldMeta?.widget === 'boolean';
 
-        if (v.startsWith('>='))      { whereParts.push(`${qcol} >= ?`);  bindings.push(v.slice(2)); }
-        else if (v.startsWith('<=')) { whereParts.push(`${qcol} <= ?`);  bindings.push(v.slice(2)); }
-        else if (v.startsWith('>'))  { whereParts.push(`${qcol} > ?`);   bindings.push(v.slice(1)); }
-        else if (v.startsWith('<'))  { whereParts.push(`${qcol} < ?`);   bindings.push(v.slice(1)); }
+        if (v.startsWith('>='))      { whereParts.push(`(${qcol} IS NOT NULL AND ${qcol} != '' AND ${qcol} >= ?)`);  bindings.push(v.slice(2)); }
+        else if (v.startsWith('<=')) { whereParts.push(`(${qcol} IS NOT NULL AND ${qcol} != '' AND ${qcol} <= ?)`);  bindings.push(v.slice(2)); }
+        else if (v.startsWith('>'))  { whereParts.push(`(${qcol} IS NOT NULL AND ${qcol} != '' AND ${qcol} > ?)`);   bindings.push(v.slice(1)); }
+        else if (v.startsWith('<'))  { whereParts.push(`(${qcol} IS NOT NULL AND ${qcol} != '' AND ${qcol} < ?)`);   bindings.push(v.slice(1)); }
         else if (v.startsWith('='))  { whereParts.push(`${qcol} = ?`);   bindings.push(v.slice(1)); }
         else if (v.includes('..'))   {
           const [lo, hi] = v.split('..', 2);
-          if (lo.trim()) { whereParts.push(`${qcol} >= ?`); bindings.push(lo.trim()); }
-          if (hi.trim()) { whereParts.push(`${qcol} <= ?`); bindings.push(hi.trim()); }
+          const rangeParts: string[] = [`${qcol} IS NOT NULL`, `${qcol} != ''`];
+          if (lo.trim()) { rangeParts.push(`${qcol} >= ?`); bindings.push(lo.trim()); }
+          if (hi.trim()) { rangeParts.push(`${qcol} <= ?`); bindings.push(hi.trim()); }
+          whereParts.push(`(${rangeParts.join(' AND ')})`);
         }
-        else if (isIndexed) { whereParts.push(`${qcol} = ?`); bindings.push(v); }
+        // Select/checkbox widgets and indexed fields always use exact match
+        else if (isIndexed || isSelect) { whereParts.push(`${qcol} = ?`); bindings.push(v); }
         else {
-          // Apply boolean parser for unqualified LIKE searches
-          const fieldAst = parseSearchQuery(v);
-          if (fieldAst) {
-            whereParts.push(searchAstToSql(fieldAst, [qcol], bindings));
+          // Wildcard/quote syntax:
+          //   "value"  → exact match
+          //   value*   → starts with
+          //   *value   → ends with
+          //   value    → substring (LIKE %value%)
+          if (v.length >= 2 && v[0] === '"' && v[v.length - 1] === '"') {
+            whereParts.push(`${qcol} = ?`); bindings.push(v.slice(1, -1));
+          } else if (v.endsWith('*') && !v.startsWith('*')) {
+            whereParts.push(`${qcol} LIKE ?`); bindings.push(`${v.slice(0, -1)}%`);
+          } else if (v.startsWith('*') && !v.endsWith('*')) {
+            whereParts.push(`${qcol} LIKE ?`); bindings.push(`%${v.slice(1)}`);
           } else {
-            whereParts.push(`${qcol} LIKE ?`); bindings.push(`%${v}%`);
+            // Apply boolean parser for unqualified LIKE searches
+            const fieldAst = parseSearchQuery(v);
+            if (fieldAst) {
+              whereParts.push(searchAstToSql(fieldAst, [qcol], bindings));
+            } else {
+              whereParts.push(`${qcol} LIKE ?`); bindings.push(`%${v}%`);
+            }
           }
         }
       }
@@ -1179,26 +1257,23 @@ export async function renderViewList(
 
   // Ownership filter: when ownerId is set, restrict to records owned by that member
   if (params.ownerId) {
-    // Always use table__field alias — custom SQL is built from auto-generated SQL which follows this convention
-    const pkAlias = `${baseTableName}__${pkName}`;
     whereParts.push(
-      `EXISTS (SELECT 1 FROM _wdpro_metadata WHERE ${app.database_mode === 'mysql' ? `CAST(_wdpro_metadata.record_id AS UNSIGNED) = _v."${pkAlias}"` : `_wdpro_metadata.record_id = ${castToText(app, `"_v"."${pkAlias}"`)}`} AND _wdpro_metadata.table_name = ? AND _wdpro_metadata.created_by_id = ?)`
+      `EXISTS (SELECT 1 FROM _wdpro_metadata WHERE ${app.database_mode === 'mysql' ? `CAST(_wdpro_metadata.record_id AS UNSIGNED) = _v."${effectivePkAlias}"` : `_wdpro_metadata.record_id = ${castToText(app, `"_v"."${effectivePkAlias}"`)}`} AND _wdpro_metadata.table_name = ? AND _wdpro_metadata.created_by_id = ?)`
     );
     bindings.push(baseTableName, String(params.ownerId));
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
-  // If sorting by a metadata field, LEFT JOIN _wdpro_metadata to get those columns
+  // LEFT JOIN _wdpro_metadata when sorting by a meta field OR when any template references _meta__ tokens
   const isMetaSecondary = rawSecondary ? META_SORT.has(rawSecondary) : false;
-  const needsMetaJoin = isMetaSort || isMetaSecondary;
+  const allTemplateTextForMeta = Object.values(tpl).filter(Boolean).join('\n');
+  const needsMetaJoin = isMetaSort || isMetaSecondary || allTemplateTextForMeta.includes('_meta__');
   let outerSql: string;
   if (needsMetaJoin) {
-    // Always use table__field alias — custom SQL follows the same convention as auto-generated SQL
-    const pkAlias = `${baseTableName}__${pkName}`;
-    outerSql = `SELECT _v.*, _m.created_at AS "_meta__created_at", _m.updated_at AS "_meta__updated_at", _m.created_by_name AS "_meta__created_by" ` +
+    outerSql = `SELECT _v.*, _m.created_at AS "_meta__created_at", _m.updated_at AS "_meta__updated_at", _m.created_by_name AS "_meta__created_by", _m.updated_by_name AS "_meta__updated_by" ` +
       `FROM (${baseSql}) AS _v ` +
-      `LEFT JOIN _wdpro_metadata _m ON ${app.database_mode === 'mysql' ? `CAST(_m.record_id AS UNSIGNED) = _v."${pkAlias}"` : `${castToText(app, `_v."${pkAlias}"`)} = _m.record_id`} AND _m.table_name = '${baseTableName}' ` +
+      `LEFT JOIN _wdpro_metadata _m ON ${app.database_mode === 'mysql' ? `CAST(_m.record_id AS UNSIGNED) = _v."${effectivePkAlias}"` : `${castToText(app, `_v."${effectivePkAlias}"`)} = _m.record_id`} AND _m.table_name = '${baseTableName}' ` +
       whereSql;
   } else {
     outerSql = `SELECT * FROM (${baseSql}) AS _v ${whereSql}`;
@@ -1333,9 +1408,11 @@ export async function renderViewList(
     const row    = rows[i];
     const pkVal  = String(row[pkName] ?? row[`${baseTableName}__${pkName}`] ?? '');
 
-    const galleryExtras: Record<string, string> = {};
+    const galleryExtras: Record<string, string | number> = {};
     for (const [alias, photoMap] of galleryThumbs) {
-      galleryExtras[alias] = photoMap.get(pkVal) ?? '';
+      const entry = photoMap.get(pkVal);
+      galleryExtras[alias] = entry?.file_path ?? '';
+      galleryExtras[`_gcount__${alias}`] = entry?.count ?? 0;
     }
     const ownerExtras = ownerExtrasMap.get(pkVal) ?? {};
 
@@ -1414,9 +1491,11 @@ export async function renderViewDetail(
     prefetchGalleryThumbnails(app, appDb, detailTpl, [pkVal], existingKeysDetail),
     prefetchOwnerFields(app, appDb, detailTpl, baseTableName, [pkVal]),
   ]);
-  const galleryExtrasDetail: Record<string, string> = {};
+  const galleryExtrasDetail: Record<string, string | number> = {};
   for (const [alias, photoMap] of galleryThumbsDetail) {
-    galleryExtrasDetail[alias] = photoMap.get(pkVal) ?? '';
+    const entry = photoMap.get(pkVal);
+    galleryExtrasDetail[alias] = entry?.file_path ?? '';
+    galleryExtrasDetail[`_gcount__${alias}`] = entry?.count ?? 0;
   }
   const ownerExtrasDetail = ownerFieldsDetail.get(pkVal) ?? {};
 
@@ -1531,6 +1610,13 @@ export async function renderFormTokens(
   const matches = [...html.matchAll(tokenRe)];
   if (!matches.length) return html;
 
+  // Load reCAPTCHA site key once — injected into every public form if configured
+  const captchaRow = await db('settings').where({ key: 'recaptcha_site_key' }).first();
+  const captchaSiteKey: string = captchaRow?.value || '';
+  const captchaWidget = captchaSiteKey
+    ? `<script src="https://www.google.com/recaptcha/api.js" async defer><\/script>\n<div class="g-recaptcha" data-sitekey="${captchaSiteKey}"></div>`
+    : '';
+
   // Collect all unique table names so we can batch-load fields
   const tableNames = [...new Set(matches.map(m => {
     const parts = m[2].split(',');
@@ -1583,12 +1669,14 @@ export async function renderFormTokens(
       }).join('') +
       (redirectVal ? `<input type="hidden" name="_redirect" value="${escHtmlAttr(redirectVal)}">` : '');
 
-    if (type === 'formopen') return openTag;
+    if (type === 'formopen') return captchaWidget ? openTag + '\n' + captchaWidget : openTag;
 
     // $form — auto-generate inputs for all non-PK, non-image, non-upload fields
+    // Skip fields that are already provided as hidden pairs
+    const hiddenFieldNames = new Set(hiddens.map((p: string) => p.slice(0, p.indexOf('=')).trim()));
     const fields = fieldsByTableId.get(table.id) ?? [];
     const inputsHtml = fields
-      .filter((f: { data_type: string }) => f.data_type !== 'image' && f.data_type !== 'upload')
+      .filter((f: { data_type: string; field_name: string }) => f.data_type !== 'image' && f.data_type !== 'upload' && !hiddenFieldNames.has(f.field_name))
       .map((f: { field_name: string; label: string; ui_widget: string; ui_options_json: string | null; is_required: boolean }) => {
         const name  = f.field_name;
         const label = f.label || name;
@@ -1613,7 +1701,7 @@ export async function renderFormTokens(
         return `<div class="wdp-field"><label>${label}</label><input type="${inputType}" name="${name}"${req}></div>`;
       }).join('\n');
 
-    return `${openTag}\n${inputsHtml}\n<div class="wdp-field"><button type="submit">Submit</button></div>\n</form>`;
+    return `${openTag}\n${inputsHtml}\n${captchaWidget ? captchaWidget + '\n' : ''}<div class="wdp-field"><button type="submit">Submit</button></div>\n</form>`;
   });
 }
 
@@ -1851,21 +1939,39 @@ async function renderWidgetTokens(
              + `<input type="checkbox" id="${id}" name="${n}" value="1"${checked}></div>`;
       }
       case 'date':
+        if (mode === 'search')
+          return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+               + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input" placeholder="e.g. 2024-01-01 or 2024-01-01..2024-12-31"></div>`;
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
              + `<input type="date" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
       case 'datetime':
+        if (mode === 'search')
+          return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+               + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input" placeholder="e.g. 2024-01-01"></div>`;
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
              + `<input type="datetime-local" id="${id}" name="${n}" value="${value.replace(' ', 'T')}" class="wdp-input"${req}></div>`;
       case 'time':
+        if (mode === 'search')
+          return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+               + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input" placeholder="e.g. 09:00..17:00"></div>`;
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
              + `<input type="time" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}></div>`;
       case 'number':
+        if (mode === 'search')
+          return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+               + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input" placeholder="e.g. >30 or 20..40"></div>`;
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
              + `<input type="number" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}${sizeAttr}></div>`;
       case 'email':
+        if (mode === 'search')
+          return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+               + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input"${sizeAttr}></div>`;
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
              + `<input type="email" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}${sizeAttr}></div>`;
       case 'url':
+        if (mode === 'search')
+          return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
+               + `<input type="text" id="${id}" name="${n}" value="${v}" class="wdp-input"${sizeAttr}></div>`;
         return `<div class="wdp-field"><label class="wdp-field-label" for="${id}">${label}</label>`
              + `<input type="url" id="${id}" name="${n}" value="${v}" class="wdp-input"${req}${sizeAttr}></div>`;
       case 'password':

@@ -17,6 +17,27 @@ ${owners.email}
 
 For joined tables, tokens automatically follow the join path defined in the Joins admin screen. You can reference fields from multiple tables in the same view.
 
+### Always use the `table.field` form — bare field names do not work
+
+Tokens must include the table name. `${name}` will always render as blank; `${pets.name}` will work.
+
+The reason is that WDP aliases every column in its SQL query as `table__field` (double underscore). The token renderer looks up `data["pets__name"]` when it sees `${pets.name}`, and finds it. If you write `${name}`, it looks for `data["name"]`, which does not exist.
+
+This also applies to `$img[]`, `$thumbnail[]`, `$days_since[]`, `$sum[]`, and any other token that takes a field reference — they all require the `table.field` format.
+
+**Search form input names** are the one exception: form `<input name="...">` elements that filter records should use the `table__field` format (double underscore, no dot) because they are submitted as query parameters, not rendered as output tokens:
+
+```html
+<!-- Output token — dot separator -->
+${pets.name}
+
+<!-- Search form filter input — double underscore -->
+<input name="pets__name" value="${pets.name}">
+
+<!-- Create/edit form field — plain field name only -->
+<input name="name">
+```
+
 ---
 
 ## System variables
@@ -287,3 +308,114 @@ Available in templates when `_wdpro_metadata` is enabled:
 | `${_meta__created_by}` | Display name of creating member |
 
 These can also be used as sort fields in the view settings.
+
+---
+
+## Public forms
+
+Public forms let anonymous visitors submit data without logging in. The table must have **Allow public submissions** enabled in the admin Tables screen.
+
+### `$form[tableName]`
+
+Renders a complete self-contained form — opening tag, all non-PK fields as inputs, and a Submit button.
+
+```
+$form[contacts]
+```
+
+Additional arguments can be passed as `key=value` pairs after the table name:
+
+- **`field=value`** — any field name from the table sets a hidden pre-filled value the visitor cannot see or change
+- **`_redirect=url`** — after a successful submit, the browser navigates to this URL. Without it, a "Record created" message is shown in place.
+
+Parameters starting with `_` are reserved by WDP. All others are treated as hidden field values.
+
+```
+$form[contacts, status=Lead, _redirect=/api/v/myapp/contacts-list]
+```
+
+Multiple hidden fields are supported:
+
+```
+$form[inquiries, pet_id=${pets.id}, source=website, _redirect=/thank-you]
+```
+
+### `$formopen[tableName]` / `$formclose`
+
+For custom form layouts. `$formopen` emits only the `<form>` opening tag and any hidden fields you specify. You write your own inputs between it and `$formclose`. The same `field=value` and `_redirect=url` arguments work here too.
+
+```
+$formopen[inquiries, pet_id=${pets.id}, _redirect=/thank-you]
+<input type="text" name="visitor_name" placeholder="Your name">
+<textarea name="message"></textarea>
+<button type="submit">Send</button>
+$formclose
+```
+
+---
+
+## CAPTCHA on public forms
+
+To prevent spam bots, Webdata Pro supports **Google reCAPTCHA v2** on public forms.
+
+### Setup
+
+1. Go to [google.com/recaptcha/admin](https://www.google.com/recaptcha/admin) and create a new site
+2. Choose **reCAPTCHA v2 — "I'm not a robot" checkbox**
+3. Add your domain(s) to the allowed list
+4. Copy the **Site key** and **Secret key**
+5. In Webdata Pro admin, go to **Settings → CAPTCHA** and paste both keys
+
+### How it works
+
+Once keys are saved, the reCAPTCHA checkbox widget is automatically injected into every `$form[...]` and `$formopen[...]` token render. No template changes required.
+
+- **`$form`** — widget appears above the Submit button
+- **`$formopen`** — widget is injected right inside the opening `<form>` tag; you can reposition the `<div class="g-recaptcha">` element in your markup if needed
+
+Submissions without a valid CAPTCHA response are rejected with a 400 before any data is written to the database.
+
+### Disabling CAPTCHA
+
+Clear both the site key and secret key fields in Settings → CAPTCHA and save. The widget will stop appearing in forms immediately.
+
+---
+
+## Advanced SQL mode
+
+Views can be switched to **Advanced SQL** mode in the Templates editor. You write the full `SELECT` statement yourself.
+
+### Column aliasing is required
+
+Token rendering always looks up columns by their `table__field` alias. In automatic mode WDP adds these aliases for you. In Advanced SQL mode **you must alias every column yourself**:
+
+```sql
+SELECT
+  contacts.id        AS contacts__id,
+  contacts.name      AS contacts__name,
+  contacts.status    AS contacts__status,
+  contacts.age       AS contacts__age
+FROM contacts
+ORDER BY contacts.name ASC
+```
+
+If you omit the alias (e.g. write `contacts.name` without `AS contacts__name`), the token `${contacts.name}` will render blank and `$if(contacts.name, ...)` will always take the false branch.
+
+The primary key column (`contacts__id`) is used internally for detail view links, metadata joins, and `${_pk}`. It must be included and correctly aliased.
+
+### Keyword search with `:q`
+
+Use `:q` as a named placeholder for the visitor's search term. WDP substitutes it with the literal search value before running the query.
+
+```sql
+SELECT
+  contacts.id    AS contacts__id,
+  contacts.name  AS contacts__name
+FROM contacts
+WHERE (:q = '' OR contacts.name LIKE '%' || :q || '%')
+ORDER BY contacts.name ASC
+```
+
+- `:q` is the raw search term — add `%` wildcards in your SQL as needed
+- When no search is active, `:q` is substituted with an empty string `''`
+- The `(:q = '' OR ...)` pattern shows all records when the search box is empty and filters when it has a value

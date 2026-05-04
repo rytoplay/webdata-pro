@@ -15,11 +15,12 @@ blueprintRouter.get('/', async (req, res, next) => {
   try {
     const app = res.locals.currentApp as App;
     const aiSettings = await aiService.getAiSettings();
+    const flash = req.session.flash; delete req.session.flash;
     res.render('admin/blueprint/wizard', {
       title:      'AI App Builder',
       app,
       aiSettings,
-      flash:      null,
+      flash,
     });
   } catch (err) {
     next(err);

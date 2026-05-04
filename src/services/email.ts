@@ -40,6 +40,7 @@ export async function sendNewRecordNotification(
   tableLabel: string,
   recordId: string | null,
   submittedBy: string,
+  action: 'insert' | 'update' | 'delete' = 'insert',
 ): Promise<void> {
   const cfg = await getSmtpConfig();
   if (!cfg) return; // silently skip — SMTP not configured
@@ -52,20 +53,24 @@ export async function sendNewRecordNotification(
   const when = new Date().toLocaleString();
   const recordLine = recordId ? `<br>Record ID: <strong>${recordId}</strong>` : '';
 
+  const actionLabel  = action === 'update' ? 'updated' : action === 'delete' ? 'deleted' : 'created';
+  const subjectVerb  = action === 'update' ? 'Record updated' : action === 'delete' ? 'Record deleted' : 'New record';
+  const bodyVerb     = action === 'update' ? 'A record was updated in' : action === 'delete' ? 'A record was deleted from' : 'A new record was submitted to';
+
   await transporter.sendMail({
     from:    `"${appName}" <${cfg.from}>`,
     to:      toEmail,
-    subject: `New record in ${tableLabel} — ${appName}`,
+    subject: `${subjectVerb} in ${tableLabel} — ${appName}`,
     html: `
-      <p>A new record was submitted to the <strong>${tableLabel}</strong> table
+      <p>${bodyVerb} the <strong>${tableLabel}</strong> table
          in your <strong>${appName}</strong> app.</p>
-      <p>Submitted by: <strong>${submittedBy}</strong><br>
+      <p>${action === 'delete' ? 'Deleted' : action === 'update' ? 'Updated' : 'Submitted'} by: <strong>${submittedBy}</strong><br>
          Time: ${when}${recordLine}</p>
       <hr style="border:none;border-top:1px solid #e5e7eb">
       <p style="font-size:0.8em;color:#6b7280">You are receiving this because admin notifications
          are enabled for ${appName}. Manage settings in the App Settings page.</p>
     `,
-    text: `New record in ${tableLabel} — ${appName}\nSubmitted by: ${submittedBy}\nTime: ${when}${recordId ? `\nRecord ID: ${recordId}` : ''}`,
+    text: `${subjectVerb} in ${tableLabel} — ${appName}\n${action === 'delete' ? 'Deleted' : action === 'update' ? 'Updated' : 'Submitted'} by: ${submittedBy}\nTime: ${when}${recordId ? `\nRecord ID: ${recordId}` : ''}`,
   });
 }
 

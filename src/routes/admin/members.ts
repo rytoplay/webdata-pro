@@ -80,8 +80,10 @@ membersRouter.post('/', async (req, res, next) => {
       });
     }
 
+    const normalizedEmail = parsed.data.email.trim().toLowerCase();
+
     // Check for duplicate email
-    const existing = await membersService.getMemberByEmail(app.id, parsed.data.email);
+    const existing = await membersService.getMemberByEmail(app.id, normalizedEmail);
     if (existing) {
       return res.render('admin/members/form', {
         title: 'New Member', member: req.body, groups, memberGroups: [],
@@ -90,7 +92,7 @@ membersRouter.post('/', async (req, res, next) => {
     }
 
     const { password_confirm: _, ...memberData } = parsed.data;
-    const member = await membersService.createMember({ app_id: app.id, ...memberData });
+    const member = await membersService.createMember({ app_id: app.id, ...memberData, email: normalizedEmail });
 
     // Assign groups
     const selectedGroups: string[] = [].concat((req.body.group_ids as any) || []);

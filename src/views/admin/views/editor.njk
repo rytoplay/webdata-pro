@@ -146,6 +146,42 @@
           </div>
 
           {% if baseFields.length %}
+          {% set _updateLines = [] %}
+          {% set _updateLines = _updateLines.concat(['<div class="wdp-detail">']) %}
+          {% set _updateLines = _updateLines.concat(['  <button data-wdp-action="back" class="wdp-btn-link">&lsaquo; Back</button>']) %}
+          {% set _updateLines = _updateLines.concat(['  <form data-wdp-form="edit" data-wdp-id="${_pk}" style="margin-top:1rem;">']) %}
+          {% for f in baseFields %}{% if not f.is_primary_key %}{% set _updateLines = _updateLines.concat(['    $update[' + baseTable.table_name + '.' + f.field_name + ']']) %}{% endif %}{% endfor %}
+          {% set _updateLines = _updateLines.concat(['    <div style="margin-top:1rem;">']) %}
+          {% set _updateLines = _updateLines.concat(['      <button type="submit" class="wdp-btn">Save</button>']) %}
+          {% set _updateLines = _updateLines.concat(['      <button type="button" data-wdp-action="back" class="wdp-btn-link" style="margin-left:0.5rem;">Cancel</button>']) %}
+          {% set _updateLines = _updateLines.concat(['    </div>']) %}
+          {% set _updateLines = _updateLines.concat(['  </form>']) %}
+          {% set _updateLines = _updateLines.concat(['</div>']) %}
+          <button type="button" id="btn-insert-all-update"
+            class="d-none btn btn-sm w-100 mb-2"
+            style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:0.75rem;"
+            title="Replace the edit form content with $update[] inputs for every field"
+            data-template="{{ _updateLines | join('\n') | escape }}">
+            <i class="bi bi-lightning-fill me-1"></i>Insert all $update fields
+          </button>
+          {% set _createLines = [] %}
+          {% set _createLines = _createLines.concat(['<div class="wdp-detail">']) %}
+          {% set _createLines = _createLines.concat(['  <button data-wdp-action="back" class="wdp-btn-link">&lsaquo; Back</button>']) %}
+          {% set _createLines = _createLines.concat(['  <form data-wdp-form="create" style="margin-top:1rem;">']) %}
+          {% for f in baseFields %}{% if not f.is_primary_key %}{% set _createLines = _createLines.concat(['    $update[' + baseTable.table_name + '.' + f.field_name + ']']) %}{% endif %}{% endfor %}
+          {% set _createLines = _createLines.concat(['    <div style="margin-top:1rem;">']) %}
+          {% set _createLines = _createLines.concat(['      <button type="submit" class="wdp-btn">Save</button>']) %}
+          {% set _createLines = _createLines.concat(['      <button type="button" data-wdp-action="back" class="wdp-btn-link" style="margin-left:0.5rem;">Cancel</button>']) %}
+          {% set _createLines = _createLines.concat(['    </div>']) %}
+          {% set _createLines = _createLines.concat(['  </form>']) %}
+          {% set _createLines = _createLines.concat(['</div>']) %}
+          <button type="button" id="btn-insert-all-create"
+            class="d-none btn btn-sm w-100 mb-2"
+            style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:0.75rem;"
+            title="Replace the create form content with $update[] inputs for every field"
+            data-template="{{ _createLines | join('\n') | escape }}">
+            <i class="bi bi-lightning-fill me-1"></i>Insert all $update fields
+          </button>
           <div class="text-muted small mb-1" style="font-size:0.7rem;">BASE TABLE — {{ baseTable.table_name }}</div>
           {% for f in baseFields %}
           <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn"
@@ -224,9 +260,13 @@
             ['_prev_page',   'Previous page number',                 'footer'],
             ['_next_page',   'Next page number',                     'footer'],
             ['_pagination',  'Auto Prev / Page N / Next widget',    'footer'],
-            ['_sort',        'Active sort column name',              'header · row'],
-            ['_dir',         '"asc" or "desc"',                      'header · row'],
-            ['_group_value', 'Value of the current group',          'group_header · group_footer']
+            ['_sort',             'Active sort column name',              'header · row'],
+            ['_dir',              '"asc" or "desc"',                      'header · row'],
+            ['_group_value',      'Value of the current group',          'group_header · group_footer'],
+            ['_meta__created_at', 'When this record was created',        'row · detail · edit_form'],
+            ['_meta__created_by', 'Who created this record',             'row · detail · edit_form'],
+            ['_meta__updated_at', 'When this record was last edited',    'row · detail · edit_form'],
+            ['_meta__updated_by', 'Who last edited this record',         'row · detail · edit_form']
           ] %}
           {% for tok in sysTokens %}
           <button type="button" class="btn btn-sm w-100 text-start mb-1 token-btn"
@@ -240,19 +280,20 @@
 
           <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">INTERACTION ATTRIBUTES</div>
           {% set iAttrs = [
-            [['data-wdp-action="detail"','data-wdp-id="${_pk}"'], 'Click → open detail view',          'row'],
-            [['data-wdp-action="edit"',  'data-wdp-id="${_pk}"'], 'Click → open edit form',            'row · detail'],
-            [['data-wdp-action="back"'],                          'Click → return to list',            'detail · edit_form'],
-            [['data-wdp-action="clear"'],                         'Click → clear all search filters',  'search_form'],
-            [['data-wdp-action="page"','data-wdp-page="${…}"'],   'Click → navigate to that page',    'footer'],
-            [['data-wdp-action="sort"','data-wdp-field="col"'],   'Click → sort by column (asc/desc)', 'header · row'],
-            [['data-wdp-form="search"  (on form)'],               'Required: marks the search form',   'search_form'],
-            [['data-wdp-form="edit"','data-wdp-id="${_pk}"  (on form)'], 'Required: marks the edit form', 'edit_form'],
-            [['$update[table.field]'],                            'Auto-renders input widget, pre-filled', 'edit_form'],
-            [['$gallery[table_photos]'],                          'Photo gallery widget (view + upload)',  'detail · edit_form']
+            [['data-wdp-action="detail"','data-wdp-id="${_pk}"'], 'Click → open detail view',          'row',                             'action_detail'],
+            [['data-wdp-action="edit"',  'data-wdp-id="${_pk}"'], 'Click → open edit form',            'row · detail',                    'action_edit'],
+            [['data-wdp-action="create"'],                        'Click → open create form',          'header · search_form',            'action_create'],
+            [['data-wdp-action="back"'],                          'Click → return to list',            'detail · edit_form · create_form','action_back'],
+            [['data-wdp-action="clear"'],                         'Click → clear all search filters',  'search_form',                     'action_clear'],
+            [['data-wdp-action="page"','data-wdp-page="${…}"'],   'Click → navigate to that page',     'footer',                          'action_page'],
+            [['data-wdp-action="sort"','data-wdp-field="col"'],   'Click → sort by column (asc/desc)', 'header · row',                    'action_sort'],
+            [['data-wdp-form="search"  (on form)'],               'Required: marks the search form',   'search_form',                     'form_search'],
+            [['data-wdp-form="edit"','data-wdp-id="${_pk}"  (on form)'], 'Required: marks the edit form', 'edit_form',                   'form_edit'],
+            [['$update[table.field]'],                            'Auto-renders input widget, pre-filled', 'edit_form',                   'widget_update'],
+            [['$gallery[table_photos]'],                          'Photo gallery widget (view + upload)',  'detail · edit_form',          'widget_gallery']
           ] %}
           {% for ia in iAttrs %}
-          <div class="mb-1 px-2 py-1 rounded" style="background:#eff6ff;color:#1e3a8a;line-height:1.25;">
+          <div class="mb-1 px-2 py-1 rounded" data-tooltip-key="{{ ia[3] }}" style="background:#eff6ff;color:#1e3a8a;line-height:1.25;cursor:default;">
             {% for line in ia[0] %}
             <div style="font-family:monospace;font-size:0.7rem;">{{ line }}</div>
             {% endfor %}
@@ -323,6 +364,15 @@
             <div style="font-family:monospace;font-size:0.6rem;color:#78350f;margin-top:3px;white-space:pre;opacity:0.8;">&lt;button class="wdp-btn" $order_url[pets.dob]&gt;
   DOB $if(_sort==&#39;pets__dob&#39;,$if(_dir==&#39;asc&#39;,&#39; ↑&#39;,&#39; ↓&#39;),&#39;&#39;)
 &lt;/button&gt;</div>
+          </button>
+
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">PAGINATION TOKENS</div>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token="$perpage[25]"
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$perpage[25]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Per-page selector dropdown (default 25)</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.6rem;color:#b45309;opacity:0.65;font-style:italic;">header · footer</div>
           </button>
 
           {% if childFormTables and childFormTables.length %}
@@ -437,6 +487,7 @@
           <div class="text-muted mt-3 mb-2" style="font-size:0.7rem;">D — PUBLIC FORMS</div>
 
           <button type="button" class="block-btn w-100 text-start mb-2 p-2 rounded" data-block="form-open"
+            data-tooltip-key="form_full"
             style="background:#fdf4ff;border:1px solid #d8b4fe;cursor:pointer;">
             <div style="font-weight:600;font-size:0.78rem;color:#6b21a8;">Public Form</div>
             <div style="font-size:0.67rem;color:#7e22ce;margin-top:2px;">HTML form posting to /api/v/{app}/form/{table}</div>
@@ -1080,7 +1131,23 @@ add_shortcode('wdp_view', function($atts) {
     if (updateHint) updateHint.classList.toggle('d-none', !isEdit);
     const searchHint = document.getElementById('search-hint');
     if (searchHint) searchHint.classList.toggle('d-none', !isSearch);
+    const insertAllBtn = document.getElementById('btn-insert-all-update');
+    if (insertAllBtn) insertAllBtn.classList.toggle('d-none', !isEdit);
+    const insertAllCreateBtn = document.getElementById('btn-insert-all-create');
+    if (insertAllCreateBtn) insertAllCreateBtn.classList.toggle('d-none', tpl !== 'create_form');
   }
+
+  // ── Insert all $update fields button ────────────────────────────────────────
+  ['btn-insert-all-update', 'btn-insert-all-create'].forEach(function (id) {
+    var btn = document.getElementById(id);
+    if (btn) {
+      btn.addEventListener('click', function () {
+        if (!activeEditor) return;
+        activeEditor.setValue(this.dataset.template || '');
+        activeEditor.refresh();
+      });
+    }
+  });
 
   buttons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2109,6 +2176,450 @@ add_shortcode('wdp_view', function($atts) {
 
   handle.addEventListener('mouseenter', function() { if (pip) pip.style.background = '#94a3b8'; });
   handle.addEventListener('mouseleave', function() { if (!dragging && pip) pip.style.background = ''; });
+}());
+</script>
+
+<!-- ── Token tooltip card ──────────────────────────────────────────────── -->
+<div id="wdp-token-tip" style="display:none;position:fixed;z-index:9999;width:320px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,0.13);overflow:hidden;font-size:0.78rem;">
+  <div style="padding:8px 12px 7px;border-bottom:1px solid #f1f5f9;background:#f8fafc;">
+    <div id="wtt-name" style="font-family:monospace;font-size:0.83rem;font-weight:700;color:#1e293b;word-break:break-all;"></div>
+    <div id="wtt-section" style="font-size:0.62rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;"></div>
+  </div>
+  <div style="padding:9px 12px 10px;">
+    <div id="wtt-desc" style="color:#374151;line-height:1.5;margin-bottom:6px;"></div>
+    <div id="wtt-used" style="font-size:0.7rem;color:#9ca3af;margin-bottom:8px;"></div>
+    <div style="font-size:0.62rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">Example</div>
+    <pre id="wtt-example" style="margin:0 0 9px;padding:5px 8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;font-size:0.7rem;color:#1e293b;font-family:monospace;white-space:pre-wrap;word-break:break-all;line-height:1.45;user-select:text;"></pre>
+    <div style="font-size:0.62rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">Preview</div>
+    <div id="wtt-preview" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:9px 11px;min-height:30px;"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var tip      = document.getElementById('wdp-token-tip');
+  var panelCol = document.getElementById('tpl-panel-col');
+  if (!tip || !panelCol) return;
+
+  /* ── Token documentation ────────────────────────────────────────────── */
+  var TD = {
+    field_value: {
+      name: '${table.field}', section: 'Field Value',
+      desc: 'Outputs the value of a field for the current record. The most common token — used in row and detail templates to display data.',
+      usedIn: 'row · detail · edit_form · footer',
+      example: '<td>${contacts.name}</td>\n<td>${contacts.joined_date}</td>',
+      preview: '<div style="display:flex;gap:16px;align-items:center;"><span style="color:#111;font-size:13px;font-weight:500;">Jane Smith</span><span style="color:#6b7280;font-size:12px;">2024-01-15</span></div>'
+    },
+    field_search: {
+      name: '$search[table.field]', section: 'Search Input',
+      desc: 'Renders a labeled search input for this field. Supports operators: >30, <=100, 20..40, "exact match", start*, *end.',
+      usedIn: 'search_form',
+      example: '<form data-wdp-form="search">\n  $search[contacts.name]\n  $search[contacts.status]\n  <button type="submit">Search</button>\n</form>',
+      preview: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">Name</label><input type="text" placeholder="Search\u2026" style="border:1px solid #d1d5db;border-radius:4px;padding:3px 7px;font-size:12px;width:130px;color:#374151;"></div>'
+    },
+    field_update: {
+      name: '$update[table.field]', section: 'Edit Input',
+      desc: "Renders a labeled input pre-filled with the current record's value. Respects the field widget type (text, select, date, checkbox\u2026).",
+      usedIn: 'edit_form · create_form',
+      example: '<form data-wdp-form="edit" data-wdp-id="${_pk}">\n  $update[contacts.name]\n  $update[contacts.status]\n  <button type="submit">Save</button>\n</form>',
+      preview: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">Name</label><input type="text" value="Jane Smith" style="border:1px solid #d1d5db;border-radius:4px;padding:3px 7px;font-size:12px;width:130px;color:#374151;"></div>'
+    },
+    field_name_attr: {
+      name: 'name="table__field"', section: 'Form Name Attribute',
+      desc: 'Inserts the correct name= attribute for a custom form input when you want to write your own <input> instead of using $update[] or $search[].',
+      usedIn: 'search_form · edit_form · create_form',
+      example: '<input type="range" name="contacts__score"\n  min="0" max="100" value="${contacts.score}">',
+      preview: '<code style="font-size:11px;color:#1e40af;background:#eff6ff;padding:3px 8px;border-radius:3px;">name="contacts__score"</code>'
+    },
+    _pk: {
+      name: '${_pk}', section: 'System Token',
+      desc: 'The primary key value of the current record. Used in action attributes to identify which record to open or edit.',
+      usedIn: 'row · detail · edit_form',
+      example: '<tr data-wdp-action="detail" data-wdp-id="${_pk}">\n  <td>${contacts.name}</td>\n</tr>',
+      preview: '<span style="font-family:monospace;background:#f1f5f9;padding:2px 8px;border-radius:3px;font-size:13px;font-weight:700;color:#334155;">42</span>'
+    },
+    _row_num: {
+      name: '${_row_num}', section: 'System Token',
+      desc: 'Row number within the current page, starting at 1. Use for "#" columns or zebra-row logic with $if().',
+      usedIn: 'row',
+      example: '<td>${_row_num}</td>',
+      preview: '<span style="color:#9ca3af;font-size:13px;font-family:monospace;">3</span>'
+    },
+    _q: {
+      name: '${_q}', section: 'System Token',
+      desc: 'The current full-text search query. Use to show "Results for: X" in the header.',
+      usedIn: 'search_form · header',
+      example: '<p>Results for: <strong>${_q}</strong></p>',
+      preview: '<p style="font-size:12px;margin:0;color:#374151;">Results for: <strong style="background:#fef9c3;padding:1px 4px;border-radius:2px;">Jane</strong></p>'
+    },
+    _page: {
+      name: '${_page}', section: 'System Token',
+      desc: 'The current page number.',
+      usedIn: 'footer · header',
+      example: 'Page ${_page} of ${_total_pages}',
+      preview: '<span style="color:#374151;font-size:13px;">Page <strong>2</strong> of 5</span>'
+    },
+    _total: {
+      name: '${_total}', section: 'System Token',
+      desc: 'Total matching records across all pages — not just the current page. Shows the full count even when paginated.',
+      usedIn: 'header · footer · search_form',
+      example: '<small>${_total} records found</small>',
+      preview: '<small style="color:#6b7280;font-size:12px;">47 records found</small>'
+    },
+    _total_pages: {
+      name: '${_total_pages}', section: 'System Token',
+      desc: 'Total number of pages given the current per-page setting.',
+      usedIn: 'footer',
+      example: 'Page ${_page} of ${_total_pages}',
+      preview: '<span style="color:#374151;font-size:13px;">5</span>'
+    },
+    _has_prev: {
+      name: '${_has_prev}', section: 'System Token',
+      desc: 'Non-empty when a previous page exists, empty otherwise. Use with $if() to conditionally show a Prev button.',
+      usedIn: 'footer',
+      example: "$if(_has_prev, '<button data-wdp-action=\"page\" data-wdp-page=\"${_prev_page}\">\u2190 Prev</button>', '')",
+      preview: '<span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;">\u2190 Prev visible</span>'
+    },
+    _has_next: {
+      name: '${_has_next}', section: 'System Token',
+      desc: 'Non-empty when a next page exists, empty otherwise. Use with $if() to conditionally show a Next button.',
+      usedIn: 'footer',
+      example: "$if(_has_next, '<button data-wdp-action=\"page\" data-wdp-page=\"${_next_page}\">Next \u2192</button>', '')",
+      preview: '<span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;">Next \u2192 visible</span>'
+    },
+    _prev_page: {
+      name: '${_prev_page}', section: 'System Token',
+      desc: 'The page number before the current one. Use with data-wdp-action="page".',
+      usedIn: 'footer',
+      example: '<button data-wdp-action="page" data-wdp-page="${_prev_page}">\u2190 Prev</button>',
+      preview: '<button style="border:1px solid #d1d5db;border-radius:4px;padding:3px 10px;font-size:12px;background:#f9fafb;">\u2190 Prev</button>'
+    },
+    _next_page: {
+      name: '${_next_page}', section: 'System Token',
+      desc: 'The page number after the current one. Use with data-wdp-action="page".',
+      usedIn: 'footer',
+      example: '<button data-wdp-action="page" data-wdp-page="${_next_page}">Next \u2192</button>',
+      preview: '<button style="border:1px solid #d1d5db;border-radius:4px;padding:3px 10px;font-size:12px;background:#f9fafb;">Next \u2192</button>'
+    },
+    _pagination: {
+      name: '${_pagination}', section: 'System Token',
+      desc: 'Auto-rendered Prev / Page N of M / Next widget. Zero-config \u2014 just drop it in the footer template.',
+      usedIn: 'footer',
+      example: '<div class="wdp-pagination">${_pagination}</div>',
+      preview: '<div style="display:flex;gap:4px;align-items:center;font-size:12px;"><button style="border:1px solid #d1d5db;border-radius:4px;padding:2px 8px;background:#f9fafb;">\u2190 Prev</button><span style="color:#6b7280;padding:0 4px;">Page 2 of 5</span><button style="border:1px solid #d1d5db;border-radius:4px;padding:2px 8px;background:#f9fafb;">Next \u2192</button></div>'
+    },
+    _sort: {
+      name: '${_sort}', section: 'System Token',
+      desc: 'The active sort column as a table__field alias (e.g. contacts__name). Use with $if() to highlight the active column header.',
+      usedIn: 'header · row',
+      example: "$if(_sort == 'contacts__name', 'class=\"active-sort\"', '')",
+      preview: '<code style="font-size:11px;color:#374151;background:#f1f5f9;padding:2px 6px;border-radius:3px;">contacts__name</code>'
+    },
+    _dir: {
+      name: '${_dir}', section: 'System Token',
+      desc: 'Sort direction: "asc" or "desc". Use with $if() to show \u2191 or \u2193 on the active column.',
+      usedIn: 'header · row',
+      example: "$if(_sort == 'contacts__name', $if(_dir == 'asc', ' \u2191', ' \u2193'), '')",
+      preview: '<div style="display:flex;gap:8px;font-size:12px;"><span style="font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:3px;">asc</span><span style="color:#9ca3af;">or</span><span style="font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:3px;">desc</span></div>'
+    },
+    _group_value: {
+      name: '${_group_value}', section: 'System Token',
+      desc: "The current group's value in a grouped view. Rendered once per group in group_header and group_footer templates.",
+      usedIn: 'group_header · group_footer',
+      example: '<h3 class="wdp-group-header">${_group_value}</h3>',
+      preview: '<h4 style="margin:0;font-size:13px;color:#374151;border-bottom:2px solid #e5e7eb;padding-bottom:4px;font-weight:700;">Active</h4>'
+    },
+    '_meta__created_at': {
+      name: '${_meta__created_at}', section: 'Metadata',
+      desc: 'Date and time this record was first created. Stored automatically when a record is saved through admin or the member portal.',
+      usedIn: 'row · detail · edit_form',
+      example: '<small>Added ${_meta__created_at}</small>',
+      preview: '<small style="color:#9ca3af;font-size:11px;">Added 2025-03-14 09:22</small>'
+    },
+    '_meta__created_by': {
+      name: '${_meta__created_by}', section: 'Metadata',
+      desc: 'Name or email of who created this record. Shows "Admin" for records entered through the admin panel.',
+      usedIn: 'row · detail · edit_form',
+      example: 'Created by: ${_meta__created_by}',
+      preview: '<span style="color:#6b7280;font-size:12px;">Created by: <strong>Admin</strong></span>'
+    },
+    '_meta__updated_at': {
+      name: '${_meta__updated_at}', section: 'Metadata',
+      desc: 'Date and time this record was last edited.',
+      usedIn: 'row · detail · edit_form',
+      example: 'Last updated: ${_meta__updated_at}',
+      preview: '<small style="color:#9ca3af;font-size:11px;">Last updated: 2025-04-01 14:47</small>'
+    },
+    '_meta__updated_by': {
+      name: '${_meta__updated_by}', section: 'Metadata',
+      desc: 'Name or email of who last edited this record.',
+      usedIn: 'row · detail · edit_form',
+      example: 'Edited by: ${_meta__updated_by}',
+      preview: '<span style="color:#6b7280;font-size:12px;">Edited by: <strong>member@example.com</strong></span>'
+    },
+    action_detail: {
+      name: 'data-wdp-action="detail"', section: 'Interaction',
+      desc: 'Makes any element clickable to open the detail view for that record. Always pair with data-wdp-id="${_pk}".',
+      usedIn: 'row',
+      example: '<tr data-wdp-action="detail"\n    data-wdp-id="${_pk}">\n  <td>${contacts.name}</td>\n</tr>',
+      preview: '<div style="border:1px solid #e5e7eb;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;"><span style="color:#374151;font-weight:500;">Jane Smith</span><span style="color:#3b82f6;font-size:10px;">click \u2192 detail</span></div>'
+    },
+    action_edit: {
+      name: 'data-wdp-action="edit"', section: 'Interaction',
+      desc: 'Opens the edit form for the specified record. Pair with data-wdp-id="${_pk}".',
+      usedIn: 'row · detail',
+      example: '<button data-wdp-action="edit"\n        data-wdp-id="${_pk}">Edit</button>',
+      preview: '<button style="border:1px solid #3b82f6;border-radius:4px;padding:3px 12px;background:#eff6ff;color:#1d4ed8;font-size:12px;">Edit</button>'
+    },
+    action_create: {
+      name: 'data-wdp-action="create"', section: 'Interaction',
+      desc: 'Opens the create form to add a new record. No data-wdp-id needed.',
+      usedIn: 'header · search_form',
+      example: '<button data-wdp-action="create"\n        class="wdp-btn">+ Add Contact</button>',
+      preview: '<button style="border:1px solid #16a34a;border-radius:4px;padding:3px 12px;background:#f0fdf4;color:#15803d;font-size:12px;">+ Add Contact</button>'
+    },
+    action_back: {
+      name: 'data-wdp-action="back"', section: 'Interaction',
+      desc: 'Returns the user to the list view. Use in detail, edit, and create form templates.',
+      usedIn: 'detail · edit_form · create_form',
+      example: '<button data-wdp-action="back">\u2190 Back to List</button>',
+      preview: '<button style="border:1px solid #d1d5db;border-radius:4px;padding:3px 12px;background:#f9fafb;color:#374151;font-size:12px;">\u2190 Back to List</button>'
+    },
+    action_clear: {
+      name: 'data-wdp-action="clear"', section: 'Interaction',
+      desc: 'Clears all active search filters and resets the view to show all records.',
+      usedIn: 'search_form',
+      example: '<button data-wdp-action="clear">\u2715 Clear</button>',
+      preview: '<button style="border:1px solid #d1d5db;border-radius:4px;padding:3px 10px;background:#f9fafb;color:#6b7280;font-size:12px;">\u2715 Clear Filters</button>'
+    },
+    action_page: {
+      name: 'data-wdp-action="page"', section: 'Interaction',
+      desc: 'Navigates to a specific page. Set data-wdp-page to the page number, or use ${_prev_page} / ${_next_page}.',
+      usedIn: 'footer',
+      example: '<button data-wdp-action="page"\n        data-wdp-page="${_next_page}">Next \u2192</button>',
+      preview: '<div style="display:flex;gap:4px;font-size:12px;"><button style="border:1px solid #d1d5db;border-radius:4px;padding:2px 8px;background:#f9fafb;">1</button><button style="border:2px solid #3b82f6;border-radius:4px;padding:2px 8px;background:#eff6ff;color:#1d4ed8;font-weight:700;">2</button><button style="border:1px solid #d1d5db;border-radius:4px;padding:2px 8px;background:#f9fafb;">3</button></div>'
+    },
+    action_sort: {
+      name: 'data-wdp-action="sort"', section: 'Interaction',
+      desc: 'Sorts the list by a column when clicked. Set data-wdp-field to the table__field alias. Toggles asc/desc on repeated clicks.',
+      usedIn: 'header · row',
+      example: '<th data-wdp-action="sort"\n    data-wdp-field="contacts__name">Name</th>',
+      preview: '<th style="cursor:pointer;font-size:12px;padding:4px 10px;border-bottom:2px solid #3b82f6;color:#1d4ed8;white-space:nowrap;background:#f8fafc;">Name \u2191</th>'
+    },
+    form_search: {
+      name: 'data-wdp-form="search"', section: 'Form Attribute',
+      desc: 'Required on the <form> element in the search_form template. Tells the embed to handle this as a search submission.',
+      usedIn: 'search_form',
+      example: '<form data-wdp-form="search">\n  $search[contacts.name]\n  <button type="submit">Search</button>\n</form>',
+      preview: '<code style="font-size:11px;color:#1e40af;background:#eff6ff;padding:3px 8px;border-radius:3px;display:block;">&lt;form data-wdp-form="search"&gt;</code>'
+    },
+    form_edit: {
+      name: 'data-wdp-form="edit"', section: 'Form Attribute',
+      desc: 'Required on the <form> in edit_form. Pair with data-wdp-id="${_pk}" so the save knows which record to update.',
+      usedIn: 'edit_form',
+      example: '<form data-wdp-form="edit"\n     data-wdp-id="${_pk}">\n  $update[contacts.name]\n  <button type="submit">Save</button>\n</form>',
+      preview: '<code style="font-size:11px;color:#1e40af;background:#eff6ff;padding:3px 8px;border-radius:3px;display:block;">&lt;form data-wdp-form="edit" data-wdp-id="42"&gt;</code>'
+    },
+    widget_update: {
+      name: '$update[table.field]', section: 'Edit Widget',
+      desc: "Auto-renders the appropriate input widget for a field, pre-filled with the current value. Respects the field's configured widget type.",
+      usedIn: 'edit_form · create_form',
+      example: '<form data-wdp-form="edit" data-wdp-id="${_pk}">\n  $update[contacts.status]\n  $update[contacts.joined_date]\n  <button type="submit">Save</button>\n</form>',
+      preview: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;">Status</label><select style="border:1px solid #d1d5db;border-radius:4px;padding:3px 6px;font-size:12px;"><option selected>Active</option><option>Inactive</option></select></div>'
+    },
+    widget_gallery: {
+      name: '$gallery[photos_table]', section: 'Gallery Widget',
+      desc: 'Renders a photo gallery widget \u2014 thumbnails plus upload button. The argument is the name of the child _wdpro_photos table.',
+      usedIn: 'detail · edit_form',
+      example: '$gallery[contacts_photos]',
+      preview: '<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;"><div style="width:44px;height:44px;border-radius:5px;background:linear-gradient(135deg,#bfdbfe,#93c5fd);"></div><div style="width:44px;height:44px;border-radius:5px;background:linear-gradient(135deg,#bbf7d0,#6ee7b7);"></div><div style="width:44px;height:44px;border-radius:5px;border:2px dashed #d1d5db;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:20px;">+</div></div>'
+    },
+    sum: {
+      name: '$sum[table.field]', section: 'Aggregate',
+      desc: 'Sum of a numeric field across all matching records (not just the current page). Place in the header or footer template.',
+      usedIn: 'header · footer',
+      example: 'Total score: <strong>$sum[contacts.score]</strong>',
+      preview: '<span style="font-size:14px;color:#111;font-weight:700;">4,872</span>'
+    },
+    avg: {
+      name: '$avg[table.field, decimals]', section: 'Aggregate',
+      desc: 'Average of a numeric field across all matching records. The second argument sets decimal places (default 0).',
+      usedIn: 'header · footer',
+      example: 'Average score: $avg[contacts.score, 1]',
+      preview: '<span style="font-size:13px;color:#374151;">48.7</span>'
+    },
+    currency_avg: {
+      name: '$$currency[$avg[\u2026], n]', section: 'Aggregate',
+      desc: 'Formats an average as currency: $ sign, thousands separators, and n decimal places.',
+      usedIn: 'header · footer',
+      example: 'Avg value: $$currency[$avg[listings.price], 0]',
+      preview: '<span style="font-size:14px;font-weight:700;color:#111;">$485,000</span>'
+    },
+    currency_sum: {
+      name: '$$currency[$sum[\u2026], n]', section: 'Aggregate',
+      desc: 'Formats a sum as currency: $ sign, thousands separators, and n decimal places.',
+      usedIn: 'header · footer',
+      example: 'Total: $$currency[$sum[listings.price], 0]',
+      preview: '<span style="font-size:14px;font-weight:700;color:#111;">$9,750,000</span>'
+    },
+    days_since: {
+      name: '$days_since[table.field]', section: 'Date',
+      desc: 'Whole days since a date field. Use for "X days since last contact" or to highlight stale records with $if().',
+      usedIn: 'row · detail',
+      example: '$days_since[contacts.last_contact] days ago',
+      preview: '<span style="color:#374151;font-size:13px;">142 days ago</span>'
+    },
+    years_since: {
+      name: '$years_since[table.field]', section: 'Date',
+      desc: 'Fractional years since a date field, to 1 decimal. Great for ages, tenure, or membership length.',
+      usedIn: 'row · detail',
+      example: 'Age: $years_since[contacts.dob] yrs',
+      preview: '<span style="color:#374151;font-size:13px;">Age: 3.9 yrs</span>'
+    },
+    order: {
+      name: '$order[table.field, Label]', section: 'Sort Link',
+      desc: 'Renders a complete sortable column header link. Automatically adds \u2191 or \u2193 arrow when this column is the active sort.',
+      usedIn: 'header',
+      example: '<th>$order[contacts.name, Name]</th>\n<th>$order[contacts.joined_date, Joined]</th>',
+      preview: '<div style="display:flex;gap:2px;"><th style="padding:4px 10px;font-size:12px;border-bottom:2px solid #3b82f6;"><a href="#" style="color:#1d4ed8;text-decoration:none;font-weight:600;">Name \u2191</a></th><th style="padding:4px 10px;font-size:12px;"><a href="#" style="color:#6b7280;text-decoration:none;">Joined</a></th></div>'
+    },
+    order_url: {
+      name: '$order_url[table.field]', section: 'Sort Attribute',
+      desc: 'Outputs the href and click attributes to make any element a sort trigger. More flexible than $order[] \u2014 use when you want full control over button markup.',
+      usedIn: 'header',
+      example: '<button class="wdp-btn" $order_url[contacts.name]>\n  Name\n</button>',
+      preview: '<button style="border:1px solid #d1d5db;border-radius:4px;padding:3px 12px;font-size:12px;background:#f9fafb;">Name \u2193</button>'
+    },
+    order_url_indicator: {
+      name: '$order_url + active indicator', section: 'Sort Attribute',
+      desc: 'Complete sortable button with \u2191\u2193 indicator using $order_url[], ${_sort}, and ${_dir}. Copy this and replace the table/field names.',
+      usedIn: 'header',
+      example: "<button class=\"wdp-btn\" $order_url[contacts.name]>\n  Name $if(_sort=='contacts__name',$if(_dir=='asc','\u2191','\u2193'),'')\n</button>",
+      preview: '<div style="display:flex;gap:4px;align-items:center;"><button style="border:2px solid #3b82f6;border-radius:4px;padding:3px 10px;font-size:12px;background:#eff6ff;color:#1d4ed8;">Name \u2191</button><button style="border:1px solid #d1d5db;border-radius:4px;padding:3px 10px;font-size:12px;background:#f9fafb;">Joined</button></div>'
+    },
+    perpage: {
+      name: '$perpage[n1, n2, \u2026]', section: 'Pagination',
+      desc: 'Renders a per-page selector dropdown. Pass a comma-separated list of options — the first value is the default. Preserves current search and sort.',
+      usedIn: 'header · footer',
+      example: 'Show $perpage[10, 25, 50] per page\nShow $perpage[1, 2, 25] per page',
+      preview: '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">Show<select style="border:1px solid #d1d5db;border-radius:4px;padding:2px 5px;font-size:12px;color:#374151;"><option selected>1</option><option>2</option><option>25</option></select>per page</div>'
+    },
+    form_full: {
+      name: '$form[table, field=value, _redirect=url]', section: 'Public Form',
+      desc: 'Renders a complete public form \u2014 all fields plus a Submit button. The table must have \u201cAllow public submissions\u201d enabled.\n\nArguments after the table name:\n\u2022 field=value \u2014 hidden pre-filled value the visitor cannot change (any field name)\n\u2022 _redirect=url \u2014 where to send the browser after a successful submit\n\nMultiple hidden fields are supported. Parameters starting with _ are reserved by WDP.',
+      usedIn: 'create_form \u00b7 detail',
+      example: '$form[contacts]\n\n$form[contacts, status=Lead, _redirect=/api/v/myapp/contacts-list]\n\n$form[inquiries, pet_id=${pets.id}, source=website, _redirect=/thank-you]',
+      preview: '<div style="display:flex;flex-direction:column;gap:4px;padding:6px;border:1px solid #e5e7eb;border-radius:5px;background:#fff;font-size:11px;"><div style="display:flex;flex-direction:column;gap:1px;"><label style="color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;">Name</label><input style="border:1px solid #d1d5db;border-radius:3px;padding:2px 5px;font-size:11px;" placeholder=""></div><div style="display:flex;flex-direction:column;gap:1px;"><label style="color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;">Email</label><input style="border:1px solid #d1d5db;border-radius:3px;padding:2px 5px;font-size:11px;" placeholder=""></div><button style="margin-top:3px;background:#2563eb;color:#fff;border:none;border-radius:3px;padding:3px 10px;font-size:11px;cursor:pointer;">Submit</button></div>'
+    },
+    form_open: {
+      name: '$formopen[table, field=value, _redirect=url]', section: 'Public Form',
+      desc: 'Emits just the opening <form> tag plus any hidden fields \u2014 you write your own inputs between it and $formclose. Same field=value and _redirect arguments as $form[].',
+      usedIn: 'create_form \u00b7 detail',
+      example: '$formopen[inquiries, pet_id=${pets.id}, _redirect=/thank-you]\n<input name="visitor_name" placeholder="Your name">\n<textarea name="message"></textarea>\n<button type="submit">Send</button>\n$formclose',
+      preview: '<div style="font-family:monospace;font-size:11px;color:#1e40af;background:#eff6ff;padding:4px 8px;border-radius:3px;line-height:1.6;"><div>&lt;form action="\u2026" method="POST"&gt;</div><div style="color:#9ca3af;padding-left:8px;">&lt;!-- your inputs here --&gt;</div><div>&lt;/form&gt;</div></div>'
+    }
+  };
+
+  /* ── Key lookup from data-token attribute ───────────────────────────── */
+  function getKey(el) {
+    if (el.dataset.tooltipKey) return el.dataset.tooltipKey;
+    var t = el.dataset.token;
+    if (!t) return null;
+    var sys = t.match(/^\$\{(_[a-z_0-9]+)\}$/);
+    if (sys) return sys[1];
+    if (/^\$\{[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*\}$/.test(t)) return 'field_value';
+    if (t.startsWith('$search['))       return 'field_search';
+    if (t.startsWith('$update[') && !t.includes('\n')) return 'field_update';
+    if (/^name="[a-z_][a-z0-9_]*(__[a-z_][a-z0-9_]*)?"$/.test(t)) return 'field_name_attr';
+    if (t.startsWith('$sum['))          return 'sum';
+    if (t.startsWith('$avg['))          return 'avg';
+    if (t.startsWith('$$currency[$avg')) return 'currency_avg';
+    if (t.startsWith('$$currency[$sum')) return 'currency_sum';
+    if (t.startsWith('$days_since['))   return 'days_since';
+    if (t.startsWith('$years_since['))  return 'years_since';
+    if (t.startsWith('$order['))        return 'order';
+    if (t.includes('$order_url') && t.includes('$if')) return 'order_url_indicator';
+    if (t.includes('$order_url'))       return 'order_url';
+    if (t.startsWith('$perpage['))      return 'perpage';
+    if (t.startsWith('$formopen['))     return 'form_open';
+    if (t.startsWith('$form['))         return 'form_full';
+    return null;
+  }
+
+  /* ── Show / position / hide ─────────────────────────────────────────── */
+  var hoverTimer = null;
+  var hideTimer  = null;
+  var currentKey = null;
+  var lastMX = 0, lastMY = 0;
+  var overTip = false;
+
+  function showTip(doc, mx, my) {
+    document.getElementById('wtt-name').textContent    = doc.name;
+    document.getElementById('wtt-section').textContent = doc.section;
+    document.getElementById('wtt-desc').textContent    = doc.desc;
+    document.getElementById('wtt-used').innerHTML      = '<strong>Used in:</strong> ' + doc.usedIn;
+    document.getElementById('wtt-example').textContent = doc.example;
+    document.getElementById('wtt-preview').innerHTML   = doc.preview;
+    tip.style.display = 'block';
+
+    var panelRect = panelCol.getBoundingClientRect();
+    var tipW = tip.offsetWidth  || 320;
+    var tipH = tip.offsetHeight || 200;
+    var left = panelRect.left - tipW - 2;
+    if (left < 8) left = panelRect.right + 2;
+    if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+    var top = my + 4;
+    if (top + tipH > window.innerHeight - 8) top = my - tipH - 4;
+    if (top < 8) top = 8;
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top  = Math.round(top)  + 'px';
+  }
+
+  function hideTip() {
+    tip.style.display = 'none';
+    currentKey = null;
+  }
+
+  function scheduleHide() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hideTip, 500);
+  }
+
+  /* ── Events ─────────────────────────────────────────────────────────── */
+  panelCol.addEventListener('mousemove', function(e) {
+    lastMX = e.clientX; lastMY = e.clientY;
+  });
+
+  panelCol.addEventListener('mouseover', function(e) {
+    var el  = e.target.closest('[data-token],[data-tooltip-key]');
+    var key = el ? getKey(el) : null;
+    if (key === currentKey) return;
+    currentKey = key;
+    clearTimeout(hoverTimer);
+    clearTimeout(hideTimer);
+    if (!overTip) hideTip();
+    if (!key) return;
+    var doc = TD[key];
+    if (!doc) return;
+    var mx = lastMX, my = lastMY;
+    hoverTimer = setTimeout(function() { showTip(doc, mx, my); }, 2000);
+  });
+
+  panelCol.addEventListener('mouseleave', function() {
+    clearTimeout(hoverTimer);
+    currentKey = null;
+    scheduleHide();
+  });
+
+  tip.addEventListener('mouseenter', function() {
+    clearTimeout(hideTimer);
+    overTip = true;
+  });
+
+  tip.addEventListener('mouseleave', function() {
+    overTip = false;
+    scheduleHide();
+  });
 }());
 </script>
 {% endblock %}

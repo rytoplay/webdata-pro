@@ -491,6 +491,9 @@ export async function applyBlueprint(app: App, bp: Blueprint): Promise<Blueprint
       if (!Array.isArray(rows) || rows.length === 0) continue;
       const tableId = tableIdByName.get(tableName);
       if (!tableId) continue;
+      // Skip sample data if the table already has records (idempotency)
+      const existing = await appDb(tableName).count('* as n').first();
+      if (existing && Number((existing as { n: number }).n) > 0) continue;
 
       const tableFields = await fieldsService.listFields(tableId);
       const fieldMap    = new Map(tableFields.map(f => [f.field_name, f]));

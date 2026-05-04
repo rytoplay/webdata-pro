@@ -365,7 +365,7 @@ memberRouter.get('/', async (req, res, next) => {
     const memberData = await membersService.getMember(member.memberId);
     const { headerHtml, footerHtml } = await getBranding(freshApp, member.memberId);
 
-    const template = groupTemplate ?? freshApp.home_template ?? DEFAULT_HOME_TEMPLATE;
+    const template = groupTemplate?.trim() || freshApp.home_template?.trim() || DEFAULT_HOME_TEMPLATE;
     const memberCtx = memberData || member;
     const pH = headerHtml ?? '';
     const pF = footerHtml ?? '';
@@ -375,9 +375,10 @@ memberRouter.get('/', async (req, res, next) => {
       bodyHtml,
       groupHomeFooter ? renderBrandingTemplate(groupHomeFooter, freshApp, memberCtx, pH, pF) : '',
     ].filter(Boolean);
+    const allViews = [...browseViews, ...manageViews];
     return res.render('member/home', {
       title: app.name, app: freshApp, renderedHtml: homeParts.join('\n'),
-      suppressPortalNav: true, memberLogoutUrl: `/app/${app.slug}/logout`,
+      views: allViews, suppressPortalNav: true, memberLogoutUrl: `/app/${app.slug}/logout`,
     });
   } catch (err) { next(err); }
 });
@@ -484,7 +485,8 @@ memberRouter.post('/register', async (req, res, next) => {
       });
     }
 
-    const { email, password, first_name, last_name } = parsed.data;
+    const { password, first_name, last_name } = parsed.data;
+    const email = parsed.data.email.trim().toLowerCase();
 
     // Check for duplicate email
     const existing = await membersService.getMemberByEmail(app.id, email);
@@ -557,7 +559,8 @@ memberRouter.get('/login', async (req, res, next) => {
 memberRouter.post('/login', async (req, res, next) => {
   try {
     const app = res.locals.memberApp as App;
-    const { email, password, returnTo } = req.body as { email: string; password: string; returnTo: string };
+    const { password, returnTo } = req.body as { email: string; password: string; returnTo: string };
+    const email = (req.body.email as string || '').trim().toLowerCase();
 
     const member = await membersService.getMemberByEmail(app.id, email);
 

@@ -53,6 +53,41 @@
         <div class="form-text ms-4">Uncheck to restrict to logged-in members with permission.</div>
       </div>
 
+      {% if view and view.id %}
+      <div id="public-urls" class="ms-4 mb-3" style="display:none;">
+        <div class="p-3 rounded" style="background:var(--accent-soft);font-size:0.82rem;">
+          <div class="fw-semibold mb-2" style="color:var(--accent);">Public URLs</div>
+          <div class="mb-1"><span class="text-muted me-2">Browse:</span><a id="url-browse" href="#" target="_blank" class="font-monospace"></a></div>
+          <div class="mb-1"><span class="text-muted me-2">Create form:</span><a id="url-new" href="#" target="_blank" class="font-monospace"></a></div>
+          <div><span class="text-muted me-2">Detail:</span><span class="font-monospace text-muted" id="url-detail"></span></div>
+        </div>
+      </div>
+      <script>
+      (function () {
+        var base    = '{{ publicBase }}/';
+        var slugEl  = document.getElementById('slug');
+        var chk     = document.getElementById('is_public');
+        var panel   = document.getElementById('public-urls');
+        var browse  = document.getElementById('url-browse');
+        var urlNew  = document.getElementById('url-new');
+        var detail  = document.getElementById('url-detail');
+
+        function update() {
+          var s = slugEl ? slugEl.value.trim() : '{{ view.slug }}';
+          var b = base + s;
+          browse.href = b; browse.textContent = b;
+          urlNew.href = b + '/new'; urlNew.textContent = b + '/new';
+          detail.textContent = b + '/{id}';
+          panel.style.display = chk.checked ? '' : 'none';
+        }
+
+        chk.addEventListener('change', update);
+        if (slugEl) slugEl.addEventListener('input', update);
+        update();
+      }());
+      </script>
+      {% endif %}
+
       <hr class="my-4">
       <h6 class="text-muted mb-3">Pagination &amp; Sorting</h6>
 

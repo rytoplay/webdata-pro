@@ -237,7 +237,14 @@
     el.addEventListener('click', function (e) {
       const tgt = e.target.closest('[data-wdp-action]');
       if (!tgt) return;
+      if (tgt.tagName === 'SELECT') return; // selects use change event
       e.preventDefault();
+      handleAction(instance, tgt);
+    });
+
+    el.addEventListener('change', function (e) {
+      const tgt = e.target.closest('[data-wdp-action]');
+      if (!tgt || tgt.tagName !== 'SELECT') return;
       handleAction(instance, tgt);
     });
 
@@ -730,6 +737,26 @@
   } else {
     scanAndInit(document);
   }
+
+  // ── Pile-thumbnail click handler (exposed globally) ──────────────────────
+  // Called from $thumbnail[] pile HTML when a gallery token has multiple photos.
+  // onclick="event.stopPropagation(); wdpOpenGallery(this)"
+  window.wdpOpenGallery = function (el) {
+    var ref     = el.getAttribute('data-wdp-gallery-ref'); // "tableName/recordId"
+    var appSlug = el.getAttribute('data-wdp-app');
+    if (!ref || !appSlug) return;
+    var slashIdx  = ref.lastIndexOf('/');
+    var tableName = ref.slice(0, slashIdx);
+    var recordId  = ref.slice(slashIdx + 1);
+    fetch('/api/v/' + appSlug + '/gallery/' + tableName + '/' + recordId, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var photos = data.photos || [];
+        if (!photos.length) return;
+        _lbOpen(photos, 0);
+      })
+      .catch(function () {});
+  };
 
   // Expose so embed.js rendered HTML can trigger it after dynamic inserts
   window.WDPGallery = { init: scanAndInit };

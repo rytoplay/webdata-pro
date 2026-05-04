@@ -299,7 +299,8 @@ viewsRouter.get('/:id/edit', async (req, res, next) => {
       return res.status(404).render('admin/error', { title: 'Not Found', message: 'View not found' });
     const tables     = await tablesService.listTables(app.id);
     const baseFields = await db('app_fields').where({ table_id: view.base_table_id }).orderBy('sort_order').select('field_name', 'label');
-    res.render('admin/views/form', { title: `Edit — ${view.label}`, tables, view, baseFields, errors: null });
+    const publicBase = `${req.protocol}://${req.get('host')}/api/v/${app.slug}`;
+    res.render('admin/views/form', { title: `Edit — ${view.label}`, tables, view, baseFields, errors: null, publicBase });
   } catch (err) { next(err); }
 });
 

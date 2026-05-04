@@ -163,7 +163,7 @@
     /* ── Inputs ───────────────────────────────── */
     .form-control, .form-select {
       border-radius: var(--radius-input);
-      border-color: var(--border);
+      border-color: #c8c5e0;
       font-family: 'Nunito', sans-serif;
       font-size: 0.9rem; color: var(--text-main);
     }
@@ -171,6 +171,10 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(91,110,245,0.13);
     }
+    .form-check-input { border-color: #a09cc0; accent-color: var(--accent); }
+    .form-check-input:focus { box-shadow: 0 0 0 3px rgba(91,110,245,0.13); border-color: var(--accent); }
+    .form-control::placeholder, .form-select::placeholder,
+    input::placeholder, textarea::placeholder { color: #b8b5d4; opacity: 1; }
     .form-label { font-weight: 700; font-size: 0.875rem; }
     .form-text  { font-size: 0.8rem; color: var(--text-muted); }
 
