@@ -535,7 +535,8 @@ memberRouter.get('/login', async (req, res, next) => {
   try {
     const app = res.locals.memberApp as App;
     if (req.session.member?.appId === app.id) {
-      return res.redirect(req.query.returnTo as string || `/app/${app.slug}/`);
+      const returnTo = req.query.returnTo as string;
+      return res.redirect((returnTo && returnTo.startsWith('/')) ? returnTo : `/app/${app.slug}/`);
     }
     const flash = req.session.flash; delete req.session.flash;
     const selfRegCount = await db('groups')

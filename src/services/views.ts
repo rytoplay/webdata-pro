@@ -3,6 +3,7 @@ import { getAppDb, castToText } from '../db/adapters/appDb';
 import { buildJoinQuery, parseColumnRefs } from './queryBuilder';
 import { getRecordMeta, metaToRowKeys } from './recordMeta';
 import { parseSearchQuery, searchAstToSql } from './searchParser';
+import { prefetchDistances, parseDistanceArgs } from './geocode';
 import type { GroupConcatSpec } from './queryBuilder';
 import type { App, View, CreateViewInput, UpdateViewInput, UIWidget } from '../domain/types';
 
@@ -711,6 +712,27 @@ export function renderTokens(template: string, data: Record<string, unknown>): s
     return num.toFixed(decimals);
   });
 
+  // $count[table.field] → count of non-empty values for that field across all found records
+  result = result.replace(/\$count\[([^\]]+)\]/g, (_, ref: string) => {
+    const fieldRef = ref.split(',')[0].trim();
+    const alias    = fieldRef.includes('__') ? fieldRef : fieldRef.replace('.', '__');
+    const val      = data[`_count__${alias}`];
+    if (val === null || val === undefined) return '';
+    return String(val);
+  });
+
+  // $distance[from, to] → pre-computed distance in miles (see prefetchDistances in geocode.ts)
+  // Each token is assigned an index (_dist__0, _dist__1, ...) matching the pre-fetch order.
+  // Tokens are processed sequentially, so the callback counter matches the pre-fetch index.
+  let _distIdx = 0;
+  result = result.replace(/\$distance\[([^\]]+)\]/g, (_, ref: string) => {
+    const args = parseDistanceArgs(ref);
+    if (args.length < 2) { _distIdx++; return ''; }
+    const val = data[`_dist__${_distIdx++}`];
+    if (val === null || val === undefined || val === '') return '';
+    return String(val);
+  });
+
   // $currency[table.field] or $currency[table.field,2] → comma-formatted number
   // Runs AFTER $sum/$avg so nested forms like $currency[$avg[table.field], 0] work:
   // $avg resolves to a plain number first, then $currency formats it.
@@ -1313,22 +1335,25 @@ export async function renderViewList(
   const total      = Number(countRows[0]?.['_t'] ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // Aggregate tokens ($sum / $avg) — scan all templates, run one batched query
+  // Aggregate tokens ($sum / $avg / $count) — scan all templates, run one batched query
   const allTemplateText = Object.values(tpl).filter(Boolean).join('\n');
-  const aggRefs = new Map<string, { needSum: boolean; needAvg: boolean }>();
-  for (const m of allTemplateText.matchAll(/\$(?:sum|avg)\[([^\]]+)\]/gi)) {
+  const aggRefs = new Map<string, { needSum: boolean; needAvg: boolean; needCount: boolean }>();
+  for (const m of allTemplateText.matchAll(/\$(?:sum|avg|count)\[([^\]]+)\]/gi)) {
     const fieldRef = m[1].split(',')[0].trim();
     const alias    = fieldRef.includes('__') ? fieldRef : fieldRef.replace('.', '__');
-    if (!aggRefs.has(alias)) aggRefs.set(alias, { needSum: false, needAvg: false });
-    if (m[0].toLowerCase().startsWith('$sum')) aggRefs.get(alias)!.needSum = true;
-    else                                        aggRefs.get(alias)!.needAvg = true;
+    if (!aggRefs.has(alias)) aggRefs.set(alias, { needSum: false, needAvg: false, needCount: false });
+    const tok = m[0].toLowerCase();
+    if (tok.startsWith('$sum'))        aggRefs.get(alias)!.needSum   = true;
+    else if (tok.startsWith('$avg'))   aggRefs.get(alias)!.needAvg   = true;
+    else                               aggRefs.get(alias)!.needCount = true;
   }
   const aggExtras: Record<string, unknown> = {};
   if (aggRefs.size > 0) {
     const selectParts: string[] = [];
-    for (const [alias, { needSum, needAvg }] of aggRefs) {
-      if (needSum) selectParts.push(`SUM("${alias}") AS "_sum__${alias}"`);
-      if (needAvg) selectParts.push(`AVG("${alias}") AS "_avg__${alias}"`);
+    for (const [alias, { needSum, needAvg, needCount }] of aggRefs) {
+      if (needSum)   selectParts.push(`SUM("${alias}") AS "_sum__${alias}"`);
+      if (needAvg)   selectParts.push(`AVG("${alias}") AS "_avg__${alias}"`);
+      if (needCount) selectParts.push(`COUNT(CASE WHEN "${alias}" IS NOT NULL AND "${alias}" != '' THEN 1 END) AS "_count__${alias}"`);
     }
     try {
       const aggRaw = await appDb.raw(
@@ -1395,12 +1420,13 @@ export async function renderViewList(
 
   const hasDetail = !!tpl.detail?.trim();
 
-  // Pre-fetch gallery first-photos and owner fields for the row template.
+  // Pre-fetch gallery first-photos, owner fields, and distance calculations for the row template.
   const existingKeys = rows.length ? new Set(Object.keys(rows[0])) : new Set<string>();
   const recordIdsForGallery = rows.map(r => String(r[pkName] ?? r[`${baseTableName}__${pkName}`] ?? '')).filter(Boolean);
-  const [galleryThumbs, ownerExtrasMap] = await Promise.all([
+  const [galleryThumbs, ownerExtrasMap, distanceExtrasMap] = await Promise.all([
     prefetchGalleryThumbnails(app, appDb, tpl.row ?? '', recordIdsForGallery, existingKeys),
     prefetchOwnerFields(app, appDb, tpl.row ?? '', baseTableName, recordIdsForGallery),
+    prefetchDistances(tpl.row ?? '', rows),
   ]);
 
   let lastGroup: unknown = Symbol('none');
@@ -1414,9 +1440,10 @@ export async function renderViewList(
       galleryExtras[alias] = entry?.file_path ?? '';
       galleryExtras[`_gcount__${alias}`] = entry?.count ?? 0;
     }
-    const ownerExtras = ownerExtrasMap.get(pkVal) ?? {};
+    const ownerExtras    = ownerExtrasMap.get(pkVal) ?? {};
+    const distanceExtras = distanceExtrasMap.get(i) ?? {};
 
-    const rowData = { ...sys, ...row, ...galleryExtras, ...ownerExtras, _pk: pkVal, _row_num: offset + i + 1 };
+    const rowData = { ...sys, ...row, ...galleryExtras, ...ownerExtras, ...distanceExtras, _pk: pkVal, _row_num: offset + i + 1 };
 
     if (groupField) {
       const gv = row[groupField];

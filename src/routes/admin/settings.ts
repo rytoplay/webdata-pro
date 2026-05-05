@@ -14,6 +14,11 @@ async function getCaptchaSettings() {
   };
 }
 
+async function getGeocodingSettings() {
+  const row = await db('settings').where({ key: 'google_geocoding_api_key' }).first() as { value: string } | undefined;
+  return { googleApiKey: row?.value || '' };
+}
+
 async function getSmtpSettings() {
   const rows = await db('settings').whereIn('key', [
     'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'smtp_from',
@@ -38,11 +43,12 @@ settingsRouter.get('/', async (req, res, next) => {
     const ollamaModels = settings.provider === 'ollama'
       ? await aiService.listOllamaModels(settings.baseUrl).catch(() => [])
       : [];
-    const smtpSettings    = await getSmtpSettings();
-    const captchaSettings = await getCaptchaSettings();
+    const smtpSettings       = await getSmtpSettings();
+    const captchaSettings    = await getCaptchaSettings();
+    const geocodingSettings  = await getGeocodingSettings();
     const flash = req.session.flash;
     delete req.session.flash;
-    res.render('admin/settings', { title: 'Settings', settings, ollamaModels, smtpSettings, captchaSettings, flash });
+    res.render('admin/settings', { title: 'Settings', settings, ollamaModels, smtpSettings, captchaSettings, geocodingSettings, flash });
   } catch (err) { next(err); }
 });
 
@@ -131,6 +137,21 @@ settingsRouter.post('/captcha', async (req, res, next) => {
     }
     req.session.flash = { type: 'success', message: 'CAPTCHA settings saved.' };
     res.redirect('/admin/settings#captcha');
+  } catch (err) { next(err); }
+});
+
+// ── POST /admin/settings/geocoding — save Google Geocoding API key ────────────
+
+settingsRouter.post('/geocoding', async (req, res, next) => {
+  try {
+    const body = req.body as Record<string, string>;
+    if (body.google_geocoding_api_key !== undefined) {
+      await db('settings')
+        .insert({ key: 'google_geocoding_api_key', value: body.google_geocoding_api_key || '' })
+        .onConflict('key').merge();
+    }
+    req.session.flash = { type: 'success', message: 'Geocoding settings saved.' };
+    res.redirect('/admin/settings#geocoding');
   } catch (err) { next(err); }
 });
 

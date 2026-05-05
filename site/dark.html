@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Webdata Pro — Build data-driven web apps without back-end code</title>
+  <meta name="description" content="Describe your app in plain English. Webdata Pro builds the database, admin panel, and member portal. You design the templates." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0D1117;
+      --bg-hi:    #161B22;
+      --bg-card:  #1C2128;
+      --border:   #30363D;
+      --border-hi:#444C56;
+      --text:     #E6EDF3;
+      --muted:    #8B949E;
+      --teal:     #2DD4BF;
+      --teal-d:   #14B8A6;
+      --teal-dim: rgba(45,212,191,0.1);
+      --amber:    #F59E0B;
+      --amber-d:  #D97706;
+      --amber-dim:rgba(245,158,11,0.12);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    /* ── NAV ─────────────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: rgba(13,17,23,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+    }
+    .nav-inner {
+      max-width: 1140px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo {
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: var(--text);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+    .nav-logo span { color: var(--teal); }
+    .nav-links { display: flex; align-items: center; gap: 1.5rem; }
+    .nav-links a {
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .btn-nav {
+      background: var(--amber) !important;
+      color: #0D1117 !important;
+      padding: 0.45rem 1.1rem !important;
+      border-radius: 8px;
+      font-weight: 700 !important;
+      font-size: 0.85rem !important;
+      transition: background 0.15s !important;
+    }
+    .btn-nav:hover { background: var(--amber-d) !important; color: #0D1117 !important; }
+
+    /* ── HERO ────────────────────────────────────────────────────────────────── */
+    .hero {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 5rem 1.5rem 4rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--amber-dim);
+      border: 1px solid rgba(245,158,11,0.25);
+      color: var(--amber);
+      font-size: 0.775rem;
+      font-weight: 600;
+      padding: 0.3rem 0.85rem;
+      border-radius: 99px;
+      margin-bottom: 1.5rem;
+      letter-spacing: 0.04em;
+    }
+    .hero h1 {
+      font-size: clamp(1.9rem, 3.5vw, 2.9rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      color: var(--text);
+      margin-bottom: 1.1rem;
+    }
+    .hero h1 em {
+      font-style: normal;
+      color: var(--teal);
+    }
+    .hero-sub {
+      font-size: 1.05rem;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 2rem;
+      max-width: 460px;
+    }
+    .hero-buttons { display: flex; gap: 0.85rem; flex-wrap: wrap; }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--teal);
+      color: #0D1117;
+      text-decoration: none;
+      padding: 0.75rem 1.6rem;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.925rem;
+      transition: background 0.15s, transform 0.1s;
+      box-shadow: 0 0 20px rgba(45,212,191,0.2);
+    }
+    .btn-primary:hover { background: var(--teal-d); transform: translateY(-1px); }
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: transparent;
+      color: var(--text);
+      text-decoration: none;
+      padding: 0.75rem 1.6rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.925rem;
+      border: 1.5px solid var(--border-hi);
+      transition: border-color 0.15s, transform 0.1s;
+    }
+    .btn-outline:hover { border-color: var(--muted); transform: translateY(-1px); }
+    .hero-note { margin-top: 1rem; font-size: 0.8rem; color: #484F58; }
+
+    /* ── BROWSER FRAME ───────────────────────────────────────────────────────── */
+    .browser-frame {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.03),
+        0 24px 64px rgba(0,0,0,0.6),
+        0 0 80px rgba(45,212,191,0.05);
+      background: var(--bg-hi);
+    }
+    .browser-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1rem;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+    .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+    .dot-r { background: #FF5F57; }
+    .dot-y { background: #FEBC2E; }
+    .dot-g { background: #28C840; }
+    .url-bar {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0.2rem 0.65rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      margin: 0 0.5rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .browser-frame img { width: 100%; display: block; }
+
+    /* ── SECTION SHARED ──────────────────────────────────────────────────────── */
+    section { padding: 5rem 1.5rem; }
+    .w { max-width: 1140px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 0.6rem;
+    }
+    .section-title {
+      font-size: clamp(1.4rem, 2.8vw, 2rem);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+      line-height: 1.2;
+    }
+    .section-sub {
+      font-size: 1rem;
+      color: var(--muted);
+      max-width: 540px;
+      line-height: 1.65;
+    }
+
+    /* ── DIVIDER LINE ────────────────────────────────────────────────────────── */
+    .divider { border: none; border-top: 1px solid var(--border); }
+
+    /* ── FEATURES ────────────────────────────────────────────────────────────── */
+    .features-section { background: var(--bg-hi); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1px;
+      margin-top: 3rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--border);
+    }
+    .feature-card {
+      background: var(--bg-hi);
+      padding: 1.5rem;
+      transition: background 0.15s;
+    }
+    .feature-card:hover { background: var(--bg-card); }
+    .feature-icon { font-size: 1.5rem; margin-bottom: 0.75rem; display: block; }
+    .feature-card h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--text); }
+    .feature-card p { font-size: 0.85rem; color: var(--muted); line-height: 1.55; }
+    .feature-card code {
+      background: var(--bg);
+      color: var(--teal);
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82em;
+    }
+
+    /* ── EDITOR SHOWCASE ─────────────────────────────────────────────────────── */
+    .showcase-section { background: var(--bg); }
+    .showcase-inner {
+      max-width: 1140px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1.6fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    /* ── WHO IT'S FOR ────────────────────────────────────────────────────────── */
+    .for-section { background: var(--bg-hi); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .for-section .w { text-align: center; }
+    .for-section .section-sub { margin: 0 auto; }
+    .tag-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      justify-content: center;
+      margin-top: 2rem;
+    }
+    .tag {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.45rem 1rem;
+      border-radius: 99px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .tag:hover { border-color: var(--teal); color: var(--text); }
+    .tag.accent {
+      background: var(--teal-dim);
+      border-color: rgba(45,212,191,0.3);
+      color: var(--teal);
+      font-weight: 600;
+    }
+
+    /* ── DIFFERENTIATOR ──────────────────────────────────────────────────────── */
+    .diff-section { background: var(--bg); }
+    .diff-inner { max-width: 760px; margin: 0 auto; text-align: center; }
+    blockquote {
+      font-size: clamp(1rem, 2vw, 1.35rem);
+      font-weight: 600;
+      line-height: 1.65;
+      color: var(--text);
+      border-left: 3px solid var(--teal);
+      text-align: left;
+      padding: 1.5rem 2rem;
+      background: var(--bg-hi);
+      border-radius: 0 10px 10px 0;
+      margin: 2rem 0;
+      letter-spacing: -0.01em;
+    }
+    .diff-section > div > p {
+      font-size: 0.975rem;
+      color: var(--muted);
+      line-height: 1.75;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ── GET STARTED ─────────────────────────────────────────────────────────── */
+    .start-section { background: var(--bg-hi); border-top: 1px solid var(--border); }
+    .start-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .start-inner .section-sub { margin: 0 auto 2.5rem; }
+    .terminal-card {
+      background: var(--bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+      margin-bottom: 2.5rem;
+      text-align: left;
+    }
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.7rem 1rem;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: 0.72rem;
+      color: #484F58;
+      font-family: 'JetBrains Mono', monospace;
+      margin-right: 1.5rem;
+    }
+    .terminal-body { padding: 1.5rem 1.75rem; }
+    .terminal-body pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      line-height: 1.85;
+      color: #C9D1D9;
+    }
+    .t-comment { color: #484F58; }
+    .t-prompt   { color: var(--teal); user-select: none; }
+    .t-url      { color: #79C0FF; }
+    .t-str      { color: #A5D6FF; }
+    .start-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--teal);
+      color: #0D1117;
+      text-decoration: none;
+      padding: 0.85rem 2.25rem;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 1rem;
+      transition: background 0.15s, transform 0.1s;
+      box-shadow: 0 0 24px rgba(45,212,191,0.25);
+    }
+    .start-cta:hover { background: var(--teal-d); transform: translateY(-1px); }
+    .start-note { margin-top: 1rem; font-size: 0.8rem; color: #484F58; }
+
+    /* ── FOOTER ──────────────────────────────────────────────────────────────── */
+    footer {
+      background: #010409;
+      border-top: 1px solid var(--border);
+      padding: 3rem 1.5rem;
+    }
+    .footer-inner {
+      max-width: 1140px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.1rem;
+    }
+    .footer-logo { font-weight: 800; font-size: 1.05rem; color: var(--text); letter-spacing: -0.02em; }
+    .footer-logo span { color: var(--teal); }
+    .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
+    .footer-links a { color: var(--muted); text-decoration: none; font-size: 0.85rem; transition: color 0.15s; }
+    .footer-links a:hover { color: var(--text); }
+    .footer-copy { font-size: 0.78rem; color: #30363D; }
+
+    /* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
+    @media (max-width: 800px) {
+      .hero { grid-template-columns: 1fr; gap: 2.5rem; }
+      .showcase-inner { grid-template-columns: 1fr; gap: 2rem; }
+      .nav-links a:not(.btn-nav) { display: none; }
+      section { padding: 3.5rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">Webdata<span>Pro</span></a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
+        <a href="https://github.com/rytoplay/webdata-pro/archive/refs/heads/main.zip" class="btn-nav">⬇ Download free</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div style="border-bottom: 1px solid var(--border);">
+    <div class="hero">
+      <div class="hero-text">
+        <div class="hero-badge">★ Free &amp; open source &nbsp;&middot;&nbsp; MIT License</div>
+        <h1>Build a real web app without hand-coding <em>the back end.</em></h1>
+        <p class="hero-sub">Describe your project in plain English. Webdata Pro builds the database, admin panel, and member portal. You stay in full control of every template, field, and permission.</p>
+        <div class="hero-buttons">
+          <a href="https://github.com/rytoplay/webdata-pro/archive/refs/heads/main.zip" class="btn-primary">
+            ⬇&nbsp; Download free
+          </a>
+          <a href="https://github.com/rytoplay/webdata-pro" class="btn-outline" target="_blank" rel="noopener">
+            GitHub →
+          </a>
+        </div>
+        <p class="hero-note">Node.js 18+ &nbsp;&middot;&nbsp; SQLite included &nbsp;&middot;&nbsp; no build step</p>
+      </div>
+
+      <div class="browser-frame">
+        <div class="browser-bar">
+          <span class="dot dot-r"></span>
+          <span class="dot dot-y"></span>
+          <span class="dot dot-g"></span>
+          <span class="url-bar">localhost:3456/app/real-estate/browse-properties</span>
+        </div>
+        <img src="img/screenshot-browse.png" alt="Browse Properties view — searchable real estate listings built with Webdata Pro" />
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section id="features" class="features-section">
+    <div class="w">
+      <div class="section-label">Features</div>
+      <div class="section-title">Everything you need, nothing you don&rsquo;t</div>
+      <p class="section-sub">Built by a web developer who got tired of rebuilding the same back end for every client.</p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <span class="feature-icon">🤖</span>
+          <h3>AI app builder</h3>
+          <p>Works with Ollama (free, local), Claude, GPT-4, or Gemini. You pick the model; you own every piece of the output.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">✏️</span>
+          <h3>Visual template editor</h3>
+          <p>Plain HTML with <code>${table.field}</code> tokens. Images, distance, aggregates, sorting — all built-in token helpers.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">👥</span>
+          <h3>Member portal &amp; groups</h3>
+          <p>Login system with groups, per-group access control, and per-group home views. Each member sees only what they&rsquo;re allowed to.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🔗</span>
+          <h3>Embeddable anywhere</h3>
+          <p>One <code>&lt;script&gt;</code> tag on any website — WordPress, Squarespace, raw HTML. The widget inherits your existing CSS.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📋</span>
+          <h3>Public forms</h3>
+          <p>Let anonymous visitors submit records without logging in. Optional Google reCAPTCHA v2 keeps bots out.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📬</span>
+          <h3>Email notifications</h3>
+          <p>Alert admins when records change — immediately or as a daily digest. Configured via SMTP in the admin panel.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🗄️</span>
+          <h3>SQLite or MySQL</h3>
+          <p>SQLite requires zero setup. Swap to MySQL for multi-user production when you&rsquo;re ready. The admin works identically.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">⚡</span>
+          <h3>No build step</h3>
+          <p><code>npm run dev</code> and you&rsquo;re in. TypeScript compiles on demand. No Webpack, no Vite, no waiting.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EDITOR SHOWCASE -->
+  <section id="how-it-works" class="showcase-section">
+    <div class="showcase-inner">
+      <div>
+        <div class="section-label">You&rsquo;re always in control</div>
+        <div class="section-title">The AI generates it.<br>You own it completely.</div>
+        <p class="section-sub" style="margin-bottom: 1.5rem;">The AI creates your tables, fields, and starter templates — but everything it produces is plain HTML and SQL that you can read, edit, and fully control. The template editor gives you a live token panel, one-click field inserts, and an instant preview.</p>
+        <p class="section-sub">There is no magic layer between you and the output. Change one line or rebuild from scratch — it&rsquo;s all yours.</p>
+      </div>
+
+      <div class="browser-frame">
+        <div class="browser-bar">
+          <span class="dot dot-r"></span>
+          <span class="dot dot-y"></span>
+          <span class="dot dot-g"></span>
+          <span class="url-bar">localhost:3456/admin/views/23/templates</span>
+        </div>
+        <img src="img/screenshot-editor.png" alt="Webdata Pro template editor — edit HTML templates with live token panel" />
+      </div>
+    </div>
+  </section>
+
+  <!-- WHO IT'S FOR -->
+  <section class="for-section">
+    <div class="w">
+      <div class="section-label">Who it&rsquo;s for</div>
+      <div class="section-title">Built for real projects, not toy demos</div>
+      <p class="section-sub">If you have structured data that people need to search, browse, or manage &mdash; Webdata Pro is for you.</p>
+      <div class="tag-cloud">
+        <span class="tag accent">🐾 Animal shelters</span>
+        <span class="tag accent">🏡 Real estate listings</span>
+        <span class="tag accent">📦 Product catalogs</span>
+        <span class="tag">Member directories</span>
+        <span class="tag">Event listings</span>
+        <span class="tag">Staff rosters</span>
+        <span class="tag">School projects</span>
+        <span class="tag">Internal tools</span>
+        <span class="tag">Consultant databases</span>
+        <span class="tag">Small business tools</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- DIFFERENTIATOR -->
+  <section class="diff-section">
+    <div class="diff-inner w">
+      <div class="section-label">The philosophy</div>
+      <div class="section-title">AI-assisted. Designer-controlled.</div>
+      <blockquote>
+        &ldquo;Most app builders make you choose between easy and powerful. Webdata Pro is the bridge between those two worlds &mdash; fast to launch, fully yours once it&rsquo;s running.&rdquo;
+      </blockquote>
+      <p>Other AI builders lock you into their styling system, their embed limitations, their notification pipeline. When you need to change something they didn&rsquo;t anticipate, you&rsquo;re stuck. Webdata Pro gets you to a working first draft in minutes &mdash; then gets out of your way.</p>
+    </div>
+  </section>
+
+  <!-- GET STARTED -->
+  <section class="start-section">
+    <div class="start-inner w">
+      <div class="section-label">Get started</div>
+      <div class="section-title">Five commands. No cloud account needed.</div>
+      <p class="section-sub">No Docker, no credit card, no deployment pipeline. Just Node.js and a terminal.</p>
+      <div class="terminal-card">
+        <div class="terminal-header">
+          <span class="dot dot-r"></span>
+          <span class="dot dot-y"></span>
+          <span class="dot dot-g"></span>
+          <span class="terminal-title">zsh &mdash; webdata-pro</span>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-comment"># Clone and install</span>
+<span class="t-prompt">$</span> git clone <span class="t-url">https://github.com/rytoplay/webdata-pro.git</span>
+<span class="t-prompt">$</span> cd <span class="t-str">webdata-pro</span> &amp;&amp; npm install
+
+<span class="t-comment"># Configure and start</span>
+<span class="t-prompt">$</span> cp <span class="t-str">.env.example</span> <span class="t-str">.env</span>
+<span class="t-prompt">$</span> npm run dev
+
+<span class="t-comment"># Open http://localhost:3456/admin</span></pre>
+        </div>
+      </div>
+      <a href="https://github.com/rytoplay/webdata-pro/archive/refs/heads/main.zip" class="start-cta">
+        ⬇ &nbsp;Download free ZIP
+      </a>
+      <p class="start-note">or &nbsp;<a href="https://github.com/rytoplay/webdata-pro" style="color: var(--muted); text-decoration: none;" target="_blank" rel="noopener">clone from GitHub →</a></p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-logo">Webdata<span>Pro</span></div>
+      <div class="footer-links">
+        <a href="https://github.com/rytoplay/webdata-pro" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/README.md" target="_blank" rel="noopener">Documentation</a>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/docs/templates.md" target="_blank" rel="noopener">Template Reference</a>
+        <a href="https://github.com/rytoplay/webdata-pro/archive/refs/heads/main.zip">Download ZIP</a>
+        <a href="https://github.com/rytoplay/webdata-pro/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </div>
+      <div class="footer-copy">Built for web developers and their clients.</div>
+    </div>
+  </footer>
+
+</body>
+</html>

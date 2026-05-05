@@ -55,7 +55,7 @@ appsRouter.post('/:id/db-config', async (req, res, next) => {
       port:     data.db_port             ?? existing.port,
       database: data.db_name?.trim()     || existing.database || '',
       username: data.db_username?.trim() || existing.username || '',
-      password: data.db_password !== undefined ? data.db_password : existing.password,
+      password: data.db_password?.trim() || existing.password,
     };
     await appsService.updateApp(app.id, { database_config_json: JSON.stringify(updated) });
     releaseAppDb(app.id);  // flush cached connection so next request uses new credentials

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webdata Pro | Admin Control</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --sidebar-bg: #1e293b;
+            --accent-blue: #38bdf8;
+            --text-main: #f8fafc;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+        }
+
+        /* Sidebar Navigation */
+        nav {
+            width: 260px;
+            height: 100vh;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1rem;
+            position: fixed;
+        }
+
+        .logo { font-weight: 800; font-size: 1.5rem; color: var(--accent-blue); margin-bottom: 2rem; }
+
+        .nav-item {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            display: block;
+            transition: 0.2s;
+        }
+
+        .nav-item:hover, .active { background: #334155; color: white; }
+
+        /* Main Content Area */
+        main {
+            margin-left: 260px;
+            padding: 3rem;
+            width: 100%;
+        }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Webdata Pro Data Table Styling */
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th { text-align: left; color: #94a3b8; border-bottom: 1px solid var(--border-color); padding: 1rem; }
+        td { padding: 1rem; border-bottom: 1px solid var(--border-color); }
+
+        .badge {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent-blue);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">Webdata Pro</div>
+        <a href="#" class="nav-item active">Dashboard</a>
+        <a href="#" class="nav-item">Member Management</a>
+        <a href="#" class="nav-item">Database (MySQL/SQLite)</a>
+        <a href="#" class="nav-item">Template Editor</a>
+    </nav>
+
+    <main>
+        <header>
+            <h1>System Overview</h1>
+            <p>Direct management of your data and interface.</p>
+        </header>
+
+        <div class="card">
+            <h3>Recent Active Members</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Group Access</th>
+                        <th>Last Login</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Example of Webdata Pro Token Implementation -->
+                    <tr>
+                        <td>${members.username}</td>
+                        <td><span class="badge">${members.group_name}</span></td>
+                        <td>$days_since[${members.last_login}] days ago</td>
+                        <td>Active</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card" style="border-left: 4px solid var(--accent-blue);">
+            <h3>Developer Note</h3>
+            <p>Webdata Pro ignores proprietary CSS frameworks. This entire dashboard is powered by the custom styles you see in the <code>&lt;style&gt;</code> block above[cite: 3, 6].</p>
+        </div>
+    </main>
+
+</body>
+</html>

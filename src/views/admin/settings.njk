@@ -168,6 +168,33 @@
   </div>
 </div>
 
+<div class="card shadow-sm mt-4" id="geocoding" style="max-width:600px;">
+  <div class="card-header py-2"><strong><i class="bi bi-geo-alt me-2"></i>Geocoding</strong></div>
+  <div class="card-body p-4">
+    <p class="text-muted small mb-3">
+      Required for the <code>$distance[]</code> template token. Without a key, Webdata Pro uses
+      <a href="https://nominatim.openstreetmap.org" target="_blank">Nominatim</a> (OpenStreetMap — free,
+      no key required, rate-limited to 1 request/sec). For higher volume or better accuracy, enter a
+      Google Geocoding API key. All results are cached so most lookups are instant.
+      Get a key at <a href="https://console.cloud.google.com/apis/library/geocoding-backend.googleapis.com" target="_blank">Google Cloud Console</a>.
+    </p>
+    <form method="POST" action="/admin/settings/geocoding">
+      <div class="mb-4">
+        <label class="form-label">Google Geocoding API key <span class="text-muted small">(optional — leave blank to use Nominatim)</span></label>
+        <input type="password" name="google_geocoding_api_key" class="form-control font-monospace"
+          placeholder="{% if geocodingSettings.googleApiKey %}(saved — leave blank to keep){% else %}AIza...{% endif %}"
+          autocomplete="new-password">
+        {% if geocodingSettings.googleApiKey %}
+        <div class="form-text text-success"><i class="bi bi-check-circle me-1"></i>Google Geocoding API key is configured.</div>
+        {% else %}
+        <div class="form-text">Using free Nominatim geocoding.</div>
+        {% endif %}
+      </div>
+      <button type="submit" class="btn btn-primary">Save Geocoding Settings</button>
+    </form>
+  </div>
+</div>
+
 <script>
 (function () {
   const providerSel  = document.getElementById('ai_provider');

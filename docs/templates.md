@@ -164,14 +164,15 @@ $gallery[pets_photos]
 
 ---
 
-## Aggregates: `$sum[]` and `$avg[]`
+## Aggregates: `$sum[]`, `$avg[]`, and `$count[]`
 
 ```
 $sum[table.field]
 $avg[table.field]
+$count[table.field]
 ```
 
-Returns the **sum** or **average** of a numeric field across the **entire filtered result set** — not just the current page.
+Returns the **sum**, **average**, or **count** of a field across the **entire filtered result set** — not just the current page.
 
 - The value is the same regardless of which page or row the token appears in.
 - Works in all templates: Row, Header, Footer, Group Header, Group Footer.
@@ -183,7 +184,10 @@ $sum[table.field]         → raw sum, e.g. 97500
 $sum[table.field, 2]      → fixed decimals, e.g. 97500.00
 $avg[table.field]         → average to 2 decimal places, e.g. 485000.00
 $avg[table.field, 0]      → average rounded to whole number, e.g. 485000
+$count[table.field]       → count of rows where field is non-empty, e.g. 34
 ```
+
+`$count` is useful for "X of Y records have a photo" summaries — `${_total}` gives the total found, `$count` gives how many have a value in a specific field.
 
 ### Combining with `$currency[]`
 
@@ -217,6 +221,50 @@ $currency[reports.total]       → 42,500
 ```
 
 Also accepts a literal number as its first argument, which is how nesting with `$sum`/`$avg` works (see above).
+
+---
+
+## Distance: `$distance[]`
+
+```
+$distance[from, to]
+```
+
+Computes the distance in miles between two locations using the Haversine formula. Returns a bare number — write the unit in your template.
+
+Each argument can be:
+- A **US zip code**: `88201`
+- A **quoted address string**: `'107 N Main St, Roswell, NM'`
+- A **field reference**: `sightings.zip` or `sightings__zip`
+- A **template string** with field interpolation: `'${sightings.city}, ${sightings.state}'`
+
+```html
+<!-- Distance from a fixed location to each record's zip field -->
+$distance[90210, properties.zip] mi away
+
+<!-- Distance using the record's city and state, interpolated into a geocodable string -->
+$distance['${sightings.city}, ${sightings.state}', 88201] mi from Roswell
+
+<!-- Both ends as literals -->
+$distance['Phoenix, AZ', 'Albuquerque, NM'] mi
+```
+
+### Geocoding
+
+Locations are geocoded on first use and permanently cached in the `_wdpro_geocode` table. Subsequent requests are instant DB lookups.
+
+By default, Webdata Pro uses [Nominatim](https://nominatim.openstreetmap.org) (OpenStreetMap — free, no API key required). For higher accuracy or international coverage, configure a Google Geocoding API key in **Admin → Settings → Geocoding**.
+
+### US zip codes vs. international postal codes
+
+**US 5-digit zip codes work reliably** — Webdata Pro sends them to Nominatim with a US country filter so `88201` always resolves to Roswell, NM and not a postal code in Bosnia or Germany (both countries also have postal codes in that range).
+
+**Non-US postal codes may be ambiguous** without a Google API key. If you are using postal codes from countries other than the US, configure a Google Geocoding API key in Settings → Geocoding, or use **city + country** format instead:
+
+```
+$distance['Berlin, Germany', properties.zip]   ✓ always unambiguous
+$distance[10115, properties.zip]               ✗ may match a non-German postal code
+```
 
 ---
 

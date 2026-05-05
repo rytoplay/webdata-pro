@@ -327,6 +327,12 @@
             <div>$$currency[$sum[table.field], 2]</div>
             <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Sum formatted with $-sign &amp; commas — e.g. $9,750.00</div>
           </button>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token="$count[table.field]"
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$count[table.field]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Count of non-empty values across all found records</div>
+          </button>
 
           <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">DATE TOKENS</div>
           <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
@@ -373,6 +379,15 @@
             <div>$perpage[25]</div>
             <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Per-page selector dropdown (default 25)</div>
             <div style="font-family:system-ui,sans-serif;font-size:0.6rem;color:#b45309;opacity:0.65;font-style:italic;">header · footer</div>
+          </button>
+
+          <div class="text-muted small mt-2 mb-1" style="font-size:0.7rem;">LOCATION TOKENS</div>
+          <button type="button" class="token-btn btn btn-sm w-100 text-start mb-1"
+            data-token="$distance['${table.city}, ${table.state}', 90210] mi"
+            data-tooltip-key="distance"
+            style="background:#fef3c7;color:#92400e;border:none;font-family:monospace;font-size:0.75rem;padding:2px 6px;line-height:1.4;">
+            <div>$distance[from, to]</div>
+            <div style="font-family:system-ui,sans-serif;font-size:0.62rem;color:#b45309;margin-top:1px;">Distance in miles between two locations</div>
           </button>
 
           {% if childFormTables and childFormTables.length %}
@@ -2461,6 +2476,20 @@ add_shortcode('wdp_view', function($atts) {
       usedIn: 'header · footer',
       example: 'Total: $$currency[$sum[listings.price], 0]',
       preview: '<span style="font-size:14px;font-weight:700;color:#111;">$9,750,000</span>'
+    },
+    count: {
+      name: '$count[table.field]', section: 'Aggregate',
+      desc: 'Count of records in the found set where this field has a non-empty value. Useful for "X of Y records have photos" summaries.',
+      usedIn: 'header · footer',
+      example: '$count[pets.photo] of ${_total} pets have a photo',
+      preview: '<span style="font-size:13px;color:#374151;">34 of 60 pets have a photo</span>'
+    },
+    distance: {
+      name: '$distance[from, to]', section: 'Location',
+      desc: 'Distance in miles between two locations. Each argument can be a zip code, a quoted address string, a field reference (table.field), or a template string using ${field} interpolation.\n\nReturns a bare number — write the unit yourself: $distance[...] mi\n\n⚠️ US zip codes (5-digit) are looked up with a US country filter and work reliably. Non-US postal codes may be ambiguous without a Google Geocoding API key configured in Settings → Geocoding. City + country format ("Berlin, Germany") is always unambiguous.',
+      usedIn: 'row',
+      example: '$distance[\'${sightings.city}, ${sightings.state}\', 88201] mi away',
+      preview: '<span style="font-size:13px;color:#374151;">431.2 mi away</span>'
     },
     days_since: {
       name: '$days_since[table.field]', section: 'Date',
